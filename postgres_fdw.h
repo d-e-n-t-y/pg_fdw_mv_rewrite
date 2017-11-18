@@ -108,9 +108,6 @@ typedef struct PgFdwRelationInfo
 	 * representing the relation.
 	 */
 	int			relation_index;
-
-        bool            query_rewritten;
-        int             rewritten_query_id;
 } PgFdwRelationInfo;
 
 /* in postgres_fdw.c */
