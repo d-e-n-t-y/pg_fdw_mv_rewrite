@@ -77,49 +77,6 @@ enum FdwScanPrivateIndex
 };
 
 /*
- * Similarly, this enum describes what's kept in the fdw_private list for
- * a ModifyTable node referencing a postgres_fdw foreign table.  We store:
- *
- * 1) INSERT/UPDATE/DELETE statement text to be sent to the remote server
- * 2) Integer list of target attribute numbers for INSERT/UPDATE
- *	  (NIL for a DELETE)
- * 3) Boolean flag showing if the remote query has a RETURNING clause
- * 4) Integer list of attribute numbers retrieved by RETURNING, if any
- */
-enum FdwModifyPrivateIndex
-{
-	/* SQL statement to execute remotely (as a String node) */
-	FdwModifyPrivateUpdateSql,
-	/* Integer list of target attribute numbers for INSERT/UPDATE */
-	FdwModifyPrivateTargetAttnums,
-	/* has-returning flag (as an integer Value node) */
-	FdwModifyPrivateHasReturning,
-	/* Integer list of attribute numbers retrieved by RETURNING */
-	FdwModifyPrivateRetrievedAttrs
-};
-
-/*
- * Similarly, this enum describes what's kept in the fdw_private list for
- * a ForeignScan node that modifies a foreign table directly.  We store:
- *
- * 1) UPDATE/DELETE statement text to be sent to the remote server
- * 2) Boolean flag showing if the remote query has a RETURNING clause
- * 3) Integer list of attribute numbers retrieved by RETURNING, if any
- * 4) Boolean flag showing if we set the command es_processed
- */
-enum FdwDirectModifyPrivateIndex
-{
-	/* SQL statement to execute remotely (as a String node) */
-	FdwDirectModifyPrivateUpdateSql,
-	/* has-returning flag (as an integer Value node) */
-	FdwDirectModifyPrivateHasReturning,
-	/* Integer list of attribute numbers retrieved by RETURNING */
-	FdwDirectModifyPrivateRetrievedAttrs,
-	/* set-processed flag (as an integer Value node) */
-	FdwDirectModifyPrivateSetProcessed
-};
-
-/*
  * Execution state of a foreign scan using postgres_fdw.
  */
 typedef struct PgFdwScanState
@@ -157,63 +114,6 @@ typedef struct PgFdwScanState
 
 	int			fetch_size;		/* number of tuples per fetch */
 } PgFdwScanState;
-
-/*
- * Execution state of a foreign insert/update/delete operation.
- */
-typedef struct PgFdwModifyState
-{
-	Relation	rel;			/* relcache entry for the foreign table */
-	AttInMetadata *attinmeta;	/* attribute datatype conversion metadata */
-
-	/* for remote query execution */
-	PGconn	   *conn;			/* connection for the scan */
-	char	   *p_name;			/* name of prepared statement, if created */
-
-	/* extracted fdw_private data */
-	char	   *query;			/* text of INSERT/UPDATE/DELETE command */
-	List	   *target_attrs;	/* list of target attribute numbers */
-	bool		has_returning;	/* is there a RETURNING clause? */
-	List	   *retrieved_attrs;	/* attr numbers retrieved by RETURNING */
-
-	/* info about parameters for prepared statement */
-	AttrNumber	ctidAttno;		/* attnum of input resjunk ctid column */
-	int			p_nums;			/* number of parameters to transmit */
-	FmgrInfo   *p_flinfo;		/* output conversion functions for them */
-
-	/* working memory context */
-	MemoryContext temp_cxt;		/* context for per-tuple temporary data */
-} PgFdwModifyState;
-
-/*
- * Execution state of a foreign scan that modifies a foreign table directly.
- */
-typedef struct PgFdwDirectModifyState
-{
-	Relation	rel;			/* relcache entry for the foreign table */
-	AttInMetadata *attinmeta;	/* attribute datatype conversion metadata */
-
-	/* extracted fdw_private data */
-	char	   *query;			/* text of UPDATE/DELETE command */
-	bool		has_returning;	/* is there a RETURNING clause? */
-	List	   *retrieved_attrs;	/* attr numbers retrieved by RETURNING */
-	bool		set_processed;	/* do we set the command es_processed? */
-
-	/* for remote query execution */
-	PGconn	   *conn;			/* connection for the update */
-	int			numParams;		/* number of parameters passed to query */
-	FmgrInfo   *param_flinfo;	/* output conversion functions for them */
-	List	   *param_exprs;	/* executable expressions for param values */
-	const char **param_values;	/* textual values of query parameters */
-
-	/* for storing result tuples */
-	PGresult   *result;			/* result for query */
-	int			num_tuples;		/* # of result tuples */
-	int			next_tuple;		/* index of next one to return */
-
-	/* working memory context */
-	MemoryContext temp_cxt;		/* context for per-tuple temporary data */
-} PgFdwDirectModifyState;
 
 /*
  * Workspace for analyzing a foreign table.
@@ -1044,7 +944,7 @@ postgresGetForeignPlan(PlannerInfo *root,
 {
 	PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) foreignrel->fdw_private;
 	Index		scan_relid;
-	List	   *fdw_private;
+	List	   *fdw_private = best_path->fdw_private;
 	List	   *remote_exprs = NIL;
 	List	   *local_exprs = NIL;
 	List	   *params_list = NIL;
@@ -1185,49 +1085,25 @@ postgresGetForeignPlan(PlannerInfo *root,
 	 * expressions to be sent as parameters.
 	 */
 	initStringInfo(&sql);
-	deparseSelectStmtForRel(&sql, root, foreignrel, fdw_scan_tlist,
-							remote_exprs, best_path->path.pathkeys,
-							false, &retrieved_attrs, &params_list);
+	
+	// If we have an already prepared alternative SQL, use that instead.
+	if (!fdw_private) 
+	{
+	  deparseSelectStmtForRel(&sql, root, foreignrel, fdw_scan_tlist,
+				  remote_exprs, best_path->path.pathkeys,
+				  false, &retrieved_attrs, &params_list);
+	  /* Remember remote_exprs for possible use by postgresPlanDirectModify */
+	  fpinfo->final_remote_exprs = remote_exprs;
 
-	/* Remember remote_exprs for possible use by postgresPlanDirectModify */
-	fpinfo->final_remote_exprs = remote_exprs;
+	  /*
+	   * Build the fdw_private list that will be available to the executor.
+	   * Items in the list must match order in enum FdwScanPrivateIndex.
+	   */
+	  fdw_private = list_make3(makeString(sql.data),
+				   retrieved_attrs,
+				   makeInteger(fpinfo->fetch_size));
+	}
 
-	//    if (fpinfo->query_rewritten)
-	//{
-	  // Construct a path but with the foreign query set to an alternate SQL.
-
-	  //initStringInfo (&sql);
-	  //if (fpinfo->rewritten_query_id == 0)
-	  //{
-	//	int i;
-		// FIXME: for now, get the alternate query from this const.
-	  //	const char *alternate_sql = "SELECT key, count_value FROM public.test_mv1";
-	  //	appendStringInfo (sql, "%s", alternate_sql);
-
-		// We return two columns: create the received_attrs just as 
-		// deparseSelectStmtForRel() would.
-	//	retrieved_attrs = NIL;
-	//	for (i = 0; i < 2; i++)
-	//	  retrieved_attrs = lappend_int(retrieved_attrs, i + 1);
-
-		// Construct an empty params list: we don't support parameters for now.
-	//	params_list = NULL;
-	//}
-
-	  // FIXME: we should somehow work out the columns to retrieve...
-	  //fdw_scan_tlist = build_tlist_to_deparse(foreignrel);
-
-	  //remote_exprs = extract_actual_clauses(fpinfo->remote_conds, false);
-	  //local_exprs = extract_actual_clauses(fpinfo->local_conds, false);
-	//}
-
-	/*
-	 * Build the fdw_private list that will be available to the executor.
-	 * Items in the list must match order in enum FdwScanPrivateIndex.
-	 */
-	fdw_private = list_make3(makeString(sql.data),
-							 retrieved_attrs,
-							 makeInteger(fpinfo->fetch_size));
 	if (IS_JOIN_REL(foreignrel) || IS_UPPER_REL(foreignrel))
 		fdw_private = lappend(fdw_private,
 							  makeString(fpinfo->relation_name->data));
@@ -1365,7 +1241,7 @@ postgresIterateForeignScan(ForeignScanState *node)
 	PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
 
-	elog(INFO, "postgresIterateForeignScan (node=%p", node);
+	//elog(INFO, "postgresIterateForeignScan (node=%p", node);
 
 	/*
 	 * If this is the first call after Begin or ReScan, we need to create the
@@ -3341,6 +3217,45 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 	add_foreign_grouping_paths(root, input_rel, output_rel);
 }
 
+static void deparse_statement_for_mv_search (StringInfo /*OUT*/ rel_sql, 
+					     List /*OUT*/ **retrieved_attrs, 
+					     PlannerInfo *root, 
+					     RelOptInfo *grouped_rel)
+{
+  PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+  List	   *remote_exprs = NIL;
+  List	   *fdw_scan_tlist = NIL;
+  ForeignPath * grouppath;
+
+  /* Create and add foreign path to the grouping relation. */
+  grouppath = create_foreignscan_path(root,
+				      grouped_rel,
+				      root->upper_targets[UPPERREL_GROUP_AGG],
+				      1 /*rows*/, 1.0/*startup_cost*/, 2.0/*total_cost*/,
+				      NIL,	/* no pathkeys */
+				      NULL,	/* no required_outer */
+				      NULL,
+				      NIL);	/* no fdw_private */
+  
+  /* Build the list of columns to be fetched from the foreign server. */
+  if (IS_JOIN_REL(grouped_rel) || IS_UPPER_REL(grouped_rel))
+    fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
+  else
+    fdw_scan_tlist = NIL;
+  
+  remote_exprs = extract_actual_clauses(fpinfo->remote_conds, false);
+  
+  fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
+  
+  deparseSelectStmtForRel(rel_sql, root, grouped_rel, fdw_scan_tlist,
+			  remote_exprs, grouppath->path.pathkeys,
+			  false, retrieved_attrs, NULL);
+  
+  pfree (grouppath);
+  // FIXME: what about freeing remote_exprs?
+  // FIXME: what about freeing fdw_scan_tlist?
+}
+
 /*
  * add_foreign_grouping_paths
  *		Add foreign path for grouping and/or aggregation.
@@ -3412,51 +3327,93 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										NULL,	/* no required_outer */
 										NULL,
 										NIL);	/* no fdw_private */
-	
-	// FIXME: might be possible to do this search without deparsing the
-	// SQL...
-	//StringInfoData rel_sql;
-	//{
-	/* Required only to be passed to deparseSelectStmtForRel */
-	//  List	   *retrieved_attrs;
-	//List	   *remote_exprs = NIL;
-	//List	   *fdw_scan_tlist = NIL;
-
-	  /* Build the list of columns to be fetched from the foreign server. */
-	  //if (IS_JOIN_REL(grouped_rel) || IS_UPPER_REL(grouped_rel))
-	//fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
-	//	  else
-	//	fdw_scan_tlist = NIL;
-
-	//	  remote_exprs = extract_actual_clauses(fpinfo->remote_conds, false);
-
-	//fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
-	  
-	//initStringInfo(&rel_sql);
-	//deparseSelectStmtForRel(&rel_sql, root, grouped_rel, fdw_scan_tlist,
-	//						  remote_exprs, grouppath->path.pathkeys,
-	//						  false, &retrieved_attrs, NULL);
-	  
-	  /*
-	   * Build the fdw_private list that will be available to the executor.
-	   * Items in the list must match order in enum FdwScanPrivateIndex.
-	   */
-	  //elog(INFO, "add_foreign_grouping_paths: SQL: %s", rel_sql.data);
-	//	}
-
-	// TODO: find a candidate MV.
-	
-	// FIXME: For now, let's presume that the query is:
-	//    SELECT key, count(value) FROM public.test GROUP BY key
-	//if (0 == strcmp (rel_sql.data, 
-	//				 "SELECT key, count(value) FROM public.test GROUP BY key"))
-	//{
-	//fpinfo->query_rewritten = true;
-	// fpinfo->rewritten_query_id = 0;
-	//}
 
 	/* Add generated path into grouped_rel by add_path(). */
 	add_path(grouped_rel, (Path *) grouppath);
+
+	// Now: see if there are any candidate MVs too...
+	{
+	  StringInfoData rel_sql;
+	  List	*retrieved_attrs;
+
+	  initStringInfo(&rel_sql);
+
+	  // FIXME: might be possible to do this search without deparsing the
+	  // SQL...
+	  deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
+					   
+	  elog(INFO, "add_foreign_grouping_paths: SQL: %s", rel_sql.data);
+
+	  // FIXME: For now, let's presume that the query is:
+	  //    SELECT key, count(value) FROM public.test GROUP BY key
+	  if (0 == strcmp (rel_sql.data, 
+			   "SELECT key, count(value) FROM public.test GROUP BY key"))
+	  {
+	    elog(INFO, "add_foreign_grouping_paths: matched quert 0");
+	  
+	    char *alternate_sql = "SELECT key, count_value FROM public.test_mv1";
+	    elog(INFO, "add_foreign_grouping_paths: alternative qeury: %s", alternate_sql);
+
+	    List *fdw_private = NIL;
+
+	    /* Estimate the cost of push down */
+	    StringInfoData sql;
+	    initStringInfo(&sql);
+	    appendStringInfoString(&sql, "EXPLAIN ");
+	    appendStringInfoString(&sql, alternate_sql);
+
+	    elog(INFO, "add_foreign_grouping_paths: explain SQL: %s", sql.data);
+
+	    double		rows;
+	    int			width;
+	    Cost		startup_cost;
+	    Cost		total_cost;
+
+	    // TODO: factor this fragment from estimate_path_cost_size()?
+	    
+	    PGconn	   *conn;
+	    RangeTblEntry *rte = planner_rt_fetch(input_rel->relid, root);
+	    Oid			userid = rte->checkAsUser ? rte->checkAsUser : GetUserId();
+	    UserMapping *user = GetUserMapping(userid, fpinfo->server->serverid);
+
+	    elog(INFO, "add_foreign_grouping_paths: connection user mapping=%p", user);
+	    conn = GetConnection(user, false);
+	    get_remote_estimate(sql.data, conn, &rows, &width,
+				&startup_cost, &total_cost);
+	    ReleaseConnection(conn);
+	    
+	    // FIXME: we consider that there are no locally-checked quals
+	    // to save building all that cruft here. But in reality, that 
+	    // might be wrong.
+	    
+	    fdw_private = list_make3 (makeString (alternate_sql),
+				      retrieved_attrs,
+				      makeInteger (fpinfo->fetch_size));
+	    fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
+
+	    grouppath = create_foreignscan_path(root,
+						grouped_rel,
+						grouping_target,
+						rows,
+						startup_cost,
+						total_cost,
+						NIL,	/* no pathkeys */
+						NULL,	/* no required_outer */
+						NULL,
+						fdw_private);	/* no fdw_private */
+	    
+	    elog(INFO, "add_foreign_grouping_paths: alternative grouppath=%p", grouppath);
+
+	    /*
+	     * Build the fdw_private list that will be available to the executor.
+	     * Items in the list must match order in enum FdwScanPrivateIndex.
+	     */
+	    
+	    /* Add generated path into grouped_rel by add_path(). */
+	    add_path(grouped_rel, (Path *) grouppath);
+	    
+	  }
+	}
 }
 
 /*
