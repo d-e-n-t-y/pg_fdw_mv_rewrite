@@ -13,6 +13,8 @@
 #include "postgres.h"
 
 #include "postgres_fdw.h"
+#include "deparse.h"
+#include "compare.h"
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -41,6 +43,7 @@
 #include "utils/rel.h"
 #include "utils/sampling.h"
 #include "utils/selfuncs.h"
+#include "tcop/tcopprot.h"
 
 PG_MODULE_MAGIC;
 
@@ -3346,13 +3349,115 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	  // FIXME: For now, let's presume that the query is:
 	  //    SELECT key, count(value) FROM public.test GROUP BY key
-	  if (0 == strcmp (rel_sql.data, 
-			   "SELECT key, count(value) FROM public.test GROUP BY key"))
+	  if ((0 == strcmp (rel_sql.data, 
+			    "SELECT key, count(value) FROM public.test GROUP BY key")) ||
+	      (0 == strcmp (rel_sql.data, 
+			    "SELECT count(value), key FROM public.test GROUP BY key")))
 	  {
-	    elog(INFO, "add_foreign_grouping_paths: matched quert 0");
+	    elog(INFO, "add_foreign_grouping_paths: matched query 0");
 	  
-	    char *alternate_sql = "SELECT key, count_value FROM public.test_mv1";
-	    elog(INFO, "add_foreign_grouping_paths: alternative qeury: %s", alternate_sql);
+	    // The alternative query we will submit if it matches.
+	    StringInfoData alternative_query;
+	    initStringInfo(&alternative_query);
+	    appendStringInfoString (&alternative_query, "SELECT ");
+
+	    // Definition of the MV:
+	    char *alternative_query_from = "FROM public.test_mv1";
+	    //List *select_clauses = list_make2 (makeString ("key"), 
+	    // makeString ("count_value"));
+
+	    // Parse the MV definition, and check the target expressions are
+	    // either already available, or push-downable...
+	    {
+	      // FIXME: pull this SQL from the pg_matviews relation.
+	      const char *mv_sql = "SELECT test.key, count(test.value) AS count_value FROM test GROUP BY test.key";
+	      RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
+	      SelectStmt *mv_query = (SelectStmt *) mv_parsetree->stmt;
+
+	      //elog(INFO, "add_foreign_grouping_paths: root: %s", nodeToString (root));
+	      //elog(INFO, "add_foreign_grouping_paths: query: %s", nodeToString (mv_query));
+	      //elog(INFO, "add_foreign_grouping_paths: input_rel: %s", nodeToString (input_rel));
+	      //elog(INFO, "add_foreign_grouping_paths: grouped_rel: %s", nodeToString (grouped_rel));
+
+	      // Check each of the target expressions are either already available, 
+	      // or push-downable...
+	      List *fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
+	      //elog(INFO, "add_foreign_grouping_paths: tlist: %s", nodeToString (fdw_scan_tlist));
+	      ListCell   *lc;
+	      int i = 0;
+	      foreach(lc, fdw_scan_tlist)
+	      {
+		//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
+		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+
+		//elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (tle));
+		
+		StringInfoData expr_sql;
+		initStringInfo(&expr_sql);
+		deparse_expr_cxt context;
+		context.buf = &expr_sql;
+		context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+		context.root = root;
+		context.foreignrel = grouped_rel;
+		
+		deparseExpr (tle->expr, &context);
+
+		//elog(INFO, "add_foreign_grouping_paths: sql: %s", expr_sql.data);
+
+		ListCell *mv_lc;
+		//elog(INFO, "add_foreign_grouping_paths: mv_tlist: %s", nodeToString (mv_query->targetList));
+		foreach (mv_lc, mv_query->targetList)
+		{
+		  //elog(INFO, "add_foreign_grouping_paths: ******** INNER ********");
+		  ResTarget *mv_tle = lfirst_node(ResTarget, mv_lc);
+
+		  //elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (mv_tle));
+
+		  StringInfoData mv_expr_sql;
+		  initStringInfo(&mv_expr_sql);
+		  StringInfoData mv_expr_alias;
+		  initStringInfo(&mv_expr_alias);
+		
+		  deparseResTarget (mv_tle, &mv_expr_sql, &mv_expr_alias);
+
+		  //elog(INFO, "add_foreign_grouping_paths: sql: %s", mv_expr_sql.data);
+		  //elog(INFO, "add_foreign_grouping_paths: alias: %s", mv_expr_alias.data);
+		  
+		  if (0 == strcmp (mv_expr_sql.data, expr_sql.data))
+		  {
+		    elog(INFO, "add_foreign_grouping_paths: match found!");
+
+		    // So append the column expression to the alternate query
+		    if (i++ > 0)
+		      appendStringInfoString (&alternative_query, ",");
+		    appendStringInfoString (&alternative_query, mv_expr_alias.data);
+
+		    goto next_expr;
+		  }
+		  else
+		  {
+		    elog(INFO, "add_foreign_grouping_paths: no match found!");
+		  }
+		}
+		// Match not found!
+		elog(INFO, "add_foreign_grouping_paths: no match found!");
+		goto next_mv;
+
+		// FIXME: we don't yet check that it might still be push-downable
+
+	      next_expr:
+		(void)0;
+	      }
+	      elog(INFO, "add_foreign_grouping_paths: matched all arguments!");
+
+	      //                        tag = CreateCommandTag(((RawStmt *) parsetree)->stmt);
+	    }
+
+	    // We got a match, so complete the query.
+	    appendStringInfoString(&alternative_query, " ");
+	    appendStringInfoString(&alternative_query, alternative_query_from);
+
+	    elog(INFO, "add_foreign_grouping_paths: alternative qeury: %s", alternative_query.data);
 
 	    List *fdw_private = NIL;
 
@@ -3360,7 +3465,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    StringInfoData sql;
 	    initStringInfo(&sql);
 	    appendStringInfoString(&sql, "EXPLAIN ");
-	    appendStringInfoString(&sql, alternate_sql);
+	    appendStringInfoString(&sql, alternative_query.data);
 
 	    elog(INFO, "add_foreign_grouping_paths: explain SQL: %s", sql.data);
 
@@ -3386,7 +3491,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    // to save building all that cruft here. But in reality, that 
 	    // might be wrong.
 	    
-	    fdw_private = list_make3 (makeString (alternate_sql),
+	    fdw_private = list_make3 (makeString (alternative_query.data),
 				      retrieved_attrs,
 				      makeInteger (fpinfo->fetch_size));
 	    fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
@@ -3414,6 +3519,8 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    
 	  }
 	}
+ next_mv:
+	(void)0;
 }
 
 /*

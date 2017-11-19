@@ -34,6 +34,7 @@
 #include "postgres.h"
 
 #include "postgres_fdw.h"
+#include "deparse.h"
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
@@ -59,51 +60,6 @@
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 
-
-/*
- * Global context for foreign_expr_walker's search of an expression tree.
- */
-typedef struct foreign_glob_cxt
-{
-	PlannerInfo *root;			/* global planner state */
-	RelOptInfo *foreignrel;		/* the foreign relation we are planning for */
-	Relids		relids;			/* relids of base relations in the underlying
-								 * scan */
-} foreign_glob_cxt;
-
-/*
- * Local (per-tree-level) context for foreign_expr_walker's search.
- * This is concerned with identifying collations used in the expression.
- */
-typedef enum
-{
-	FDW_COLLATE_NONE,			/* expression is of a noncollatable type, or
-								 * it has default collation that is not
-								 * traceable to a foreign Var */
-	FDW_COLLATE_SAFE,			/* collation derives from a foreign Var */
-	FDW_COLLATE_UNSAFE			/* collation is non-default and derives from
-								 * something other than a foreign Var */
-} FDWCollateState;
-
-typedef struct foreign_loc_cxt
-{
-	Oid			collation;		/* OID of current collation, if any */
-	FDWCollateState state;		/* state of current collation choice */
-} foreign_loc_cxt;
-
-/*
- * Context for deparseExpr
- */
-typedef struct deparse_expr_cxt
-{
-	PlannerInfo *root;			/* global planner state */
-	RelOptInfo *foreignrel;		/* the foreign relation we are planning for */
-	RelOptInfo *scanrel;		/* the underlying scan relation. Same as
-								 * foreignrel, when that represents a join or
-								 * a base relation. */
-	StringInfo	buf;			/* output buffer to append to */
-	List	  **params_list;	/* exprs that will become remote Params */
-} deparse_expr_cxt;
 
 #define REL_ALIAS_PREFIX	"r"
 /* Handy macro to add relation name qualification */
@@ -143,7 +99,7 @@ static void deparseReturningList(StringInfo buf, PlannerInfo *root,
 static void deparseColumnRef(StringInfo buf, int varno, int varattno,
 				 PlannerInfo *root, bool qualify_col);
 static void deparseRelation(StringInfo buf, Relation rel);
-static void deparseExpr(Expr *expr, deparse_expr_cxt *context);
+extern void deparseExpr(Expr *expr, deparse_expr_cxt *context);
 static void deparseVar(Var *node, deparse_expr_cxt *context);
 static void deparseConst(Const *node, deparse_expr_cxt *context, int showtype);
 static void deparseParam(Param *node, deparse_expr_cxt *context);
@@ -2115,7 +2071,7 @@ deparseStringLiteral(StringInfo buf, const char *val)
  * scheme: anything more complex than a Var, Const, function call or cast
  * should be self-parenthesized.
  */
-static void
+extern void
 deparseExpr(Expr *node, deparse_expr_cxt *context)
 {
 	if (node == NULL)
@@ -3172,3 +3128,84 @@ get_relation_column_alias_ids(Var *node, RelOptInfo *foreignrel,
 	/* Shouldn't get here */
 	elog(ERROR, "unexpected expression in subquery output");
 }
+
+static void
+deparseRTExpr (Node *t, StringInfo sql);
+
+static void
+deparseRTColumnRef (ColumnRef *t, StringInfo sql)
+{
+  elog(INFO, "deparseRTColumnRef: t: %s", nodeToString (t));
+
+  // FIXME: what about emitting the discriminator?
+
+  appendStringInfoString (sql, strVal (list_nth (t->fields, 1)));
+}
+
+static void
+deparseFuncCall (FuncCall *t, StringInfo sql)
+{
+  elog(INFO, "deparseFuncCall: t: %s", nodeToString (t));
+
+  {
+    ListCell *lc;
+    int i = 0;
+    foreach (lc, t->funcname)
+    {
+      if (i++ > 0)
+	appendStringInfoString (sql, ".");
+      appendStringInfoString (sql, strVal (lfirst_node(Value, lc)));
+    }
+  }
+
+  appendStringInfoString (sql, "(");
+
+  {
+    ListCell *lc;
+    int i = 0;
+    foreach (lc, t->args)
+    {
+      if (i++ > 0)
+	appendStringInfoString (sql, ",");
+      deparseRTExpr (lfirst_node(Node, lc), sql);
+    }
+  }
+
+  appendStringInfoString (sql, ")");
+}
+
+static void
+deparseRTExpr (Node *t, StringInfo sql)
+{
+  elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));
+
+  switch (nodeTag (t))
+  {
+  case T_ColumnRef:
+    // We can't overload the regular deparseColumnRef, so we use our own.
+    deparseRTColumnRef ((ColumnRef *) t, sql);
+    break;
+  case T_FuncCall:
+    deparseFuncCall ((FuncCall *) t, sql);
+    break;
+  default:
+    elog (ERROR, "Node type not supported: %d",  (int) nodeTag(t));
+    break;
+  }
+}
+
+extern void
+deparseResTarget (ResTarget *t, StringInfo sql, StringInfo alias)
+{
+  elog(INFO, "deparseResTarget: t: %s", nodeToString (t));
+
+  deparseRTExpr (t->val, sql);
+
+  if (alias) {
+    if (t->name != NULL)
+      appendStringInfoString (alias, t->name);
+    else
+      appendStringInfoString (alias, sql->data);
+  }
+}
+
