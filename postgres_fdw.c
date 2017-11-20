@@ -3278,7 +3278,7 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
   
   heap_close(rel, NoLock);
   
-  elog(INFO, "add_foreign_grouping_paths: target (local) table: %s", foreign_table_name.data);
+  elog(INFO, "find_related_matviews_for_relation: target (local) table: %s", foreign_table_name.data);
   {
 	ForeignServer *server;
 	UserMapping *mapping;
@@ -3320,13 +3320,14 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 	  int num_mvs = PQntuples(res);
 	  
 	  for (int i = 0; i < num_mvs; i++)
-		{
-		  elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
-			   PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
-		  *mvs_schema = lappend (*mvs_schema, makeString (PQgetvalue(res, i, 0)));
-		  *mvs_name = lappend (*mvs_name, makeString (PQgetvalue(res, i, 1)));
-		  *mvs_definition = lappend (*mvs_definition, makeString (PQgetvalue(res, i, 2)));
-		}
+	  {
+		//elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
+		//     PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
+		
+		*mvs_schema = lappend (*mvs_schema, makeString (PQgetvalue(res, i, 0)));
+		*mvs_name = lappend (*mvs_name, makeString (PQgetvalue(res, i, 1)));
+		*mvs_definition = lappend (*mvs_definition, makeString (PQgetvalue(res, i, 2)));
+	  }
 	  PQclear(res);
 	  ReleaseConnection(conn);
 	}
@@ -3339,6 +3340,41 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 	}
 	PG_END_TRY();
   }
+}
+
+static List *
+deparse_matview_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_rel)
+{
+  PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+  
+  List *expression_strings = NIL;
+
+  List *fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
+
+  //elog(INFO, "add_foreign_grouping_paths: tlist: %s", nodeToString (fdw_scan_tlist));
+  ListCell   *lc;
+  int i = 0;
+  foreach(lc, fdw_scan_tlist)
+  {
+	//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
+	TargetEntry *tle = lfirst_node(TargetEntry, lc);
+	
+	//elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (tle));
+	
+	StringInfo expr_sql = makeStringInfo();
+	deparse_expr_cxt context;
+	context.buf = expr_sql;
+	context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+	context.root = root;
+	context.foreignrel = grouped_rel;
+	
+	deparseExpr (tle->expr, &context);
+	
+	//elog(INFO, "deparse_matview_tlist_expressions: expr: %s", expr_sql->data);
+	expression_strings = lappend (expression_strings, expr_sql);
+  }
+
+  return expression_strings;
 }
 
 /*
@@ -3416,7 +3452,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	/* Add generated path into grouped_rel by add_path(). */
 	add_path(grouped_rel, (Path *) grouppath);
 
-	// Now: see if there are any candidate MVs too...
+	// See if there are any candidate MVs...
 	List *mvs_schema = NIL;
 	List *mvs_name = NIL;
 	List *mvs_definition = NIL;
@@ -3425,6 +3461,34 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										&mvs_schema, &mvs_name, &mvs_definition);
 
 	{
+	  ListCell   *sc;
+	  ListCell   *nc;
+	  ListCell   *dc;
+	  
+	  // Evaluate each MV in turn...
+	  forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
+	  {
+		StringInfo mv_schema = lfirst(sc);
+		StringInfo mv_name = lfirst(nc);
+		StringInfo mv_definition = lfirst(dc);
+
+		// 1. Check the GROUP BY clause: it must match exactly
+
+		// FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer 
+		// where it can be re-aggregated
+
+		// 2. Check the FROM clause: it must match exactly
+
+		// 3. Check the WHERE clause: they must match exactly
+
+		// FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
+
+		// 4. Check for HAVING clause: push them in to the WHERE list
+
+		// FIXME: 5. Consider computing any missing aggregates from other components
+
+		// 6. Check the SELECT clauses: they must be a subset
+	  }
 	  StringInfoData rel_sql;
 	  List	*retrieved_attrs;
 
@@ -3468,28 +3532,16 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	      // Check each of the target expressions are either already available, 
 	      // or push-downable...
-	      List *fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
-	      //elog(INFO, "add_foreign_grouping_paths: tlist: %s", nodeToString (fdw_scan_tlist));
+		  List *expr_sqls = deparse_matview_tlist_expressions (root, grouped_rel);
+		  
+		  int i = 0;
 	      ListCell   *lc;
-	      int i = 0;
-	      foreach(lc, fdw_scan_tlist)
-	      {
-		//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
-		TargetEntry *tle = lfirst_node(TargetEntry, lc);
+	      foreach(lc, expr_sqls)
+		  {
+			//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
+			StringInfo expr_sql = lfirst(lc);
 
-		//elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (tle));
-		
-		StringInfoData expr_sql;
-		initStringInfo(&expr_sql);
-		deparse_expr_cxt context;
-		context.buf = &expr_sql;
-		context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
-		context.root = root;
-		context.foreignrel = grouped_rel;
-		
-		deparseExpr (tle->expr, &context);
-
-		//elog(INFO, "add_foreign_grouping_paths: sql: %s", expr_sql.data);
+			//elog(INFO, "add_foreign_grouping_paths: sql: %s", expr_sql->data);
 
 		ListCell *mv_lc;
 		//elog(INFO, "add_foreign_grouping_paths: mv_tlist: %s", nodeToString (mv_query->targetList));
@@ -3510,7 +3562,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		  //elog(INFO, "add_foreign_grouping_paths: sql: %s", mv_expr_sql.data);
 		  //elog(INFO, "add_foreign_grouping_paths: alias: %s", mv_expr_alias.data);
 		  
-		  if (0 == strcmp (mv_expr_sql.data, expr_sql.data))
+		  if (0 == strcmp (mv_expr_sql.data, expr_sql->data))
 		  {
 		    elog(INFO, "add_foreign_grouping_paths: match found!");
 
