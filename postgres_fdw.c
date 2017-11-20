@@ -3343,7 +3343,7 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 }
 
 static List *
-deparse_matview_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_rel)
+deparse_grouped_rel_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_rel)
 {
   PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
   
@@ -3375,6 +3375,32 @@ deparse_matview_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_rel)
   }
 
   return expression_strings;
+}
+
+static SelectStmt *
+parse_select_query (const char *mv_sql)
+{
+  RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
+  SelectStmt *mv_query = (SelectStmt *) mv_parsetree->stmt;
+  return mv_query;
+}
+
+static void
+deparse_matview_tlist_expressions (SelectStmt *mv_query,
+								   List **expr_sql, List **expr_alias)
+{
+  ListCell *mv_lc;
+  foreach (mv_lc, mv_query->targetList)
+  {
+	ResTarget *mv_tle = lfirst_node (ResTarget, mv_lc);
+	StringInfo mv_expr_sql = makeStringInfo();
+	StringInfo mv_expr_alias = makeStringInfo();
+
+	deparseResTarget (mv_tle, mv_expr_sql, mv_expr_alias);
+
+	*expr_sql = lappend (*expr_sql, mv_expr_sql);
+	*expr_alias = lappend (*expr_alias, mv_expr_alias);
+  }
 }
 
 /*
@@ -3521,9 +3547,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    // either already available, or push-downable...
 	    {
 	      // FIXME: pull this SQL from the pg_matviews relation.
-	      const char *mv_sql = (const char *) strVal (list_nth (mvs_definition, 0));
-	      RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
-	      SelectStmt *mv_query = (SelectStmt *) mv_parsetree->stmt;
+	      SelectStmt *mv_query = parse_select_query ((const char *) strVal (list_nth (mvs_definition, 0)));
 
 	      //elog(INFO, "add_foreign_grouping_paths: root: %s", nodeToString (root));
 	      //elog(INFO, "add_foreign_grouping_paths: query: %s", nodeToString (mv_query));
@@ -3532,60 +3556,55 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	      // Check each of the target expressions are either already available, 
 	      // or push-downable...
-		  List *expr_sqls = deparse_matview_tlist_expressions (root, grouped_rel);
-		  
+		  List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
+		  List *mv_expr_sqls = NIL;
+		  List *mv_expr_aliases = NIL;
+		  deparse_matview_tlist_expressions (mv_query, &mv_expr_sqls, &mv_expr_aliases);
+
 		  int i = 0;
 	      ListCell   *lc;
-	      foreach(lc, expr_sqls)
+	      foreach (lc, expr_sqls)
 		  {
 			//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
 			StringInfo expr_sql = lfirst(lc);
 
 			//elog(INFO, "add_foreign_grouping_paths: sql: %s", expr_sql->data);
 
-		ListCell *mv_lc;
-		//elog(INFO, "add_foreign_grouping_paths: mv_tlist: %s", nodeToString (mv_query->targetList));
-		foreach (mv_lc, mv_query->targetList)
-		{
-		  //elog(INFO, "add_foreign_grouping_paths: ******** INNER ********");
-		  ResTarget *mv_tle = lfirst_node(ResTarget, mv_lc);
+			//elog(INFO, "add_foreign_grouping_paths: mv_tlist: %s", nodeToString (mv_query->targetList));
+			ListCell *mv_lc1;
+			ListCell *mv_lc2;
+			forboth (mv_lc1, mv_expr_sqls, mv_lc2, mv_expr_aliases)
+			{
+			  StringInfo mv_expr_sql = lfirst(mv_lc1);
+			  StringInfo mv_expr_alias = lfirst(mv_lc2);
 
-		  //elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (mv_tle));
-
-		  StringInfoData mv_expr_sql;
-		  initStringInfo(&mv_expr_sql);
-		  StringInfoData mv_expr_alias;
-		  initStringInfo(&mv_expr_alias);
-		
-		  deparseResTarget (mv_tle, &mv_expr_sql, &mv_expr_alias);
-
-		  //elog(INFO, "add_foreign_grouping_paths: sql: %s", mv_expr_sql.data);
-		  //elog(INFO, "add_foreign_grouping_paths: alias: %s", mv_expr_alias.data);
-		  
-		  if (0 == strcmp (mv_expr_sql.data, expr_sql->data))
-		  {
-		    elog(INFO, "add_foreign_grouping_paths: match found!");
-
-		    // So append the column expression to the alternate query
-		    if (i++ > 0)
-		      appendStringInfoString (&alternative_query, ",");
-		    appendStringInfoString (&alternative_query, mv_expr_alias.data);
-
-		    goto next_expr;
-		  }
-		  else
-		  {
-		    elog(INFO, "add_foreign_grouping_paths: no match found!");
-		  }
-		}
-		// Match not found!
-		elog(INFO, "add_foreign_grouping_paths: no match found!");
-		goto next_mv;
-
-		// FIXME: we don't yet check that it might still be push-downable
-
+			  //elog(INFO, "add_foreign_grouping_paths: sql: %s", mv_expr_sql->data);
+			  //elog(INFO, "add_foreign_grouping_paths: alias: %s", mv_expr_alias->data);
+			  
+			  if (0 == strcmp (mv_expr_sql->data, expr_sql->data))
+			  {
+				elog(INFO, "add_foreign_grouping_paths: match found!");
+				
+				// So append the column expression to the alternate query
+				if (i++ > 0)
+				  appendStringInfoString (&alternative_query, ",");
+				appendStringInfoString (&alternative_query, mv_expr_alias->data);
+				
+				goto next_expr;
+			  }
+			  else
+			  {
+				elog(INFO, "add_foreign_grouping_paths: no match found!");
+			  }
+			}
+			// Match not found!
+			elog(INFO, "add_foreign_grouping_paths: no match found!");
+			goto next_mv;
+			
+			// FIXME: we don't yet check that it might still be push-downable
+			
 	      next_expr:
-		(void)0;
+			(void)0;
 	      }
 	      elog(INFO, "add_foreign_grouping_paths: matched all arguments!");
 
