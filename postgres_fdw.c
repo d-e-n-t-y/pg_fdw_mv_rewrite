@@ -14,7 +14,6 @@
 
 #include "postgres_fdw.h"
 #include "deparse.h"
-#include "compare.h"
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -3259,6 +3258,89 @@ static void deparse_statement_for_mv_search (StringInfo /*OUT*/ rel_sql,
   // FIXME: what about freeing fdw_scan_tlist?
 }
 
+static void
+find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
+									List **mvs_schema, 
+									List **mvs_name, 
+									List **mvs_definition)
+{
+  StringInfoData foreign_table_name;
+  initStringInfo(&foreign_table_name);
+  
+  RangeTblEntry *rte = planner_rt_fetch(input_rel->relid, root);
+  
+  /*
+   * Core code already has some lock on each rel being planned, so we
+   * can use NoLock here.
+   */
+  Relation	rel = heap_open(rte->relid, NoLock);
+  deparseRelation (&foreign_table_name, rel);
+  
+  heap_close(rel, NoLock);
+  
+  elog(INFO, "add_foreign_grouping_paths: target (local) table: %s", foreign_table_name.data);
+  {
+	ForeignServer *server;
+	UserMapping *mapping;
+	PGconn	   *conn;
+	
+	mapping = GetUserMapping(GetUserId(), GetForeignTable(rte->relid)->serverid);
+	
+	conn = GetConnection(mapping, false);
+	
+	PGresult   *volatile res = NULL;
+	
+	PG_TRY();
+	{
+	  
+	  int			numrows, i;
+	  
+	  const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
+		" FROM pg_tables t, public.pgx_rewritable_matviews j, pg_matviews v"
+		" WHERE t.schemaname = j.tableschemaname"
+		" AND t.tablename = j.tablename"
+		" AND j.matviewschemaname = v.schemaname"
+		" AND j.matviewname = v.matviewname"
+		" AND t.schemaname || '.' || t.tablename = $1::text";
+	  
+	  const int nr_params = 1;
+	  const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
+	  const int paramLengths[nr_params] = { strlen (foreign_table_name.data) };
+	  
+	  res = pgfdw_exec_query_params(conn, find_mvs_query,
+									1, NULL/*paramTypes*/,
+									paramValues, paramLengths,
+									NULL /*paramFormats*/,
+									0 /*resultFormat=text*/);
+	  
+	  // FIXME: is this the best way to deap with the error?
+	  if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		pgfdw_report_error(ERROR, res, conn, false, find_mvs_query);
+	  
+	  int num_mvs = PQntuples(res);
+	  
+	  for (int i = 0; i < num_mvs; i++)
+		{
+		  elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
+			   PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
+		  *mvs_schema = lappend (*mvs_schema, makeString (PQgetvalue(res, i, 0)));
+		  *mvs_name = lappend (*mvs_name, makeString (PQgetvalue(res, i, 1)));
+		  *mvs_definition = lappend (*mvs_definition, makeString (PQgetvalue(res, i, 2)));
+		}
+	  PQclear(res);
+	  ReleaseConnection(conn);
+	}
+	PG_CATCH();
+	{
+	  if (res)
+		PQclear(res);
+	  ReleaseConnection(conn);
+	  PG_RE_THROW();
+	}
+	PG_END_TRY();
+  }
+}
+
 /*
  * add_foreign_grouping_paths
  *		Add foreign path for grouping and/or aggregation.
@@ -3335,6 +3417,13 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	add_path(grouped_rel, (Path *) grouppath);
 
 	// Now: see if there are any candidate MVs too...
+	List *mvs_schema = NIL;
+	List *mvs_name = NIL;
+	List *mvs_definition = NIL;
+
+	find_related_matviews_for_relation (root, input_rel, 
+										&mvs_schema, &mvs_name, &mvs_definition);
+
 	{
 	  StringInfoData rel_sql;
 	  List	*retrieved_attrs;
@@ -3361,8 +3450,6 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    initStringInfo(&alternative_query);
 	    appendStringInfoString (&alternative_query, "SELECT ");
 
-	    // Definition of the MV:
-	    char *alternative_query_from = "FROM public.test_mv1";
 	    //List *select_clauses = list_make2 (makeString ("key"), 
 	    // makeString ("count_value"));
 
@@ -3370,7 +3457,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    // either already available, or push-downable...
 	    {
 	      // FIXME: pull this SQL from the pg_matviews relation.
-	      const char *mv_sql = "SELECT test.key, count(test.value) AS count_value FROM test GROUP BY test.key";
+	      const char *mv_sql = (const char *) strVal (list_nth (mvs_definition, 0));
 	      RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
 	      SelectStmt *mv_query = (SelectStmt *) mv_parsetree->stmt;
 
@@ -3455,7 +3542,10 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	    // We got a match, so complete the query.
 	    appendStringInfoString(&alternative_query, " ");
-	    appendStringInfoString(&alternative_query, alternative_query_from);
+	    appendStringInfoString(&alternative_query, " FROM ");
+	    appendStringInfoString(&alternative_query, strVal (list_nth (mvs_schema, 0)));
+	    appendStringInfoString(&alternative_query, ".");
+	    appendStringInfoString(&alternative_query, strVal (list_nth (mvs_name, 0)));
 
 	    elog(INFO, "add_foreign_grouping_paths: alternative qeury: %s", alternative_query.data);
 

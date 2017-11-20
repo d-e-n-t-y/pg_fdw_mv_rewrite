@@ -98,7 +98,6 @@ static void deparseReturningList(StringInfo buf, PlannerInfo *root,
 					 List **retrieved_attrs);
 static void deparseColumnRef(StringInfo buf, int varno, int varattno,
 				 PlannerInfo *root, bool qualify_col);
-static void deparseRelation(StringInfo buf, Relation rel);
 extern void deparseExpr(Expr *expr, deparse_expr_cxt *context);
 static void deparseVar(Var *node, deparse_expr_cxt *context);
 static void deparseConst(Const *node, deparse_expr_cxt *context, int showtype);
@@ -1996,7 +1995,7 @@ deparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root,
  * Use value of table_name FDW option (if any) instead of relation's name.
  * Similarly, schema_name FDW option overrides schema name.
  */
-static void
+extern void
 deparseRelation(StringInfo buf, Relation rel)
 {
 	ForeignTable *table;

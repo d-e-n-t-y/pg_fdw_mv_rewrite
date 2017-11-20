@@ -519,6 +519,35 @@ pgfdw_exec_query(PGconn *conn, const char *query)
 }
 
 /*
+ * Submit a query and wait for the result.
+ *
+ * This function is interruptible by signals.
+ *
+ * Caller is responsible for the error handling on the result.
+ */
+PGresult *
+pgfdw_exec_query_params(PGconn *conn, const char *query,
+			int nParams,
+			const Oid *paramTypes,
+			const char * const *paramValues,
+			const int *paramLengths,
+			const int *paramFormats,
+			int resultsFormat)
+{
+	/*
+	 * Submit a query.  Since we don't use non-blocking mode, this also can
+	 * block.  But its risk is relatively small, so we ignore that for now.
+	 */
+	if (!PQsendQueryParams(conn, query,
+			       nParams, paramTypes, paramValues,
+			       paramLengths, paramFormats, resultsFormat))
+		pgfdw_report_error(ERROR, NULL, conn, false, query);
+
+	/* Wait for the result. */
+	return pgfdw_get_result(conn, query);
+}
+
+/*
  * Wait for the result from a prior asynchronous execution function call.
  *
  * This function offers quick responsiveness by checking for any interruptions.
