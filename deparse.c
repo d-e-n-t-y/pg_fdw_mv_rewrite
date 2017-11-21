@@ -133,8 +133,6 @@ static void appendGroupByClause(List *tlist, deparse_expr_cxt *context);
 static void appendAggOrderBy(List *orderList, List *targetList,
 				 deparse_expr_cxt *context);
 static void appendFunctionName(Oid funcid, deparse_expr_cxt *context);
-static Node *deparseSortGroupClause(Index ref, List *tlist,
-					   deparse_expr_cxt *context);
 
 /*
  * Helper functions
@@ -3001,7 +2999,7 @@ appendFunctionName(Oid funcid, deparse_expr_cxt *context)
  * Like get_rule_sortgroupclause(), returns the expression tree, so caller
  * need not find it again.
  */
-static Node *
+extern Node *
 deparseSortGroupClause(Index ref, List *tlist, deparse_expr_cxt *context)
 {
 	StringInfo	buf = context->buf;

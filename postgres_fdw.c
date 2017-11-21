@@ -3356,6 +3356,7 @@ deparse_grouped_rel_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_re
   
   List *expression_strings = NIL;
 
+  // FIXME: factor out?
   List *fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
 
   //elog(INFO, "add_foreign_grouping_paths: tlist: %s", nodeToString (fdw_scan_tlist));
@@ -3363,7 +3364,6 @@ deparse_grouped_rel_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_re
   int i = 0;
   foreach(lc, fdw_scan_tlist)
   {
-	//elog(INFO, "add_foreign_grouping_paths: ******** OUTER ********");
 	TargetEntry *tle = lfirst_node(TargetEntry, lc);
 	
 	//elog(INFO, "add_foreign_grouping_paths: expr: %s", nodeToString (tle));
@@ -3378,6 +3378,45 @@ deparse_grouped_rel_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_re
 	deparseExpr (tle->expr, &context);
 	
 	//elog(INFO, "deparse_matview_tlist_expressions: expr: %s", expr_sql->data);
+	expression_strings = lappend (expression_strings, expr_sql);
+  }
+
+  return expression_strings;
+}
+
+static List *
+deparse_grouped_rel_group_clause_expressions (PlannerInfo *root, RelOptInfo *grouped_rel)
+{
+  Query	   *query = root->parse;
+
+  elog(INFO, "%s:", __func__);
+
+  PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+  
+  List *expression_strings = NIL;
+
+  // FIXME: factor out?
+  List *fdw_scan_tlist = build_tlist_to_deparse(grouped_rel);
+
+  List *group_by_tlist = query->groupClause;
+
+  ListCell   *lc;
+  int i = 0;
+  foreach(lc, group_by_tlist)
+  {
+	SortGroupClause *sgc = lfirst_node(SortGroupClause, lc);
+	
+	StringInfo expr_sql = makeStringInfo();
+	deparse_expr_cxt context;
+	context.buf = expr_sql;
+	context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+	context.root = root;
+	context.foreignrel = grouped_rel;
+	
+	deparseSortGroupClause (sgc->tleSortGroupRef, fdw_scan_tlist, &context);
+	
+	elog(INFO, "%s: deparsed expression: %s", __func__, expr_sql->data);
+
 	expression_strings = lappend (expression_strings, expr_sql);
   }
 
@@ -3405,9 +3444,35 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 
 	deparseResTarget (mv_tle, mv_expr_sql, mv_expr_alias);
 
+	elog(INFO, "%s: deparsed: %s (alias %s)", __func__, mv_expr_sql->data, mv_expr_alias->data);
+
 	*expr_sql = lappend (*expr_sql, mv_expr_sql);
 	*expr_alias = lappend (*expr_alias, mv_expr_alias);
   }
+}
+
+static List *
+deparse_matview_group_clause_expressions (SelectStmt *mv_query)
+{
+  List *expr_sql = NIL;
+
+  elog(INFO, "%s:", __func__);
+
+  ListCell *mv_lc;
+  foreach (mv_lc, mv_query->groupClause)
+  {
+	SortGroupClause *mv_tle = lfirst_node (SortGroupClause, mv_lc);
+	StringInfo mv_expr_sql = makeStringInfo();
+
+	deparseResTarget (list_nth_node (ResTarget, mv_query->targetList, mv_tle->tleSortGroupRef), 
+					  mv_expr_sql, NULL);
+
+	elog(INFO, "%s: deparsed expression: %s", __func__, mv_expr_sql->data);
+
+	expr_sql = lappend (expr_sql, mv_expr_sql);
+  }
+
+  return expr_sql;
 }
 
 static bool
@@ -3421,45 +3486,48 @@ check_select_clauses_for_matview (List *expr_sqls, List *mv_expr_sqls, List *mv_
   {
 	StringInfo expr_sql = lfirst(lc);
 	
-	//elog(INFO, "check_select_clauses_for_matview: sql: %s", expr_sql->data);
-	//elog(INFO, "check_select_clauses_for_matview: mv_tlist: %s", nodeToString (mv_query->targetList));
+	elog(INFO, "%s: matching expr: %s", __func__, expr_sql->data);
+
 	ListCell *mv_lc1;
-	ListCell *mv_lc2;
-	forboth (mv_lc1, mv_expr_sqls, mv_lc2, mv_expr_aliases)
+	ListCell *mv_lc2 = mv_expr_aliases != NULL ? list_head(mv_expr_aliases) : NULL;
+	foreach (mv_lc1, mv_expr_sqls)
 	{
 	  StringInfo mv_expr_sql = lfirst(mv_lc1);
-	  StringInfo mv_expr_alias = lfirst(mv_lc2);
+	  StringInfo mv_expr_alias = mv_expr_aliases != NULL ? lfirst(mv_lc2) : NULL;
 	  
-	  //elog(INFO, "check_select_clauses_for_matview: sql: %s", mv_expr_sql->data);
-	  //elog(INFO, "check_select_clauses_for_matview: alias: %s", mv_expr_alias->data);
-	  
+	  elog(INFO, "%s: against expr: %s", __func__, mv_expr_sql->data);
+
 	  if (0 == strcmp (mv_expr_sql->data, expr_sql->data))
 	  {
 		// Match found!
 
-		// elog(INFO, "check_select_clauses_for_matview: match found!");
+		elog(INFO, "%s: match found: %s", __func__, mv_expr_sql->data);
 		
 		// So append the column expression to the alternate query
-		if (i++ > 0)
-		  appendStringInfoString (selected_mv_aliases, ",");
+		if (mv_expr_aliases != NULL)
+		{
+		  if (i++ > 0)
+			appendStringInfoString (selected_mv_aliases, ", ");
 
-		appendStringInfoString (selected_mv_aliases, mv_expr_alias->data);
-		
+		  appendStringInfoString (selected_mv_aliases, mv_expr_alias->data);
+		}
 		goto next_expr;
 	  }
 	  else
 	  {
-		// elog(INFO, "check_select_clauses_for_matview: no match found!");
+		//elog(INFO, "%s: no match found: %s", __func__, expr_sql->data);
 		// continue
 	  }
+	  mv_lc2 = mv_expr_aliases != NULL ? lnext (mv_lc2) : NULL;
 	}
 
 	// Match not found!
-	// elog(INFO, "check_select_clauses_for_matview: no match found!");
+	//elog(INFO, "%s: no match found!", __func__);
+
 	return false;
 	
   next_expr:
-	(void)0;
+	0;
   }
 
   // Complete match found!
@@ -3607,20 +3675,32 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		
 		// FIXME: For now, let's presume that the query is:
 		//    SELECT key, count(value) FROM public.test GROUP BY key
-		if ((0 != strcmp (rel_sql.data, 
-						  "SELECT key, count(value) FROM public.test GROUP BY key")) &&
-			(0 != strcmp (rel_sql.data, 
-						  "SELECT count(value), key FROM public.test GROUP BY key")))
-		  // Match not found...
-		  goto next_mv;
+		//if ((0 != strcmp (rel_sql.data, 
+		//				  "SELECT key, count(value) FROM public.test GROUP BY key")) &&
+		//	(0 != strcmp (rel_sql.data, 
+		//				  "SELECT count(value), key FROM public.test GROUP BY key")))
+		//  // Match not found...
+		//  goto next_mv;
 
 	    // The alternative query we will submit if it matches.
 	    StringInfoData alternative_query;
 	    initStringInfo(&alternative_query);
 	    appendStringInfoString (&alternative_query, "SELECT ");
 
+		SelectStmt *mv_query = parse_select_query ((const char *) mv_definition->data);
+
 		// 1. Check the GROUP BY clause: it must match exactly
-		elog(INFO, "%s: checking GROUP BY clauses...", __func__);
+		{
+		  elog(INFO, "%s: checking GROUP BY clauses...", __func__);
+		  List *expr_sqls = deparse_grouped_rel_group_clause_expressions (root, grouped_rel);
+		  
+		  List *mv_expr_sqls = deparse_matview_group_clause_expressions (mv_query);
+		  
+		  // FIXME
+		  if (!check_select_clauses_for_matview (expr_sqls, mv_expr_sqls, NULL,
+												 NULL))
+			goto next_mv;
+		}
 
 		// FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer 
 		// where it can be re-aggregated
@@ -3639,17 +3719,18 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		// FIXME: 5. Consider computing any missing aggregates from other components
 
 		// 6. Check the SELECT clauses: they must be a subset
-		elog(INFO, "%s: checking SELECT clauses...", __func__);
-		List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
-		
-		SelectStmt *mv_query = parse_select_query ((const char *) mv_definition->data);
-		List *mv_expr_sqls = NIL;
-		List *mv_expr_aliases = NIL;
-		deparse_matview_tlist_expressions (mv_query, &mv_expr_sqls, &mv_expr_aliases);
-		
-		if (!check_select_clauses_for_matview (expr_sqls, mv_expr_sqls, mv_expr_aliases,
-											   &alternative_query))
-		  goto next_mv;
+		{
+		  elog(INFO, "%s: checking SELECT clauses...", __func__);
+		  List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
+		  
+		  List *mv_expr_sqls = NIL;
+		  List *mv_expr_aliases = NIL;
+		  deparse_matview_tlist_expressions (mv_query, &mv_expr_sqls, &mv_expr_aliases);
+		  
+		  if (!check_select_clauses_for_matview (expr_sqls, mv_expr_sqls, mv_expr_aliases,
+												 &alternative_query))
+			goto next_mv;
+		}
 
 	    // Complete the query...
 	    appendStringInfoString(&alternative_query, " ");
