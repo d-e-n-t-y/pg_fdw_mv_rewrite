@@ -26,6 +26,7 @@
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "optimizer/cost.h"
 #include "optimizer/clauses.h"
 #include "optimizer/pathnode.h"
@@ -3584,7 +3585,11 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	Cost		startup_cost;
 	Cost		total_cost;
 
-	elog(INFO, "add_foreign_grouping_paths");
+	elog(INFO, "%s", __func__);
+
+	elog(INFO, "%s: root: %s", __func__, pretty_format_node_dump (nodeToString (root)));
+	elog(INFO, "%s: input_rel: %s", __func__, pretty_format_node_dump (nodeToString (input_rel)));
+	elog(INFO, "%s: grouped_rel: %s", __func__, pretty_format_node_dump (nodeToString (grouped_rel)));
 
 	/* Nothing to be done, if there is no grouping or aggregation required. */
 	if (!parse->groupClause && !parse->groupingSets && !parse->hasAggs &&
@@ -3732,12 +3737,23 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 			goto next_mv;
 		}
 
+		// FIXME: 6a. Allow SELECT of an expression based on the fundamental
+		// MV's select tList. This may necessitate re-computing the expression list
+		// to contain direct ColumnRefs instead of Exprs where those are matched.
+		// In turn, this reuires recursive processing of the query tree to search 
+		// for matches. After that, the whole matter becomes a regular check for 
+		// push-down-ability.
+
 	    // Complete the query...
 	    appendStringInfoString(&alternative_query, " ");
 	    appendStringInfoString(&alternative_query, " FROM ");
 	    appendStringInfoString(&alternative_query, mv_schema->data);
 	    appendStringInfoString(&alternative_query, ".");
 	    appendStringInfoString(&alternative_query, mv_name->data);
+
+		// FIXME: add there WHERE cluase too.
+
+		// FIXME: do we need to append the ORDER BY clause too?
 
 		elog(INFO, "%s: alternative qeury: %s", __func__, alternative_query.data);
 
