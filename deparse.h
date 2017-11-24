@@ -54,3 +54,6 @@ deparseRelation(StringInfo buf, Relation rel);
 
 extern Node *
 deparseSortGroupClause(Index ref, List *tlist, deparse_expr_cxt *context);
+
+extern void 
+appendConditions(List *exprs, deparse_expr_cxt *context);

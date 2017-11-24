@@ -3432,9 +3432,77 @@ parse_select_query (const char *mv_sql)
   return mv_query;
 }
 
+static bool
+check_expr_target_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
+									Expr *expr, 
+									List /* ResTarget* */ *tlist, 
+									List /* StringInfo */ *tStrList)
+{
+  PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+
+  if (expr == NULL)
+	return true;
+
+  elog(INFO, "%s: checking expr: %s", __func__, nodeToString (expr));
+  
+  switch (nodeTag(expr))
+  {
+  case T_OpExpr:
+	{
+	  OpExpr *node = (OpExpr *) expr;
+	  
+	  return (check_expr_target_in_matview_tlist (root, grouped_rel, 
+												  lfirst (list_head(node->args)), 
+												  tlist, tStrList) &&
+			  check_expr_target_in_matview_tlist (root, grouped_rel, 
+												  lfirst (list_tail(node->args)), 
+												  tlist, tStrList));
+	}
+	break;
+  case T_Const:
+	// Constants are always matchable.
+	return true;
+	break;
+  case T_Var:
+	{
+	  // FIXME: this fragment seems to crop up everywhere...
+	  deparse_expr_cxt context;
+	  StringInfo var = makeStringInfo();
+	  context.buf = var;
+	  context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+	  context.root = root;
+	  context.foreignrel = grouped_rel;
+
+	  deparseExpr (expr, &context);
+
+	  elog(INFO, "%s: searching for match for: %s", __func__, var->data);
+
+	  // FIXME: we're validating against the MV SQL tlist, but we should really
+	  // check against the column that the tList entry references.
+	  ListCell *lc;
+	  foreach (lc, tStrList)
+	  {
+		StringInfo tStr = lfirst(lc);
+	  
+		elog(INFO, "%s: against expr: %s", __func__, tStr->data);
+
+		if (0 == strcmp (var->data, tStr->data))
+		  return true;
+	  }
+	  return false;
+	}
+	break;
+  default:
+	elog(WARNING, "%s: unrecognised expr node type: %d", __func__, nodeTag (expr));
+  }
+  
+  return false;
+}
+
 static void
 deparse_matview_tlist_expressions (SelectStmt *mv_query,
-								   List **expr_sql, List **expr_alias)
+								   List /* StringInfo* */ **expr_sql, 
+								   List /* StringInfo* */ **expr_alias)
 {
   ListCell *mv_lc;
   foreach (mv_lc, mv_query->targetList)
@@ -3587,9 +3655,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	elog(INFO, "%s", __func__);
 
-	elog(INFO, "%s: root: %s", __func__, pretty_format_node_dump (nodeToString (root)));
-	elog(INFO, "%s: input_rel: %s", __func__, pretty_format_node_dump (nodeToString (input_rel)));
-	elog(INFO, "%s: grouped_rel: %s", __func__, pretty_format_node_dump (nodeToString (grouped_rel)));
+	elog(INFO, "%s: root: %s", __func__, nodeToString (root));
+	elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+	elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
 
 	/* Nothing to be done, if there is no grouping or aggregation required. */
 	if (!parse->groupClause && !parse->groupingSets && !parse->hasAggs &&
@@ -3665,27 +3733,29 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		StringInfo mv_name = lfirst(nc);
 		StringInfo mv_definition = lfirst(dc);
 
-		StringInfoData rel_sql;
 		List	*retrieved_attrs;
 		
 		elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
-		initStringInfo(&rel_sql);
-		
-		// FIXME: might be possible to do this search without deparsing the
-		// SQL...
-		deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
-		
-		elog(INFO, "%s: SQL: %s", __func__, rel_sql.data);
-		
-		// FIXME: For now, let's presume that the query is:
-		//    SELECT key, count(value) FROM public.test GROUP BY key
-		//if ((0 != strcmp (rel_sql.data, 
-		//				  "SELECT key, count(value) FROM public.test GROUP BY key")) &&
-		//	(0 != strcmp (rel_sql.data, 
-		//				  "SELECT count(value), key FROM public.test GROUP BY key")))
-		//  // Match not found...
-		//  goto next_mv;
+		{
+		  StringInfoData rel_sql;
+		  
+		  initStringInfo(&rel_sql);
+		  
+		  // FIXME: might be possible to do this search without deparsing the
+		  // SQL...
+		  deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
+		  
+		  elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
+		  
+		  initStringInfo(&rel_sql);
+		  
+		  // FIXME: might be possible to do this search without deparsing the
+		  // SQL...
+		  deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
+		  
+		  elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+		}
 
 	    // The alternative query we will submit if it matches.
 	    StringInfoData alternative_query;
@@ -3693,7 +3763,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    appendStringInfoString (&alternative_query, "SELECT ");
 
 		SelectStmt *mv_query = parse_select_query ((const char *) mv_definition->data);
-
+		
+		List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
+		
 		// 1. Check the GROUP BY clause: it must match exactly
 		{
 		  elog(INFO, "%s: checking GROUP BY clauses...", __func__);
@@ -3715,6 +3787,31 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 		// 3. Check the WHERE clause: they must match exactly
 		elog(INFO, "%s: checking WHERE clauses...", __func__);
+		{
+		  elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+		  ListCell   *lc;
+		  foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
+		  {
+		    RestrictInfo *ri = lfirst (lc);
+		    Expr *expr;
+		    
+		    /* Extract clause from RestrictInfo, if required */
+		    if (IsA(ri, RestrictInfo))
+		    {
+		      expr = ((RestrictInfo *) ri)->clause;
+		      elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
+
+			  if (!check_expr_target_in_matview_tlist (root, grouped_rel, 
+													   expr, 
+													   mv_query->targetList, expr_sqls))
+				goto next_mv;
+		    }
+		    else
+		    {
+		      elog(ERROR, "%s: unrecognised clause type", __func__);
+		    }
+		  }
+		}
 
 		// FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
 
@@ -3726,7 +3823,6 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		// 6. Check the SELECT clauses: they must be a subset
 		{
 		  elog(INFO, "%s: checking SELECT clauses...", __func__);
-		  List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
 		  
 		  List *mv_expr_sqls = NIL;
 		  List *mv_expr_aliases = NIL;
@@ -3751,7 +3847,24 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    appendStringInfoString(&alternative_query, ".");
 	    appendStringInfoString(&alternative_query, mv_name->data);
 
-		// FIXME: add there WHERE cluase too.
+		// Add there WHERE cluase too, if any.
+		{
+		  // FIXME: this fragment seems to crop up everywhere...
+		  deparse_expr_cxt context;
+		  context.buf = &alternative_query;
+		  context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+		  context.root = root;
+		  context.foreignrel = grouped_rel;
+		  
+		  PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
+		  List *quals = ofpinfo->remote_conds;
+
+		  if (quals != NIL)
+		  {
+			appendStringInfo (&alternative_query, " WHERE ");
+			appendConditions (quals, &context);
+		  }
+		}
 
 		// FIXME: do we need to append the ORDER BY clause too?
 

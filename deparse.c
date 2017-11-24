@@ -121,7 +121,6 @@ static void deparseSelectSql(List *tlist, bool is_subquery, List **retrieved_att
 				 deparse_expr_cxt *context);
 static void deparseLockingClause(deparse_expr_cxt *context);
 static void appendOrderByClause(List *pathkeys, deparse_expr_cxt *context);
-static void appendConditions(List *exprs, deparse_expr_cxt *context);
 static void deparseFromExprForRel(StringInfo buf, PlannerInfo *root,
 					  RelOptInfo *joinrel, bool use_alias, List **params_list);
 static void deparseFromExpr(List *quals, deparse_expr_cxt *context);
@@ -1226,7 +1225,7 @@ deparseLockingClause(deparse_expr_cxt *context)
  * Depending on the caller, the list elements might be either RestrictInfos
  * or bare clauses.
  */
-static void
+extern void
 appendConditions(List *exprs, deparse_expr_cxt *context)
 {
 	int			nestlevel;
