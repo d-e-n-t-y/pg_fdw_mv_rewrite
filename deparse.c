@@ -165,9 +165,15 @@ classifyConditions(PlannerInfo *root,
 		RestrictInfo *ri = lfirst_node(RestrictInfo, lc);
 
 		if (is_foreign_expr(root, baserel, ri->clause))
+		{
 			*remote_conds = lappend(*remote_conds, ri);
+			//elog(INFO, "%s: expression is remote: %s", __func__, nodeToString (ri));
+		}
 		else
+		{
 			*local_conds = lappend(*local_conds, ri);
+			//elog(INFO, "%s: expression is local: %s", __func__, nodeToString (ri));
+		}
 	}
 }
 
@@ -190,6 +196,8 @@ is_foreign_expr(PlannerInfo *root,
 	glob_cxt.root = root;
 	glob_cxt.foreignrel = baserel;
 
+	//elog(INFO, "%s: evanluating expression using walker: %s", __func__, nodeToString (expr));
+
 	/*
 	 * For an upper relation, use relids from its underneath scan relation,
 	 * because the upperrel's own relids currently aren't set to anything
@@ -204,12 +212,16 @@ is_foreign_expr(PlannerInfo *root,
 	if (!foreign_expr_walker((Node *) expr, &glob_cxt, &loc_cxt))
 		return false;
 
+	//elog(INFO, "%s: checking for unsafe collation...", __func__);
+
 	/*
 	 * If the expression has a valid collation that does not arise from a
 	 * foreign var, the expression can not be sent over.
 	 */
 	if (loc_cxt.state == FDW_COLLATE_UNSAFE)
 		return false;
+
+	//elog(INFO, "%s: checking for mutable expression...", __func__);
 
 	/*
 	 * An expression which includes any mutable functions can't be sent over
@@ -220,6 +232,8 @@ is_foreign_expr(PlannerInfo *root,
 	 */
 	if (contain_mutable_functions((Node *) expr))
 		return false;
+
+	//elog(INFO, "%s: all OK.", __func__);
 
 	/* OK to evaluate on the remote server */
 	return true;
@@ -248,6 +262,8 @@ foreign_expr_walker(Node *node,
 	foreign_loc_cxt inner_cxt;
 	Oid			collation;
 	FDWCollateState state;
+
+	//elog(INFO, "%s: walking expression: %s", __func__, nodeToString (node));
 
 	/* Need do nothing for empty subexpressions */
 	if (node == NULL)
@@ -287,11 +303,15 @@ foreign_expr_walker(Node *node,
 					if (var->varattno < 0 &&
 						var->varattno != SelfItemPointerAttributeNumber &&
 						var->varattno != ObjectIdAttributeNumber)
+					{
+					        //elog(INFO, "%s: system column.", __func__);
 						return false;
+					}
 
 					/* Else check the collation */
 					collation = var->varcollid;
 					state = OidIsValid(collation) ? FDW_COLLATE_SAFE : FDW_COLLATE_NONE;
+					//elog(INFO, "%s: varcollid=%d, state=%d.", __func__, collation, state);
 				}
 				else
 				{
@@ -305,6 +325,7 @@ foreign_expr_walker(Node *node,
 						 * collatable foreign Var, so set state to NONE.
 						 */
 						state = FDW_COLLATE_NONE;
+					        //elog(INFO, "%s: var belongs to other table.", __func__);
 					}
 					else
 					{
@@ -313,6 +334,7 @@ foreign_expr_walker(Node *node,
 						 * in a collation-insensitive context.
 						 */
 						state = FDW_COLLATE_UNSAFE;
+					        //elog(INFO, "%s: var unsafe.", __func__);
 					}
 				}
 			}
@@ -330,9 +352,15 @@ foreign_expr_walker(Node *node,
 				collation = c->constcollid;
 				if (collation == InvalidOid ||
 					collation == DEFAULT_COLLATION_OID)
+				{
+				        //elog(INFO, "%s: const collation invalid or default.", __func__);
 					state = FDW_COLLATE_NONE;
+				}
 				else
+				{
+				        //elog(INFO, "%s: const collation unsafe.", __func__);
 					state = FDW_COLLATE_UNSAFE;
+				}
 			}
 			break;
 		case T_Param:
@@ -393,30 +421,48 @@ foreign_expr_walker(Node *node,
 			{
 				FuncExpr   *fe = (FuncExpr *) node;
 
+				//elog(INFO, "%s: evaluating function...", __func__);
+
 				/*
 				 * If function used by the expression is not shippable, it
 				 * can't be sent to remote because it might have incompatible
 				 * semantics on remote side.
 				 */
 				if (!is_shippable(fe->funcid, ProcedureRelationId, fpinfo))
+				{
+				        //elog(INFO, "%s: function not shippable.", __func__);
 					return false;
+				}
+
 
 				/*
 				 * Recurse to input subexpressions.
 				 */
 				if (!foreign_expr_walker((Node *) fe->args,
 										 glob_cxt, &inner_cxt))
+				{
+				        //elog(INFO, "%s: expression contains non-shippable subexpression.", __func__);
 					return false;
+				}
 
 				/*
 				 * If function's input collation is not derived from a foreign
 				 * Var, it can't be sent to remote.
 				 */
-				if (fe->inputcollid == InvalidOid)
+				if (fe->inputcollid == InvalidOid ||
+				    (fe->inputcollid != InvalidOid &&
+				     inner_cxt.state == FDW_COLLATE_NONE))
 					 /* OK, inputs are all noncollatable */ ;
-				else if (inner_cxt.state != FDW_COLLATE_SAFE ||
-						 fe->inputcollid != inner_cxt.collation)
+				else if (inner_cxt.state != FDW_COLLATE_SAFE)
+				{
+				        //elog(INFO, "%s: input collation not safe (%d).", __func__, inner_cxt.state);
 					return false;
+				}
+				else if (fe->inputcollid != inner_cxt.collation)
+				{
+				        //elog(INFO, "%s: input (%d) not derived from arg (%d) collation.", __func__, fe->inputcollid, inner_cxt.collation);
+					return false;
+				}
 
 				/*
 				 * Detect whether node is introducing a collation not derived
@@ -434,6 +480,8 @@ foreign_expr_walker(Node *node,
 					state = FDW_COLLATE_NONE;
 				else
 					state = FDW_COLLATE_UNSAFE;
+
+				//elog(INFO, "%s: good.", __func__);
 			}
 			break;
 		case T_OpExpr:
@@ -625,6 +673,8 @@ foreign_expr_walker(Node *node,
 			break;
 		case T_Aggref:
 			{
+			        //elog(INFO, "%s: walking Aggref.", __func__);
+
 				Aggref	   *agg = (Aggref *) node;
 				ListCell   *lc;
 
@@ -639,6 +689,8 @@ foreign_expr_walker(Node *node,
 				/* As usual, it must be shippable. */
 				if (!is_shippable(agg->aggfnoid, ProcedureRelationId, fpinfo))
 					return false;
+
+			        //elog(INFO, "%s: shippable.", __func__);
 
 				/*
 				 * Recurse to input args. aggdirectargs, aggorder and
@@ -660,6 +712,8 @@ foreign_expr_walker(Node *node,
 					if (!foreign_expr_walker(n, glob_cxt, &inner_cxt))
 						return false;
 				}
+
+			        //elog(INFO, "%s: walked list.", __func__);
 
 				/*
 				 * For aggorder elements, check whether the sort operator, if
@@ -737,13 +791,19 @@ foreign_expr_walker(Node *node,
 	 * to remote because it might have incompatible semantics on remote side.
 	 */
 	if (check_type && !is_shippable(exprType(node), TypeRelationId, fpinfo))
+	{
+	        //elog(INFO, "%s: return type not shippable.", __func__);
 		return false;
+	}
 
+	//elog(INFO, "%s: merging collation.", __func__);
 	/*
 	 * Now, merge my collation information into my parent's state.
 	 */
 	if (state > outer_cxt->state)
 	{
+	        //elog(INFO, "%s: outer becomes state %d, collation %d (was %d, %d).", __func__, state, collation, outer_cxt->state, outer_cxt->collation);
+
 		/* Override previous parent state */
 		outer_cxt->collation = collation;
 		outer_cxt->state = state;
@@ -754,6 +814,7 @@ foreign_expr_walker(Node *node,
 		switch (state)
 		{
 			case FDW_COLLATE_NONE:
+			        //elog(INFO, "%s: outer state becomes unchanged (was %d).", __func__, outer_cxt->state);
 				/* Nothing + nothing is still nothing */
 				break;
 			case FDW_COLLATE_SAFE:
@@ -764,11 +825,13 @@ foreign_expr_walker(Node *node,
 					 */
 					if (outer_cxt->collation == DEFAULT_COLLATION_OID)
 					{
+					        //elog(INFO, "%s: collation beats state %d, collation %d (was %d, default %d).", __func__, state, collation, outer_cxt->state, outer_cxt->collation);
 						/* Override previous parent state */
 						outer_cxt->collation = collation;
 					}
 					else if (collation != DEFAULT_COLLATION_OID)
 					{
+					        //elog(INFO, "%s: collation beats state %d, non-default collation %d (was %d, %d).", __func__, FDW_COLLATE_UNSAFE, collation, outer_cxt->state, outer_cxt->collation);
 						/*
 						 * Conflict; show state as indeterminate.  We don't
 						 * want to "return false" right away, since parent
@@ -776,13 +839,18 @@ foreign_expr_walker(Node *node,
 						 */
 						outer_cxt->state = FDW_COLLATE_UNSAFE;
 					}
+				} else {
+				  //elog(INFO, "%s: outer state becomes unchanged (was %d).", __func__, outer_cxt->state);
 				}
 				break;
 			case FDW_COLLATE_UNSAFE:
+			        //elog(INFO, "%s: still conflicted.", __func__);
 				/* We're still conflicted ... */
 				break;
 		}
 	}
+
+	//elog(INFO, "%s: done.", __func__);
 
 	/* It looks OK */
 	return true;
@@ -3131,18 +3199,42 @@ deparseRTExpr (Node *t, StringInfo sql);
 static void
 deparseRTColumnRef (ColumnRef *t, StringInfo sql)
 {
-  elog(INFO, "deparseRTColumnRef: t: %s", nodeToString (t));
+  //elog(INFO, "deparseRTColumnRef: t: %s", nodeToString (t));
 
   // FIXME: what about emitting the discriminator?
 
-  appendStringInfoString (sql, strVal (list_nth (t->fields, 1)));
+  appendStringInfo (sql, "\"%s\"", strVal (list_nth (t->fields, 1)));
+}
+
+static void
+deparseTypeCast (TypeCast *t, StringInfo sql)
+{
+  //elog(INFO, "%s: t: %s", __func__, nodeToString (t));
+
+  deparseRTExpr ((Node *) t->arg, sql);
+  appendStringInfoString (sql, "::");
+  deparseRTExpr ((Node *) t->typeName, sql);
+}
+
+static void
+deparseTypeName (TypeName *t, StringInfo sql)
+{
+  ListCell *lc;
+  int i = 0;
+  foreach (lc, t->names)
+  {
+    if (i > 0)
+      appendStringInfoString (sql, " ");
+    appendStringInfoString (sql, strVal (lfirst_node(Value, lc)));
+  }
 }
 
 static void
 deparseFuncCall (FuncCall *t, StringInfo sql)
 {
-  elog(INFO, "deparseFuncCall: t: %s", nodeToString (t));
+  //elog(INFO, "deparseFuncCall: t: %s", nodeToString (t));
 
+  appendStringInfoString (sql, "(");
   {
     ListCell *lc;
     int i = 0;
@@ -3162,18 +3254,43 @@ deparseFuncCall (FuncCall *t, StringInfo sql)
     foreach (lc, t->args)
     {
       if (i++ > 0)
-	appendStringInfoString (sql, ",");
+	appendStringInfoString (sql, ", ");
       deparseRTExpr (lfirst_node(Node, lc), sql);
     }
   }
 
   appendStringInfoString (sql, ")");
+  appendStringInfoString (sql, ")");
+}
+
+static void
+deparseAConst (Value *value, StringInfo sql)
+{
+  switch (nodeTag (value))
+  {
+  case T_String:
+    // FIXME: escape string
+    appendStringInfo (sql, "'%s'", strVal (value));
+    break;
+  case T_Integer:
+    appendStringInfo (sql, "%ld", intVal (value));
+    break;
+  case T_Float:
+    appendStringInfo (sql, "'%s'", strVal (value));
+    break;
+  case T_Null:
+    appendStringInfo (sql, "NULL");
+    break;
+  default:
+    elog (ERROR, "Value type not supported: %d",  (int) nodeTag(value));
+    break;
+  }
 }
 
 static void
 deparseRTExpr (Node *t, StringInfo sql)
 {
-  elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));
+  //elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));
 
   switch (nodeTag (t))
   {
@@ -3184,6 +3301,15 @@ deparseRTExpr (Node *t, StringInfo sql)
   case T_FuncCall:
     deparseFuncCall ((FuncCall *) t, sql);
     break;
+  case T_TypeCast:
+    deparseTypeCast ((TypeCast *) t, sql);
+    break;
+  case T_A_Const:
+    deparseAConst (&(((A_Const *) t)->val), sql);
+    break;
+  case T_TypeName:
+    deparseTypeName ((TypeName *) t, sql);
+    break;
   default:
     elog (ERROR, "Node type not supported: %d",  (int) nodeTag(t));
     break;
@@ -3193,7 +3319,7 @@ deparseRTExpr (Node *t, StringInfo sql)
 extern void
 deparseResTarget (ResTarget *t, StringInfo sql, StringInfo alias)
 {
-  elog(INFO, "deparseResTarget: t: %s", nodeToString (t));
+  //elog(INFO, "deparseResTarget: t: %s", nodeToString (t));
 
   deparseRTExpr (t->val, sql);
 

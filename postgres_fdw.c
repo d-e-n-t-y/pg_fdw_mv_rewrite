@@ -2986,12 +2986,18 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 	int			i;
 	List	   *tlist = NIL;
 
+	elog(INFO, "%s: checking for grouping sets...", __func__);
+
 	/* Grouping Sets are not pushable */
 	if (query->groupingSets)
 		return false;
 
 	/* Get the fpinfo of the underlying scan relation. */
 	ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
+
+	elog(INFO, "%s: checking for local conditions...", __func__);
+
+	elog(INFO, "%s: local conditions: %s", __func__, nodeToString (ofpinfo->local_conds));
 
 	/*
 	 * If underneath input relation has any local conditions, those conditions
@@ -3025,6 +3031,8 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 		Index		sgref = get_pathtarget_sortgroupref(grouping_target, i);
 		ListCell   *l;
 
+		elog(INFO, "%s: checking target expression: %s", __func__, nodeToString (expr));
+
 		/* Check whether this expression is part of GROUP BY clause */
 		if (sgref && get_sortgroupref_clause_noerr(sgref, query->groupClause))
 		{
@@ -3032,6 +3040,8 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 			 * If any of the GROUP BY expression is not shippable we can not
 			 * push down aggregation to the foreign server.
 			 */
+		    elog(INFO, "%s: checking if clause is shippable...", __func__);
+			
 			if (!is_foreign_expr(root, grouped_rel, expr))
 				return false;
 
@@ -3040,6 +3050,8 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 		}
 		else
 		{
+		    elog(INFO, "%s: checking if expression is pushable...", __func__);
+
 			/* Check entire expression whether it is pushable or not */
 			if (is_foreign_expr(root, grouped_rel, expr))
 			{
@@ -3150,6 +3162,8 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 			 */
 			if (IsA(expr, Aggref))
 			{
+			    elog(INFO, "%s: checking aggregate local condition is safe to push: %s", __func__, nodeToString (expr));
+
 				if (!is_foreign_expr(root, grouped_rel, expr))
 					return false;
 
@@ -3297,12 +3311,16 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 	  int			numrows, i;
 	  
 	  const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
-		" FROM pg_tables t, public.pgx_rewritable_matviews j, pg_matviews v"
-		" WHERE t.schemaname = j.tableschemaname"
-		" AND t.tablename = j.tablename"
+		" FROM ("
+		"  SELECT tablename objname, schemaname FROM pg_tables"
+		"  UNION ALL SELECT viewname, schemaname FROM pg_views"
+		"  UNION ALL SELECT matviewname, schemaname FROM pg_matviews"
+		") o, public.pgx_rewritable_matviews j, pg_matviews v"
+		" WHERE o.schemaname = j.tableschemaname"
+		" AND o.objname = j.tablename"
 		" AND j.matviewschemaname = v.schemaname"
 		" AND j.matviewname = v.matviewname"
-		" AND t.schemaname || '.' || t.tablename = $1::text";
+		" AND o.schemaname || '.' || o.objname = $1::text";
 	  
 	  const int nr_params = 1;
 	  const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
@@ -3525,7 +3543,7 @@ deparse_matview_group_clause_expressions (SelectStmt *mv_query)
 {
   List *expr_sql = NIL;
 
-  elog(INFO, "%s:", __func__);
+  elog(INFO, "%s: %s", __func__, nodeToString (mv_query));
 
   ListCell *mv_lc;
   foreach (mv_lc, mv_query->groupClause)
@@ -3655,9 +3673,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 	elog(INFO, "%s", __func__);
 
-	elog(INFO, "%s: root: %s", __func__, nodeToString (root));
-	elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-	elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
+	//elog(INFO, "%s: root: %s", __func__, nodeToString (root));
+	//elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+	//elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
 
 	/* Nothing to be done, if there is no grouping or aggregation required. */
 	if (!parse->groupClause && !parse->groupingSets && !parse->hasAggs &&
@@ -3678,11 +3696,13 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	fpinfo->user = ifpinfo->user;
 	merge_fdw_options(fpinfo, ifpinfo, NULL);
 
+	elog(INFO, "%s: assessing push-down safety...", __func__);
+
 	/* Assess if it is safe to push down aggregation and grouping. */
 	if (!foreign_grouping_ok(root, grouped_rel))
 		return;
 
-	elog(INFO, "add_foreign_grouping_paths: foreign_grouping_ok");
+	elog(INFO, "%s: push-down safety OK.", __func__);
 
 	/* Estimate the cost of push down */
 	estimate_path_cost_size(root, grouped_rel, NIL, NIL, &rows,
