@@ -1,0 +1,349 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BF8BEF121FD1EF6D003A7AC9 /* connection.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE81FD1E590003A7AC9 /* connection.c */; };
+		BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE91FD1E590003A7AC9 /* deparse.c */; };
+		BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */; };
+		BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEF31FD1E590003A7AC9 /* shippable.c */; };
+		BF8BEF191FD1EFD4003A7AC9 /* libpq.5.10.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */; };
+		BF8BEF1E1FD1F22D003A7AC9 /* deparse.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEEA1FD1E590003A7AC9 /* deparse.h */; };
+		BF8BEF201FD1F24E003A7AC9 /* postgres_fdw.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */; };
+		BF8BEF9D1FD1F559003A7AC9 /* include in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEF9C1FD1F559003A7AC9 /* include */; settings = {ATTRIBUTES = (Private, ); }; };
+		BF8BEF9F1FD1F596003A7AC9 /* libpq in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEF9E1FD1F596003A7AC9 /* libpq */; settings = {ATTRIBUTES = (Private, ); }; };
+		BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEED1FD1E590003A7AC9 /* option.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		BF8BEEE81FD1E590003A7AC9 /* connection.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connection.c; sourceTree = "<group>"; };
+		BF8BEEE91FD1E590003A7AC9 /* deparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = deparse.c; sourceTree = "<group>"; };
+		BF8BEEEA1FD1E590003A7AC9 /* deparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = deparse.h; sourceTree = "<group>"; };
+		BF8BEEEB1FD1E590003A7AC9 /* expected */ = {isa = PBXFileReference; lastKnownFileType = folder; path = expected; sourceTree = "<group>"; };
+		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		BF8BEEED1FD1E590003A7AC9 /* option.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = option.c; sourceTree = "<group>"; };
+		BF8BEEEE1FD1E590003A7AC9 /* postgres_fdw--1.0.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "postgres_fdw--1.0.sql"; sourceTree = "<group>"; };
+		BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = postgres_fdw.c; sourceTree = "<group>"; };
+		BF8BEEF01FD1E590003A7AC9 /* postgres_fdw.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = postgres_fdw.control; sourceTree = "<group>"; };
+		BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = postgres_fdw.h; sourceTree = "<group>"; };
+		BF8BEEF21FD1E590003A7AC9 /* setup.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = setup.sql; sourceTree = "<group>"; };
+		BF8BEEF31FD1E590003A7AC9 /* shippable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = shippable.c; sourceTree = "<group>"; };
+		BF8BEEF41FD1E590003A7AC9 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
+		BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = postgres_fdw.sql; path = sql/postgres_fdw.sql; sourceTree = "<group>"; };
+		BF8BEF0E1FD1EF5D003A7AC9 /* libpostgres_fdw.so.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libpostgres_fdw.so.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = ../../lib/libpq.5.10.dylib; sourceTree = "<group>"; };
+		BF8BEF9C1FD1F559003A7AC9 /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../../src/include; sourceTree = "<group>"; };
+		BF8BEF9E1FD1F596003A7AC9 /* libpq */ = {isa = PBXFileReference; lastKnownFileType = folder; name = libpq; path = ../../src/interfaces/libpq; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BF8BEF0B1FD1EF5D003A7AC9 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF8BEF191FD1EFD4003A7AC9 /* libpq.5.10.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		BF8BEEDD1FD1E500003A7AC9 = {
+			isa = PBXGroup;
+			children = (
+				BF8BEEEB1FD1E590003A7AC9 /* expected */,
+				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
+				BF8BEEEE1FD1E590003A7AC9 /* postgres_fdw--1.0.sql */,
+				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
+				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
+				BF8BEEF01FD1E590003A7AC9 /* postgres_fdw.control */,
+				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,
+				BF8BEEF41FD1E590003A7AC9 /* sql */,
+				BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */,
+				BF8BEEFC1FD1EBD0003A7AC9 /* Products */,
+				BF8BEF171FD1EFD4003A7AC9 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		BF8BEEF61FD1E99D003A7AC9 /* Source code */ = {
+			isa = PBXGroup;
+			children = (
+				BF8BEEE81FD1E590003A7AC9 /* connection.c */,
+				BF8BEEE91FD1E590003A7AC9 /* deparse.c */,
+				BF8BEEED1FD1E590003A7AC9 /* option.c */,
+				BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */,
+				BF8BEEF31FD1E590003A7AC9 /* shippable.c */,
+			);
+			name = "Source code";
+			sourceTree = "<group>";
+		};
+		BF8BEEFC1FD1EBD0003A7AC9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BF8BEF0E1FD1EF5D003A7AC9 /* libpostgres_fdw.so.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BF8BEF171FD1EFD4003A7AC9 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		BF8BEF1F1FD1F23E003A7AC9 /* Headers */ = {
+			isa = PBXGroup;
+			children = (
+				BF8BEF9C1FD1F559003A7AC9 /* include */,
+				BF8BEF9E1FD1F596003A7AC9 /* libpq */,
+				BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */,
+				BF8BEEEA1FD1E590003A7AC9 /* deparse.h */,
+			);
+			name = Headers;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		BF8BEF0C1FD1EF5D003A7AC9 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF8BEF9F1FD1F596003A7AC9 /* libpq in Headers */,
+				BF8BEF9D1FD1F559003A7AC9 /* include in Headers */,
+				BF8BEF1E1FD1F22D003A7AC9 /* deparse.h in Headers */,
+				BF8BEF201FD1F24E003A7AC9 /* postgres_fdw.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw.so */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "postgres_fdw.so" */;
+			buildPhases = (
+				BF8BEF0B1FD1EF5D003A7AC9 /* Frameworks */,
+				BF8BEF0A1FD1EF5D003A7AC9 /* Sources */,
+				BF8BEF0C1FD1EF5D003A7AC9 /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = postgres_fdw.so;
+			productName = postgres_fdw.so;
+			productReference = BF8BEF0E1FD1EF5D003A7AC9 /* libpostgres_fdw.so.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BF8BEEDE1FD1E500003A7AC9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0830;
+				ORGANIZATIONNAME = "John Dent";
+				TargetAttributes = {
+					BF8BEF0D1FD1EF5D003A7AC9 = {
+						CreatedOnToolsVersion = 8.3;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = BF8BEEE11FD1E500003A7AC9 /* Build configuration list for PBXProject "PostgreSQL" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = BF8BEEDD1FD1E500003A7AC9;
+			productRefGroup = BF8BEEFC1FD1EBD0003A7AC9 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw.so */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BF8BEF0A1FD1EF5D003A7AC9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */,
+				BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */,
+				BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */,
+				BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */,
+				BF8BEF121FD1EF6D003A7AC9 /* connection.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BF8BEEE31FD1E500003A7AC9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+			};
+			name = Debug;
+		};
+		BF8BEEE41FD1E500003A7AC9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+			};
+			name = Release;
+		};
+		BF8BEF101FD1EF5D003A7AC9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				BUNDLE_LOADER = ../../src/backend/postgres;
+				CODE_SIGN_IDENTITY = "-";
+				DYLIB_COMPATIBILITY_VERSION = "";
+				DYLIB_CURRENT_VERSION = "";
+				EXECUTABLE_PREFIX = lib;
+				HEADER_SEARCH_PATHS = "";
+				"HEADER_SEARCH_PATHS[arch=*]" = "";
+				LIBRARY_SEARCH_PATHS = (
+					../../src/interfaces/libpq,
+					../../src/port,
+					../../src/common,
+				);
+				LINK_WITH_STANDARD_LIBRARIES = YES;
+				MACH_O_TYPE = mh_bundle;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
+			};
+			name = Debug;
+		};
+		BF8BEF111FD1EF5D003A7AC9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				BUNDLE_LOADER = ../../src/backend/postgres;
+				CODE_SIGN_IDENTITY = "-";
+				DYLIB_COMPATIBILITY_VERSION = "";
+				DYLIB_CURRENT_VERSION = "";
+				EXECUTABLE_PREFIX = lib;
+				HEADER_SEARCH_PATHS = "";
+				"HEADER_SEARCH_PATHS[arch=*]" = "";
+				LIBRARY_SEARCH_PATHS = (
+					../../src/interfaces/libpq,
+					../../src/port,
+					../../src/common,
+				);
+				LINK_WITH_STANDARD_LIBRARIES = YES;
+				MACH_O_TYPE = mh_bundle;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BF8BEEE11FD1E500003A7AC9 /* Build configuration list for PBXProject "PostgreSQL" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF8BEEE31FD1E500003A7AC9 /* Debug */,
+				BF8BEEE41FD1E500003A7AC9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "postgres_fdw.so" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF8BEF101FD1EF5D003A7AC9 /* Debug */,
+				BF8BEF111FD1EF5D003A7AC9 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = BF8BEEDE1FD1E500003A7AC9 /* Project object */;
+}

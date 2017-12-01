@@ -3194,16 +3194,13 @@ get_relation_column_alias_ids(Var *node, RelOptInfo *foreignrel,
 }
 
 static void
-deparseRTExpr (Node *t, StringInfo sql);
-
-static void
 deparseRTColumnRef (ColumnRef *t, StringInfo sql)
 {
   //elog(INFO, "deparseRTColumnRef: t: %s", nodeToString (t));
 
   // FIXME: what about emitting the discriminator?
 
-  appendStringInfo (sql, "\"%s\"", strVal (list_nth (t->fields, 1)));
+  appendStringInfoString (sql, quote_identifier (strVal (list_nth (t->fields, 1))));
 }
 
 static void
@@ -3287,7 +3284,7 @@ deparseAConst (Value *value, StringInfo sql)
   }
 }
 
-static void
+extern void
 deparseRTExpr (Node *t, StringInfo sql)
 {
   //elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));

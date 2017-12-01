@@ -1191,7 +1191,7 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
 									 FdwScanPrivateSelectSql));
 	fsstate->retrieved_attrs = (List *) list_nth(fsplan->fdw_private,
 												 FdwScanPrivateRetrievedAttrs);
-	fsstate->fetch_size = intVal(list_nth(fsplan->fdw_private,
+	fsstate->fetch_size = (int) intVal(list_nth(fsplan->fdw_private,
 										  FdwScanPrivateFetchSize));
 
 	/* Create contexts for batches of tuples and per-tuple temp workspace. */
@@ -2758,7 +2758,7 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
 			fpinfo->shippable_extensions =
 				ExtractExtensionList(defGetString(def), false);
 		else if (strcmp(def->defname, "fetch_size") == 0)
-			fpinfo->fetch_size = strtol(defGetString(def), NULL, 10);
+			fpinfo->fetch_size = (int) strtol(defGetString(def), NULL, 10);
 	}
 }
 
@@ -2779,7 +2779,7 @@ apply_table_options(PgFdwRelationInfo *fpinfo)
 		if (strcmp(def->defname, "use_remote_estimate") == 0)
 			fpinfo->use_remote_estimate = defGetBoolean(def);
 		else if (strcmp(def->defname, "fetch_size") == 0)
-			fpinfo->fetch_size = strtol(defGetString(def), NULL, 10);
+			fpinfo->fetch_size = (int) strtol(defGetString(def), NULL, 10);
 	}
 }
 
@@ -3295,7 +3295,6 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
   
   elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
   {
-	ForeignServer *server;
 	UserMapping *mapping;
 	PGconn	   *conn;
 	
@@ -3307,9 +3306,6 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 	
 	PG_TRY();
 	{
-	  
-	  int			numrows, i;
-	  
 	  const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
 		" FROM ("
 		"  SELECT tablename objname, schemaname FROM pg_tables"
@@ -3324,7 +3320,7 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
 	  
 	  const int nr_params = 1;
 	  const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
-	  const int paramLengths[nr_params] = { strlen (foreign_table_name.data) };
+	  const int paramLengths[nr_params] = { (int) strlen (foreign_table_name.data) };
 	  
 	  res = pgfdw_exec_query_params(conn, find_mvs_query,
 									1, NULL/*paramTypes*/,
@@ -3380,7 +3376,6 @@ deparse_grouped_rel_tlist_expressions (PlannerInfo *root, RelOptInfo *grouped_re
 
   //elog(INFO, "add_foreign_grouping_paths: tlist: %s", nodeToString (fdw_scan_tlist));
   ListCell   *lc;
-  int i = 0;
   foreach(lc, fdw_scan_tlist)
   {
 	TargetEntry *tle = lfirst_node(TargetEntry, lc);
@@ -3420,7 +3415,6 @@ deparse_grouped_rel_group_clause_expressions (PlannerInfo *root, RelOptInfo *gro
   List *group_by_tlist = query->groupClause;
 
   ListCell   *lc;
-  int i = 0;
   foreach(lc, group_by_tlist)
   {
 	SortGroupClause *sgc = lfirst_node(SortGroupClause, lc);
@@ -3481,6 +3475,7 @@ check_expr_target_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
 	// Constants are always matchable.
 	return true;
 	break;
+  case T_FuncExpr:
   case T_Var:
 	{
 	  // FIXME: this fragment seems to crop up everywhere...
@@ -3531,7 +3526,7 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 
 	deparseResTarget (mv_tle, mv_expr_sql, mv_expr_alias);
 
-	elog(INFO, "%s: deparsed: %s (alias %s)", __func__, mv_expr_sql->data, mv_expr_alias->data);
+	// elog(INFO, "%s: deparsed: %s (alias %s)", __func__, mv_expr_sql->data, mv_expr_alias->data);
 
 	*expr_sql = lappend (*expr_sql, mv_expr_sql);
 	*expr_alias = lappend (*expr_alias, mv_expr_alias);
@@ -3543,18 +3538,17 @@ deparse_matview_group_clause_expressions (SelectStmt *mv_query)
 {
   List *expr_sql = NIL;
 
-  elog(INFO, "%s: %s", __func__, nodeToString (mv_query));
+  // elog(INFO, "%s: %s", __func__, nodeToString (mv_query));
 
   ListCell *mv_lc;
   foreach (mv_lc, mv_query->groupClause)
   {
-	SortGroupClause *mv_tle = lfirst_node (SortGroupClause, mv_lc);
+	Expr *mv_gce = lfirst_node (Expr, mv_lc);
 	StringInfo mv_expr_sql = makeStringInfo();
 
-	deparseResTarget (list_nth_node (ResTarget, mv_query->targetList, mv_tle->tleSortGroupRef), 
-					  mv_expr_sql, NULL);
+	deparseRTExpr ((Node *) mv_gce, mv_expr_sql);
 
-	elog(INFO, "%s: deparsed expression: %s", __func__, mv_expr_sql->data);
+	// elog(INFO, "%s: deparsed expression: %s", __func__, mv_expr_sql->data);
 
 	expr_sql = lappend (expr_sql, mv_expr_sql);
   }
@@ -3614,7 +3608,7 @@ check_select_clauses_for_matview (List *expr_sqls, List *mv_expr_sqls, List *mv_
 	return false;
 	
   next_expr:
-	0;
+	NULL;
   }
 
   // Complete match found!
@@ -3784,17 +3778,17 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 		SelectStmt *mv_query = parse_select_query ((const char *) mv_definition->data);
 		
-		List *expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
+		List *required_expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
 		
 		// 1. Check the GROUP BY clause: it must match exactly
 		{
 		  elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-		  List *expr_sqls = deparse_grouped_rel_group_clause_expressions (root, grouped_rel);
+		  List *required_expr_sqls = deparse_grouped_rel_group_clause_expressions (root, grouped_rel);
 		  
 		  List *mv_expr_sqls = deparse_matview_group_clause_expressions (mv_query);
 		  
 		  // FIXME
-		  if (!check_select_clauses_for_matview (expr_sqls, mv_expr_sqls, NULL,
+		  if (!check_select_clauses_for_matview (required_expr_sqls, mv_expr_sqls, NULL,
 												 NULL))
 			goto next_mv;
 		}
@@ -3823,7 +3817,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 
 			  if (!check_expr_target_in_matview_tlist (root, grouped_rel, 
 													   expr, 
-													   mv_query->targetList, expr_sqls))
+													   mv_query->targetList, required_expr_sqls))
 				goto next_mv;
 		    }
 		    else
@@ -3848,7 +3842,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		  List *mv_expr_aliases = NIL;
 		  deparse_matview_tlist_expressions (mv_query, &mv_expr_sqls, &mv_expr_aliases);
 		  
-		  if (!check_select_clauses_for_matview (expr_sqls, mv_expr_sqls, mv_expr_aliases,
+		  if (!check_select_clauses_for_matview (required_expr_sqls, mv_expr_sqls, mv_expr_aliases,
 												 &alternative_query))
 			goto next_mv;
 		}
@@ -3928,8 +3922,8 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    add_path(grouped_rel, (Path *) grouppath);
 	    
 	  next_mv:
-		elog(INFO, "%s: done.", __func__);
-		0;
+		//elog(INFO, "%s: done.", __func__);
+		NULL;
 	  }
 	}
 }

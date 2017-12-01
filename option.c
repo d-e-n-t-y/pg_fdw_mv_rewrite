@@ -136,7 +136,7 @@ postgres_fdw_validator(PG_FUNCTION_ARGS)
 		{
 			int			fetch_size;
 
-			fetch_size = strtol(defGetString(def), NULL, 10);
+			fetch_size = (int) strtol(defGetString(def), NULL, 10);
 			if (fetch_size <= 0)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
