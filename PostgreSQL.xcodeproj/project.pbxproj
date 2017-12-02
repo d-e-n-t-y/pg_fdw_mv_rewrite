@@ -279,6 +279,8 @@
 				ALWAYS_SEARCH_USER_PATHS = YES;
 				BUNDLE_LOADER = ../../src/backend/postgres;
 				CODE_SIGN_IDENTITY = "-";
+				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
+				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_PREFIX = lib;
@@ -292,8 +294,10 @@
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				OBJROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
 				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
 			};
 			name = Debug;
@@ -304,6 +308,8 @@
 				ALWAYS_SEARCH_USER_PATHS = YES;
 				BUNDLE_LOADER = ../../src/backend/postgres;
 				CODE_SIGN_IDENTITY = "-";
+				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
+				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_PREFIX = lib;
@@ -317,8 +323,10 @@
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				OBJROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
+				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
 				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
 			};
 			name = Release;
@@ -342,6 +350,7 @@
 				BF8BEF111FD1EF5D003A7AC9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
 	};
