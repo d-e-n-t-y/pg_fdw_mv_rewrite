@@ -27,6 +27,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
+#include "nodes/nodes.h"
 #include "optimizer/cost.h"
 #include "optimizer/clauses.h"
 #include "optimizer/pathnode.h"
@@ -3771,15 +3772,15 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	/* Add generated path into grouped_rel by add_path(). */
 	add_path(grouped_rel, (Path *) grouppath);
 
-	// See if there are any candidate MVs...
-	List *mvs_schema = NIL;
-	List *mvs_name = NIL;
-	List *mvs_definition = NIL;
-
 	{
 	  elog(INFO, "%s: searching for MVs...", __func__);
 	  
-	  find_related_matviews_for_relation (root, input_rel, 
+        // See if there are any candidate MVs...
+        List *mvs_schema = NIL;
+        List *mvs_name = NIL;
+        List *mvs_definition = NIL;
+        
+	  find_related_matviews_for_relation (root, input_rel,
 										  &mvs_schema, &mvs_name, &mvs_definition);
       
       List	*retrieved_attrs;
@@ -3816,6 +3817,14 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		StringInfo mv_schema = lfirst(sc);
 		StringInfo mv_name = lfirst(nc);
 		StringInfo mv_definition = lfirst(dc);
+          
+          // First, copy the grouped_rel. We'll begin the actual transformation
+          // later. Note that this is a shallow copy except for the fpinfo
+          RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
+          PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
+          *transformed_rel = *grouped_rel;
+          *tfpinfo = *fpinfo;
+          transformed_rel->fdw_private = tfpinfo;
 
 		elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
@@ -3837,7 +3846,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		// 1. Check the GROUP BY clause: it must match exactly
 		{
 		  elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-            List *tl = build_tlist_to_deparse(grouped_rel);
+            List *tl = build_tlist_to_deparse(transformed_rel);
             
             //elog(INFO, "%s: target list: %s", __func__, nodeToString(tl));
             
@@ -3849,7 +3858,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 
                 //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
 
-                if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, parsed_mv_query->targetList))
+                if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
                 {
                         elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
                         goto next_mv;
@@ -3883,7 +3892,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		      expr = ((RestrictInfo *) ri)->clause;
 		      //elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
 
-			  if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, parsed_mv_query->targetList))
+			  if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
               {
                 elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
 				goto next_mv;
@@ -3907,7 +3916,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		{
 		  elog(INFO, "%s: checking SELECT clauses...", __func__);
 		  
-		  if (!check_select_clauses_for_matview (root, grouped_rel, input_rel, parsed_mv_query->targetList))
+		  if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList))
 			goto next_mv;
 		}
 
@@ -3939,9 +3948,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		  // FIXME: this fragment seems to crop up everywhere...
 		  deparse_expr_cxt context;
 		  context.buf = &alternative_query;
-		  context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+		  context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
 		  context.root = root;
-		  context.foreignrel = grouped_rel;
+		  context.foreignrel = transformed_rel;
 		  
 		  PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
 		  List *quals = ofpinfo->remote_conds;
@@ -3965,7 +3974,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	    Cost		startup_cost;
 	    Cost		total_cost;
 
-		estimate_query_cost (root, input_rel, grouped_rel, 
+		estimate_query_cost (root, input_rel, transformed_rel,
 							 alternative_query.data, &rows, &width, &startup_cost, &total_cost);
 
 	    // FIXME: we consider that there are no locally-checked quals
@@ -3980,8 +3989,11 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 										makeInteger (fpinfo->fetch_size));
 	    fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
 		
+        // We still add the path to the raw grouped_rel — the foreign query is
+          // the one that is modified to scan the MV, and the local planner need
+          // know nothing of it except for the reduced plan cost.
 	    grouppath = create_foreignscan_path(root,
-											grouped_rel,
+											transformed_rel,
 											grouping_target,
 											rows,
 											startup_cost,
@@ -3991,7 +4003,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 											NULL,
 											fdw_private);	/* no fdw_private */
 	    
-	    /* Add generated path into grouped_rel by add_path(). */
+	    /* Add generated path into transformed_rel by add_path(). */
 	    add_path(grouped_rel, (Path *) grouppath);
 	    
 	  next_mv:

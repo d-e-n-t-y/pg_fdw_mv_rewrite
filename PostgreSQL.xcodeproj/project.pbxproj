@@ -16,16 +16,6 @@
 		BF8BEFB11FD2C346003A7AC9 /* postgres_fdw.so in CopyFiles */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* postgres_fdw.so */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		BF8BEFAB1FD2C1C2003A7AC9 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = BF8BEEDE1FD1E500003A7AC9 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = BF8BEF0D1FD1EF5D003A7AC9;
-			remoteInfo = postgres_fdw;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXCopyFilesBuildPhase section */
 		BF8BEFAD1FD2C2DF003A7AC9 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -140,24 +130,6 @@
 		};
 /* End PBXHeadersBuildPhase section */
 
-/* Begin PBXLegacyTarget section */
-		BF8BEFA71FD2C170003A7AC9 /* postgres_fdw-install */ = {
-			isa = PBXLegacyTarget;
-			buildArgumentsString = install;
-			buildConfigurationList = BF8BEFA81FD2C170003A7AC9 /* Build configuration list for PBXLegacyTarget "postgres_fdw-install" */;
-			buildPhases = (
-			);
-			buildToolPath = /usr/bin/make;
-			buildWorkingDirectory = "";
-			dependencies = (
-				BF8BEFAC1FD2C1C2003A7AC9 /* PBXTargetDependency */,
-			);
-			name = "postgres_fdw-install";
-			passBuildSettingsInEnvironment = 1;
-			productName = "postgres_fdw-install";
-		};
-/* End PBXLegacyTarget section */
-
 /* Begin PBXNativeTarget section */
 		BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw */ = {
 			isa = PBXNativeTarget;
@@ -190,10 +162,6 @@
 						CreatedOnToolsVersion = 8.3;
 						ProvisioningStyle = Automatic;
 					};
-					BF8BEFA71FD2C170003A7AC9 = {
-						CreatedOnToolsVersion = 8.3;
-						ProvisioningStyle = Automatic;
-					};
 				};
 			};
 			buildConfigurationList = BF8BEEE11FD1E500003A7AC9 /* Build configuration list for PBXProject "PostgreSQL" */;
@@ -209,7 +177,6 @@
 			projectRoot = "";
 			targets = (
 				BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw */,
-				BF8BEFA71FD2C170003A7AC9 /* postgres_fdw-install */,
 			);
 		};
 /* End PBXProject section */
@@ -228,14 +195,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		BF8BEFAC1FD2C1C2003A7AC9 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw */;
-			targetProxy = BF8BEFAB1FD2C1C2003A7AC9 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BF8BEEE31FD1E500003A7AC9 /* Debug */ = {
@@ -385,29 +344,6 @@
 			};
 			name = Release;
 		};
-		BF8BEFA91FD2C170003A7AC9 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUGGING_SYMBOLS = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-			};
-			name = Debug;
-		};
-		BF8BEFAA1FD2C170003A7AC9 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = "";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -428,14 +364,6 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
-		};
-		BF8BEFA81FD2C170003A7AC9 /* Build configuration list for PBXLegacyTarget "postgres_fdw-install" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				BF8BEFA91FD2C170003A7AC9 /* Debug */,
-				BF8BEFAA1FD2C170003A7AC9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
 		};
 /* End XCConfigurationList section */
 	};
