@@ -96,8 +96,6 @@ static void deparseReturningList(StringInfo buf, PlannerInfo *root,
 					 bool trig_after_row,
 					 List *returningList,
 					 List **retrieved_attrs);
-static void deparseColumnRef(StringInfo buf, int varno, int varattno,
-				 PlannerInfo *root, bool qualify_col);
 extern void deparseExpr(Expr *expr, deparse_expr_cxt *context);
 static void deparseVar(Var *node, deparse_expr_cxt *context);
 static void deparseConst(Const *node, deparse_expr_cxt *context, int showtype);
@@ -1915,7 +1913,7 @@ deparseAnalyzeSql(StringInfo buf, Relation rel, List **retrieved_attrs)
  *
  * If qualify_col is true, qualify column name with the alias of relation.
  */
-static void
+extern void
 deparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root,
 				 bool qualify_col)
 {
@@ -3261,6 +3259,63 @@ deparseFuncCall (FuncCall *t, StringInfo sql)
 }
 
 static void
+deparseAExpr (A_Expr *t, StringInfo sql)
+{
+    //elog(INFO, "%s: t: %s", __func__, nodeToString (t));
+
+    if (t->lexpr)
+        deparseRTExpr ((Node *) t->lexpr, sql);
+    
+    switch (t->kind)
+    {
+        case AEXPR_OP:
+            appendStringInfoString(sql, " = ");
+            break;
+        default:
+            elog (ERROR, "Value type not supported: %d",  (int) nodeTag(t));
+            break;
+    }
+
+    if (t->rexpr)
+        deparseRTExpr ((Node *) t->rexpr, sql);
+}
+
+static void
+deparseCaseExpr (CaseExpr *t, StringInfo sql)
+{
+    //elog(INFO, "%s: t: %s", __func__, nodeToString (t));
+
+    // FIXME: we currently only support CASE WHEN variant; we should
+    // also support CASE arg WHEN ... THEN .. too.
+    appendStringInfoString (sql, "CASE");
+    
+    {
+        ListCell *lc;
+        foreach (lc, t->args)
+        {
+            CaseWhen *wt = (CaseWhen *) lfirst_node(Value, lc);
+
+            appendStringInfoString (sql, " WHEN ");
+            
+            deparseRTExpr ((Node *) wt->expr, sql);
+            
+            appendStringInfoString (sql, " THEN ");
+            
+            deparseRTExpr ((Node *) wt->result, sql);
+        }
+    }
+    
+    if (t->defresult)
+    {
+        appendStringInfoString (sql, " ELSE ");
+        
+        deparseRTExpr ((Node *) t->defresult, sql);
+    }
+    
+    appendStringInfoString (sql, " END");
+}
+
+static void
 deparseAConst (Value *value, StringInfo sql)
 {
   switch (nodeTag (value))
@@ -3287,30 +3342,36 @@ deparseAConst (Value *value, StringInfo sql)
 extern void
 deparseRTExpr (Node *t, StringInfo sql)
 {
-  //elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));
-
-  switch (nodeTag (t))
-  {
-  case T_ColumnRef:
-    // We can't overload the regular deparseColumnRef, so we use our own.
-    deparseRTColumnRef ((ColumnRef *) t, sql);
-    break;
-  case T_FuncCall:
-    deparseFuncCall ((FuncCall *) t, sql);
-    break;
-  case T_TypeCast:
-    deparseTypeCast ((TypeCast *) t, sql);
-    break;
-  case T_A_Const:
-    deparseAConst (&(((A_Const *) t)->val), sql);
-    break;
-  case T_TypeName:
-    deparseTypeName ((TypeName *) t, sql);
-    break;
-  default:
-    elog (ERROR, "Node type not supported: %d",  (int) nodeTag(t));
-    break;
-  }
+    //elog(INFO, "deparseRTExpr: t: %s", nodeToString (t));
+    
+    switch (nodeTag (t))
+    {
+        case T_ColumnRef:
+            // We can't overload the regular deparseColumnRef, so we use our own.
+            deparseRTColumnRef ((ColumnRef *) t, sql);
+            break;
+        case T_FuncCall:
+            deparseFuncCall ((FuncCall *) t, sql);
+            break;
+        case T_TypeCast:
+            deparseTypeCast ((TypeCast *) t, sql);
+            break;
+        case T_A_Const:
+            deparseAConst (&(((A_Const *) t)->val), sql);
+            break;
+        case T_TypeName:
+            deparseTypeName ((TypeName *) t, sql);
+            break;
+        case T_A_Expr:
+            deparseAExpr ((A_Expr *) t, sql);
+            break;
+        case T_CaseExpr:
+            deparseCaseExpr ((CaseExpr *) t, sql);
+            break;
+        default:
+            elog (ERROR, "Node type not supported: %d",  (int) nodeTag(t));
+            break;
+    }
 }
 
 extern void

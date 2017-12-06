@@ -170,14 +170,14 @@ is_shippable(Oid objectId, Oid classId, PgFdwRelationInfo *fpinfo)
 	/* Built-in objects are presumed shippable. */
 	if (is_builtin(objectId))
 	{
-		elog(INFO, "%s: built-in object is shippable.", __func__);
+		//elog(INFO, "%s: built-in object is shippable.", __func__);
 		return true;
 	}
 
 	/* Otherwise, give up if user hasn't specified any shippable extensions. */
 	if (fpinfo->shippable_extensions == NIL)
 	{
-		elog(INFO, "%s: no shippable extensions specified: giving up.", __func__);
+		//elog(INFO, "%s: no shippable extensions specified: giving up.", __func__);
 		return false;
 	}
 
@@ -217,7 +217,7 @@ is_shippable(Oid objectId, Oid classId, PgFdwRelationInfo *fpinfo)
 	}
 
 
-	elog(INFO, "%s: look-up shippable in cache: %d", __func__, entry->shippable);
+	//elog(INFO, "%s: look-up shippable in cache: %d", __func__, entry->shippable);
 
 	return entry->shippable;
 }

@@ -60,3 +60,6 @@ appendConditions(List *exprs, deparse_expr_cxt *context);
 
 extern void
 deparseRTExpr (Node *t, StringInfo sql);
+
+extern void deparseColumnRef(StringInfo buf, int varno, int varattno,
+                             PlannerInfo *root, bool qualify_col);

@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-               BuildableName = "libpostgres_fdw.so.dylib"
-               BlueprintName = "postgres_fdw.so"
+               BuildableName = "postgres_fdw.so"
+               BlueprintName = "postgres_fdw"
                ReferencedContainer = "container:PostgreSQL.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -46,8 +46,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "libpostgres_fdw.so.dylib"
-            BlueprintName = "postgres_fdw.so"
+            BuildableName = "postgres_fdw.so"
+            BlueprintName = "postgres_fdw"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -64,8 +64,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "libpostgres_fdw.so.dylib"
-            BlueprintName = "postgres_fdw.so"
+            BuildableName = "postgres_fdw.so"
+            BlueprintName = "postgres_fdw"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

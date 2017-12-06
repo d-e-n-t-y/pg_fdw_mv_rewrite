@@ -3031,7 +3031,7 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 		Index		sgref = get_pathtarget_sortgroupref(grouping_target, i);
 		ListCell   *l;
 
-		elog(INFO, "%s: checking target expression: %s", __func__, nodeToString (expr));
+		//elog(INFO, "%s: checking target expression: %s", __func__, nodeToString (expr));
 
 		/* Check whether this expression is part of GROUP BY clause */
 		if (sgref && get_sortgroupref_clause_noerr(sgref, query->groupClause))
@@ -3040,7 +3040,7 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 			 * If any of the GROUP BY expression is not shippable we can not
 			 * push down aggregation to the foreign server.
 			 */
-		    elog(INFO, "%s: checking if clause is shippable...", __func__);
+		    //elog(INFO, "%s: checking if clause is shippable...", __func__);
 			
 			if (!is_foreign_expr(root, grouped_rel, expr))
 				return false;
@@ -3050,7 +3050,7 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 		}
 		else
 		{
-		    elog(INFO, "%s: checking if expression is pushable...", __func__);
+		    //elog(INFO, "%s: checking if expression is pushable...", __func__);
 
 			/* Check entire expression whether it is pushable or not */
 			if (is_foreign_expr(root, grouped_rel, expr))
@@ -3162,7 +3162,7 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 			 */
 			if (IsA(expr, Aggref))
 			{
-			    elog(INFO, "%s: checking aggregate local condition is safe to push: %s", __func__, nodeToString (expr));
+			    //elog(INFO, "%s: checking aggregate local condition is safe to push: %s", __func__, nodeToString (expr));
 
 				if (!is_foreign_expr(root, grouped_rel, expr))
 					return false;
@@ -3436,82 +3436,259 @@ deparse_grouped_rel_group_clause_expressions (PlannerInfo *root, RelOptInfo *gro
   return expression_strings;
 }
 
-static SelectStmt *
-parse_select_query (const char *mv_sql)
+static void
+parse_select_query (SelectStmt **mv_query, Query **parsed_mv_query,
+                    const char *mv_sql)
 {
   RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
-  SelectStmt *mv_query = (SelectStmt *) mv_parsetree->stmt;
-  return mv_query;
+  *mv_query = (SelectStmt *) mv_parsetree->stmt;
+    
+  List *qtList = pg_analyze_and_rewrite (mv_parsetree, mv_sql, NULL, 0, NULL);
+  *parsed_mv_query = list_nth_node (Query, qtList, 0);
+
+  //elog(INFO, "%s: parsed query: %s", __func__, nodeToString (*parsed_mv_query));
+}
+
+static void
+renumber_mv_vars_to_match_input_rel (PlannerInfo *root, Query *mv, RelOptInfo *input_rel)
+{
+    // FIXME: probably can't presue varno == 1
+    const Index varno = 1;
+    
+    List /* Value* */ *in_colnames = planner_rt_fetch((int) varno, root)->eref->colnames;
+
+    List /* Var* */ *varList = pull_var_clause ((Node *) mv->targetList, PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS);
+    
+    //elog(INFO, "%s: input column names: %s", __func__, nodeToString (in_colnames));
+    
+    //elog(INFO, "%s: considering query: %s", __func__, nodeToString (mv));
+
+    {
+        ListCell *lc;
+        foreach (lc, varList)
+        {
+            Var *v = lfirst(lc);
+            
+            Assert(!IS_SPECIAL_VARNO(varno));
+            
+            //elog(INFO, "%s: considering node: %s", __func__, nodeToString (v));
+            
+            //elog(INFO, "%s: processing %d, %d", __func__, (int) v->varno, (int) v->varattno);
+                
+            //elog(INFO, "%s: processing %s", __func__, nodeToString(planner_rt_fetch((int) v->varno, root)));
+                
+            Value *col_name = list_nth_node(Value, list_nth_node (RangeTblEntry, mv->rtable, (int) v->varno - 1)->eref->colnames, (int) v->varattno - 1);
+
+            //elog(INFO, "%s: column name %s", __func__, col_name->val.str);
+
+            bool matched = false;
+            Index varattno = 1;
+            ListCell *lc;
+            foreach (lc, in_colnames)
+            {
+                Value *in_colname = lfirst(lc);
+                
+                //elog(INFO, "%s: considering: %s", __func__, tListStr->val.str);
+                if (in_colname != NULL)
+                {
+                    if (0 == strcmp (col_name->val.str, in_colname->val.str))
+                    {
+                        //elog(INFO, "%s: mv columns RTE: %s", __func__, nodeToString (mv->rtable));
+
+                        elog(INFO, "%s: renumbered varattno: %d->%d (%s)", __func__, v->varattno, varattno, col_name->val.str);
+                        v->varattno = varattno;
+                        
+                        // FIXME: we perhaps outght to make the equal() infrastructure
+                        // based on a walker-pattern so as we can override what gets
+                        // considered for equality.
+                        v->varoattno = varattno; // mark old==new to promote better matching
+                        
+                        matched = true;
+                        break;
+                    }
+                }
+                varattno++;
+            }
+            if (!matched)
+            {
+                elog(INFO, "%s: no match for %s: renumbering to 9999", __func__, col_name->val.str);
+                v->varno = 9999;
+            }
+        }
+    }
 }
 
 static bool
-check_expr_target_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
-									Expr *expr, 
-									List /* ResTarget* */ *tlist, 
-									List /* StringInfo */ *tStrList)
+check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
+                                     RelOptInfo *input_rel,
+                                     Expr *expr,
+                                     List /* TargetEntry* */ *tList);
+
+struct expr_targets_in_matview_tlist_ctx
 {
-  PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+    PlannerInfo *root;
+    RelOptInfo *grouped_rel;
+    RelOptInfo *input_rel;
+    List /* TargetEntry* */ *tList;
+    int current_level;
+    bool match_found;
+    bool did_search_anything;
+    int match_found_at_level;
+};
+                                            
+static bool
+expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview_tlist_ctx *ctx)
+{
+    bool stop_search;
+    bool done = false;
+    bool local_match_found = false;
 
-  if (expr == NULL)
-	return true;
+    //elog(INFO, "%s: >>>>", __func__);
+    
+    ctx->did_search_anything = true;
+    
+    if (!ctx->match_found)
+    {
+        //elog(INFO, "%s: previous expr didn't match; no point continuing...", __func__);
+        return false;
+    }
 
-  elog(INFO, "%s: checking expr: %s", __func__, nodeToString (expr));
-  
-  switch (nodeTag(expr))
-  {
-  case T_OpExpr:
-	{
-	  OpExpr *node = (OpExpr *) expr;
-	  
-	  return (check_expr_target_in_matview_tlist (root, grouped_rel, 
-												  lfirst (list_head(node->args)), 
-												  tlist, tStrList) &&
-			  check_expr_target_in_matview_tlist (root, grouped_rel, 
-												  lfirst (list_tail(node->args)), 
-												  tlist, tStrList));
-	}
-	break;
-  case T_Const:
-	// Constants are always matchable.
-	return true;
-	break;
-  case T_FuncExpr:
-  case T_Var:
-	{
-	  // FIXME: this fragment seems to crop up everywhere...
-	  deparse_expr_cxt context;
-	  StringInfo var = makeStringInfo();
-	  context.buf = var;
-	  context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
-	  context.root = root;
-	  context.foreignrel = grouped_rel;
+    ctx->current_level++;
 
-	  deparseExpr (expr, &context);
+    //elog(INFO, "%s: checking expr: %s, current_level = %d", __func__, nodeToString (node), ctx->current_level);
+    
+    // If we've already found a match at a heigher level, unfortunately
+    // we have no option but to continue the scan. However there's nothing
+    // to do in that case becasue we already matched. So continue onwards
+    // but do nothing.
+    //if (!done)
+    //{
+    //    if (ctx->match_found_at_level != -1 &&
+    //        ctx->current_level > ctx->match_found_at_level)
+    //    {
+    //        stop_search = false;
+    //        done = true;
+    //        elog(INFO, "%s: already matched at level %d", __func__, ctx->match_found_at_level);
+    //    }
+    //}
 
-	  elog(INFO, "%s: searching for match for: %s", __func__, var->data);
+    if (!done)
+    {
+        if (node == NULL)
+        {
+            stop_search = false;
+            done = true;
+            //elog(INFO, "%s: NULL node", __func__);
+        }
+    }
 
-	  // FIXME: we're validating against the MV SQL tlist, but we should really
-	  // check against the column that the tList entry references.
-	  ListCell *lc;
-	  foreach (lc, tStrList)
-	  {
-		StringInfo tStr = lfirst(lc);
-	  
-		elog(INFO, "%s: against expr: %s", __func__, tStr->data);
+    if (!done)
+    {
+        if (IsA (node, Const))
+        {
+            stop_search = false;
+            local_match_found = true;
+            done = true;
+            //elog(INFO, "%s: constants are always acceptable", __func__);
+        }
+    }
+    
+    if (!done)
+    {
+        // First check if any of the expressions match any TL node outright.
+        // It might, for example, be a Var, and that should match easily.
+        ListCell *lc;
+        foreach (lc, ctx->tList)
+        {
+            TargetEntry *te = lfirst(lc);
+            
+            //elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
+            
+            // FIXME: I think we need to have re-numbered the TLEs in order that
+            // we don't accidently match on an entity that is different
+            local_match_found = equal (te->expr, node);
+            
+            if (local_match_found)
+            {
+                //elog(INFO, "%s: matched!", __func__);
 
-		if (0 == strcmp (var->data, tStr->data))
-		  return true;
-	  }
-	  return false;
-	}
-	break;
-  default:
-	elog(WARNING, "%s: unrecognised expr node type: %d", __func__, nodeTag (expr));
-  }
-  
-  return false;
+                stop_search = false;
+                local_match_found = true;
+                ctx->match_found_at_level = ctx->current_level;
+                done = true;
+                
+                break;
+            }
+        }
+    }
+    
+    if (!done)
+    {
+        // Copy current context
+        struct expr_targets_in_matview_tlist_ctx sub_ctx = *ctx;
+        
+        sub_ctx.match_found = true; // walker will set to false if not matched
+        sub_ctx.did_search_anything = false; // indicates whether match_found is valid
+
+        sub_ctx.current_level++;
+        
+        //elog(INFO, "%s: walking sub-expressions...", __func__);
+
+        // Look at the sub-expressions inside the Node. All must either match
+        // exactly, or derive from something that does.
+        expression_tree_walker (node, expr_targets_in_matview_tlist_walker, &sub_ctx);
+        
+        if (!sub_ctx.did_search_anything) {
+            //elog(INFO, "%s: (no sub-expressions walked)", __func__);
+        }
+        
+        //elog(INFO, "%s: done walking sub-expressions.", __func__);
+
+        local_match_found = sub_ctx.did_search_anything && sub_ctx.match_found;
+
+        sub_ctx.current_level++;
+        
+        done = true;
+    }
+
+    if (done)
+    {
+        //elog(INFO, "%s: done; local match found: %d", __func__, local_match_found);
+
+        // We got a match: record it, but we can't abort the walk because
+        // there may be adjacent arguments. Unfortunately, we can't directly
+        // signal to go no deepper, but continue with the adjacent walk.
+        ctx->match_found = ctx->match_found && local_match_found;
+
+        //elog(INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
+    }
+
+    ctx->current_level--;
+    
+    elog(INFO, "%s: <<<<", __func__);
+
+    // Always continue to search adjacent expressions, even if we didn't dive down.
+    return false;
 }
 
+static bool
+check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
+                                     RelOptInfo *input_rel,
+									 Expr *expr,
+                                     List /* TargetEntry* */ *tList)
+{
+    if (expr == NULL)
+        return true;
+    
+    struct expr_targets_in_matview_tlist_ctx ctx = {
+        root, grouped_rel, input_rel, tList
+    };
+    ctx.match_found = true; // walker will set to false if not matched
+    
+    expr_targets_in_matview_tlist_walker ((Node *) expr, &ctx);
+
+    return ctx.match_found;
+}
 static void
 deparse_matview_tlist_expressions (SelectStmt *mv_query,
 								   List /* StringInfo* */ **expr_sql, 
@@ -3557,62 +3734,26 @@ deparse_matview_group_clause_expressions (SelectStmt *mv_query)
 }
 
 static bool
-check_select_clauses_for_matview (List *expr_sqls, List *mv_expr_sqls, List *mv_expr_aliases,
-								  StringInfo selected_mv_aliases)
+check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
+                                  RelOptInfo *input_rel,
+                                  List /* TargetEntry* */ *tList)
 {
-  int i = 0;
-
-  ListCell   *lc;
-  foreach (lc, expr_sqls)
-  {
-	StringInfo expr_sql = lfirst(lc);
-	
-	elog(INFO, "%s: matching expr: %s", __func__, expr_sql->data);
-
-	ListCell *mv_lc1;
-	ListCell *mv_lc2 = mv_expr_aliases != NULL ? list_head(mv_expr_aliases) : NULL;
-	foreach (mv_lc1, mv_expr_sqls)
-	{
-	  StringInfo mv_expr_sql = lfirst(mv_lc1);
-	  StringInfo mv_expr_alias = mv_expr_aliases != NULL ? lfirst(mv_lc2) : NULL;
-	  
-	  elog(INFO, "%s: against expr: %s", __func__, mv_expr_sql->data);
-
-	  if (0 == strcmp (mv_expr_sql->data, expr_sql->data))
-	  {
-		// Match found!
-
-		elog(INFO, "%s: match found: %s", __func__, mv_expr_sql->data);
-		
-		// So append the column expression to the alternate query
-		if (mv_expr_aliases != NULL)
-		{
-		  if (i++ > 0)
-			appendStringInfoString (selected_mv_aliases, ", ");
-
-		  appendStringInfoString (selected_mv_aliases, mv_expr_alias->data);
-		}
-		goto next_expr;
-	  }
-	  else
-	  {
-		//elog(INFO, "%s: no match found: %s", __func__, expr_sql->data);
-		// continue
-	  }
-	  mv_lc2 = mv_expr_aliases != NULL ? lnext (mv_lc2) : NULL;
-	}
-
-	// Match not found!
-	//elog(INFO, "%s: no match found!", __func__);
-
-	return false;
-	
-  next_expr:
-	NULL;
-  }
-
-  // Complete match found!
-  return true;
+    ListCell   *lc;
+    foreach (lc, build_tlist_to_deparse(grouped_rel))
+    {
+        Expr *expr = lfirst(lc);
+        
+        elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
+        
+        if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, tList))
+        {
+            elog(INFO, "%s: expr not found in MV tlist: %s", __func__, nodeToString (expr));
+            return false;
+        }
+    }
+    
+    // Complete match found!
+    return true;
 }
 
 static void 
@@ -3735,49 +3876,59 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 	  
 	  find_related_matviews_for_relation (root, input_rel, 
 										  &mvs_schema, &mvs_name, &mvs_definition);
+      
+      List	*retrieved_attrs;
+      
+      // Deparse:
+      //   1. the input relation (i.e., the ungrouped source table)
+      //   2. the grouped relation (i.e., the input relation with all the aggregates applied)
+      {
+        StringInfoData rel_sql;
+        
+        initStringInfo(&rel_sql);
+        
+        // FIXME: might be possible to do this search without deparsing the
+        // SQL...
+        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
+        
+        elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
+        
+        initStringInfo(&rel_sql);
+        
+        // FIXME: might be possible to do this search without deparsing the
+        // SQL...
+        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
+        
+        elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+      }
 
+      // Evaluate each MV in turn...
 	  ListCell   *sc;
 	  ListCell   *nc;
 	  ListCell   *dc;
-	  
-	  // Evaluate each MV in turn...
 	  forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
 	  {
 		StringInfo mv_schema = lfirst(sc);
 		StringInfo mv_name = lfirst(nc);
 		StringInfo mv_definition = lfirst(dc);
 
-		List	*retrieved_attrs;
-		
 		elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
-
-		{
-		  StringInfoData rel_sql;
-		  
-		  initStringInfo(&rel_sql);
-		  
-		  // FIXME: might be possible to do this search without deparsing the
-		  // SQL...
-		  deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
-		  
-		  elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
-		  
-		  initStringInfo(&rel_sql);
-		  
-		  // FIXME: might be possible to do this search without deparsing the
-		  // SQL...
-		  deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
-		  
-		  elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
-		}
 
 	    // The alternative query we will submit if it matches.
 	    StringInfoData alternative_query;
 	    initStringInfo(&alternative_query);
 	    appendStringInfoString (&alternative_query, "SELECT ");
 
-		SelectStmt *mv_query = parse_select_query ((const char *) mv_definition->data);
+        SelectStmt *mv_query;
+        Query *parsed_mv_query;
+        parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
 		
+        renumber_mv_vars_to_match_input_rel (root, parsed_mv_query, input_rel);
+          
+        List *mv_tlist_sqls = NIL;
+        List *mv_tlist_aliases = NIL;
+        deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
+        
 		List *required_expr_sqls = deparse_grouped_rel_tlist_expressions (root, grouped_rel);
 		
 		// 1. Check the GROUP BY clause: it must match exactly
@@ -3786,12 +3937,29 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		  List *required_expr_sqls = deparse_grouped_rel_group_clause_expressions (root, grouped_rel);
 		  
 		  List *mv_expr_sqls = deparse_matview_group_clause_expressions (mv_query);
-		  
-		  // FIXME
-		  if (!check_select_clauses_for_matview (required_expr_sqls, mv_expr_sqls, NULL,
-												 NULL))
-			goto next_mv;
-		}
+
+            List *tl = build_tlist_to_deparse(grouped_rel);
+            
+            elog(INFO, "%s: target list: %s", __func__, nodeToString(tl));
+            
+            ListCell   *lc;
+            foreach (lc, root->parse->groupClause)
+            {
+                SortGroupClause *sgc = lfirst (lc);
+                Expr *expr = list_nth_node(TargetEntry, tl, (int) sgc->tleSortGroupRef - 1)->expr;
+                
+                elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
+
+                if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, parsed_mv_query->targetList))
+                {
+                        elog(INFO, "%s: GROUP BY clause not found in MV SELECT list", __func__);
+                        goto next_mv;
+                }
+            }
+          // FIXME: the above check only checks some selected clauses; the balance of
+          // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
+          // check needs to be exact set equality.
+        }
 
 		// FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer 
 		// where it can be re-aggregated
@@ -3802,7 +3970,8 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		// 3. Check the WHERE clause: they must match exactly
 		elog(INFO, "%s: checking WHERE clauses...", __func__);
 		{
-		  elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+		  //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+            
 		  ListCell   *lc;
 		  foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
 		  {
@@ -3815,10 +3984,11 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		      expr = ((RestrictInfo *) ri)->clause;
 		      elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
 
-			  if (!check_expr_target_in_matview_tlist (root, grouped_rel, 
-													   expr, 
-													   mv_query->targetList, required_expr_sqls))
+			  if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, parsed_mv_query->targetList))
+              {
+                elog(INFO, "%s: WHERE clause not found in MV SELECT list", __func__);
 				goto next_mv;
+              }
 		    }
 		    else
 		    {
@@ -3838,12 +4008,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
 		{
 		  elog(INFO, "%s: checking SELECT clauses...", __func__);
 		  
-		  List *mv_expr_sqls = NIL;
-		  List *mv_expr_aliases = NIL;
-		  deparse_matview_tlist_expressions (mv_query, &mv_expr_sqls, &mv_expr_aliases);
-		  
-		  if (!check_select_clauses_for_matview (required_expr_sqls, mv_expr_sqls, mv_expr_aliases,
-												 &alternative_query))
+		  if (!check_select_clauses_for_matview (root, grouped_rel, input_rel, parsed_mv_query->targetList))
 			goto next_mv;
 		}
 
