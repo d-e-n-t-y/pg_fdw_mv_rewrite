@@ -3447,11 +3447,59 @@ renumber_mv_vars_to_match_input_rel (PlannerInfo *root, Query *mv, RelOptInfo *i
     }
 }
 
+struct transform_todo {
+    List /* Var * */ *replacement_var;
+    List /* Expr * */ *replaced_expr;
+};
+
+static void
+transform_todo_list_add_match (struct transform_todo *todo_list, Index i, Expr *replaced_node, TargetEntry *replacement_te)
+{
+    todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
+    todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
+}
+
+static Node *
+transform_todos_mutator (Node *node, struct transform_todo *todo_list)
+{
+    ListCell *lc1, *lc2;
+    forboth(lc1, todo_list->replaced_expr, lc2, todo_list->replacement_var)
+    {
+        Expr *replaced_node = (Expr *) lfirst (lc1);
+        Index i = (Index) lfirst_int (lc2);
+        
+        if (replaced_node == (Expr *) node)
+        {
+    
+            Var *v = makeNode (Var);
+            v->varno = v->varnoold = 1;
+            v->varattno = v->varoattno = (int) i;
+            v->varcollid = InvalidOid;
+            v->varlevelsup = 0;
+            v->vartype = 0; // FIXME? Not sure if this is relevant as far as deparsing goes...
+            v->vartypmod = 0;
+            v->location = -1;
+            
+            elog(INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
+            
+            return (Node *) v;
+        }
+    }
+    return expression_tree_mutator (node, transform_todos_mutator, todo_list);
+}
+
+List /* TargetEntry* */ *
+transform_todos (List /* TargetEntry* */ *tlist, struct transform_todo *todo_list)
+{
+    return (List *) expression_tree_mutator ((Node *) tlist, transform_todos_mutator, todo_list);
+}
+
 static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
                                      RelOptInfo *input_rel,
                                      Expr *expr,
-                                     List /* TargetEntry* */ *tList);
+                                     List /* TargetEntry* */ *tList,
+                                     struct transform_todo *todo_list);
 
 struct expr_targets_in_matview_tlist_ctx
 {
@@ -3463,10 +3511,11 @@ struct expr_targets_in_matview_tlist_ctx
     bool match_found;
     bool did_search_anything;
     int match_found_at_level;
+    struct transform_todo *todo_list;
 };
                                             
 static bool
-expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview_tlist_ctx *ctx)
+expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview_tlist_ctx *ctx)
 {
     bool stop_search;
     bool done = false;
@@ -3526,6 +3575,7 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
     {
         // First check if any of the expressions match any TL node outright.
         // It might, for example, be a Var, and that should match easily.
+        Index i = 1;
         ListCell *lc;
         foreach (lc, ctx->tList)
         {
@@ -3540,6 +3590,8 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
             if (local_match_found)
             {
                 //elog(INFO, "%s: matched!", __func__);
+                
+                transform_todo_list_add_match (ctx->todo_list, i, node, te);
 
                 stop_search = false;
                 local_match_found = true;
@@ -3548,6 +3600,7 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
                 
                 break;
             }
+            i++;
         }
     }
     
@@ -3604,15 +3657,17 @@ static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
                                      RelOptInfo *input_rel,
 									 Expr *expr,
-                                     List /* TargetEntry* */ *tList)
+                                     List /* TargetEntry* */ *tList,
+                                     struct transform_todo *todo_list)
 {
     if (expr == NULL)
         return true;
     
     struct expr_targets_in_matview_tlist_ctx ctx = {
-        root, grouped_rel, input_rel, tList
+        root, grouped_rel, input_rel, tList,
     };
     ctx.match_found = true; // walker will set to false if not matched
+    ctx.todo_list = todo_list;
     
     expr_targets_in_matview_tlist_walker ((Node *) expr, &ctx);
 
@@ -3642,7 +3697,8 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 static bool
 check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
                                   RelOptInfo *input_rel,
-                                  List /* TargetEntry* */ *tList)
+                                  List /* TargetEntry* */ *tList,
+                                  struct transform_todo *transform_todo_list)
 {
     ListCell   *lc;
     foreach (lc, build_tlist_to_deparse(grouped_rel))
@@ -3651,7 +3707,7 @@ check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, tList))
+        if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, tList, transform_todo_list))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
@@ -3822,16 +3878,24 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             // later. Note that this is a shallow copy except for the fpinfo
             RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
             PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
-            *transformed_rel = *grouped_rel;
-            *tfpinfo = *fpinfo;
-            transformed_rel->fdw_private = tfpinfo;
+            List /* TargetEntry * */ *transformed_tlist = NIL;
+            struct transform_todo transform_todo_list = { NULL, NIL, NIL };
+            {
+                *transformed_rel = *grouped_rel;
+                *tfpinfo = *fpinfo;
+                transformed_rel->fdw_private = tfpinfo;
+                List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
+                {
+                    ListCell   *lc;
+                    foreach (lc, grouped_tlist)
+                    {
+                        TargetEntry *tle = (TargetEntry *) lfirst(lc);
+                        transformed_tlist = lappend (transformed_tlist, copyObject (tle));
+                    }
+                }
+            }
             
             elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
-            
-            // The alternative query we will submit if it matches.
-            StringInfoData alternative_query;
-            initStringInfo(&alternative_query);
-            appendStringInfoString (&alternative_query, "SELECT ");
             
             SelectStmt *mv_query;
             Query *parsed_mv_query;
@@ -3846,19 +3910,18 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             // 1. Check the GROUP BY clause: it must match exactly
             {
                 elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-                List *tl = build_tlist_to_deparse(transformed_rel);
-                
-                //elog(INFO, "%s: target list: %s", __func__, nodeToString(tl));
+
+                //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
                 
                 ListCell   *lc;
                 foreach (lc, root->parse->groupClause)
                 {
                     SortGroupClause *sgc = lfirst (lc);
-                    Expr *expr = list_nth_node(TargetEntry, tl, (int) sgc->tleSortGroupRef - 1)->expr;
+                    Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
                     
                     //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
                     
-                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
+                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list))
                     {
                         elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
                         goto next_mv;
@@ -3876,6 +3939,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             elog(INFO, "%s: checking FROM clauses...", __func__);
             
             // 3. Check the WHERE clause: they must match exactly
+            List /* Expr* */ *transformed_clist = NIL;
             elog(INFO, "%s: checking WHERE clauses...", __func__);
             {
                 //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
@@ -3890,18 +3954,15 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                     if (IsA(ri, RestrictInfo))
                     {
                         expr = ((RestrictInfo *) ri)->clause;
-                        //elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
-                        
-                        if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
-                        {
-                            elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
-                            goto next_mv;
-                        }
                     }
-                    else
+
+                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list))
                     {
-                        elog(ERROR, "%s: unrecognised clause type", __func__);
+                        elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+                        goto next_mv;
                     }
+                        
+                    transformed_clist = lappend (transformed_clist, expr);
                 }
             }
             
@@ -3916,7 +3977,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             {
                 elog(INFO, "%s: checking SELECT clauses...", __func__);
                 
-                if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList))
+                if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList, &transform_todo_list))
                     goto next_mv;
             }
             
@@ -3932,11 +3993,28 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             // FIXME: 7.2: Transform the grouped_rel.relid to target the MV
             // FIXME: 7.2: Fix-up the RTE to match the MV
             // FIXME: 7.3: Transform exprs that match exprs in the MV into Vars
+            transformed_tlist = transform_todos (transformed_tlist, &transform_todo_list);
+            elog(INFO, "%s: transformed target list: %s", __func__, nodeToString (transformed_tlist));
+
             // FIXME: 7.3: Fix-up the other remaining Var pointers
             // FIXME: 7.4: Remove the residual GROUP BY clause
             // FIXME: 7.5: Transform any HAVING clauses into WHERE clauses.
             
-            // Complete the query...
+            // Build the alternative query.
+            StringInfoData alternative_query;
+            initStringInfo(&alternative_query);
+            appendStringInfoString (&alternative_query, "SELECT ");
+            {
+                // FIXME: this seems not to work; make a more simplistic deparser to pull directly from the parsed MV query.
+
+                /* Fill portions of context common to upper, join and base relation */
+                deparse_expr_cxt context;
+                context.buf = &alternative_query;
+                context.root = root;
+                context.foreignrel = grouped_rel;
+                //context.scanrel = IS_UPPER_REL(rel) ? fpinfo->outerrel : rel;
+                deparseExplicitTargetList (transformed_tlist, NULL, &context);
+            }
             appendStringInfoString(&alternative_query, " ");
             appendStringInfoString(&alternative_query, " FROM ");
             appendStringInfoString(&alternative_query, mv_schema->data);
@@ -3954,6 +4032,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 
                 PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
                 List *quals = ofpinfo->remote_conds;
+                
+                quals = transform_todos (transformed_clist, &transform_todo_list);
+                elog(INFO, "%s: transformed quals list: %s", __func__, nodeToString (quals));
                 
                 if (quals != NIL)
                 {

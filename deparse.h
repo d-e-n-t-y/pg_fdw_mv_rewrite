@@ -63,3 +63,7 @@ deparseRTExpr (Node *t, StringInfo sql);
 
 extern void deparseColumnRef(StringInfo buf, int varno, int varattno,
                              PlannerInfo *root, bool qualify_col);
+
+extern void
+deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
+                          deparse_expr_cxt *context);

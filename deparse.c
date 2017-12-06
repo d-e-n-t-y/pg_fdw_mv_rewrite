@@ -88,8 +88,6 @@ static void deparseTargetList(StringInfo buf,
 				  Bitmapset *attrs_used,
 				  bool qualify_col,
 				  List **retrieved_attrs);
-static void deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
-						  deparse_expr_cxt *context);
 static void deparseSubqueryTargetList(deparse_expr_cxt *context);
 static void deparseReturningList(StringInfo buf, PlannerInfo *root,
 					 Index rtindex, Relation rel,
@@ -1359,7 +1357,7 @@ get_jointype_name(JoinType jointype)
  * retrieved_attrs is the list of continuously increasing integers starting
  * from 1. It has same number of entries as tlist.
  */
-static void
+extern void
 deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
 						  deparse_expr_cxt *context)
 {
@@ -1367,7 +1365,8 @@ deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
 	StringInfo	buf = context->buf;
 	int			i = 0;
 
-	*retrieved_attrs = NIL;
+    if (retrieved_attrs != NULL)
+        *retrieved_attrs = NIL;
 
 	foreach(lc, tlist)
 	{
@@ -1377,7 +1376,8 @@ deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
 			appendStringInfoString(buf, ", ");
 		deparseExpr((Expr *) tle->expr, context);
 
-		*retrieved_attrs = lappend_int(*retrieved_attrs, i + 1);
+        if (retrieved_attrs != NULL)
+            *retrieved_attrs = lappend_int(*retrieved_attrs, i + 1);
 		i++;
 	}
 
