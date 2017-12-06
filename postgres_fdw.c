@@ -3700,317 +3700,317 @@ estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
  */
 static void
 add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
-						   RelOptInfo *grouped_rel)
+                           RelOptInfo *grouped_rel)
 {
-	Query	   *parse = root->parse;
-	PgFdwRelationInfo *ifpinfo = input_rel->fdw_private;
-	PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
-	ForeignPath *grouppath;
-	PathTarget *grouping_target;
-	double		rows;
-	int			width;
-	Cost		startup_cost;
-	Cost		total_cost;
-
-	elog(INFO, "%s", __func__);
-
-	//elog(INFO, "%s: root: %s", __func__, nodeToString (root));
-	//elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-	//elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
-
-	/* Nothing to be done, if there is no grouping or aggregation required. */
-	if (!parse->groupClause && !parse->groupingSets && !parse->hasAggs &&
-		!root->hasHavingQual)
-		return;
-
-	grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
-
-	/* save the input_rel as outerrel in fpinfo */
-	fpinfo->outerrel = input_rel;
-
-	/*
-	 * Copy foreign table, foreign server, user mapping, FDW options etc.
-	 * details from the input relation's fpinfo.
-	 */
-	fpinfo->table = ifpinfo->table;
-	fpinfo->server = ifpinfo->server;
-	fpinfo->user = ifpinfo->user;
-	merge_fdw_options(fpinfo, ifpinfo, NULL);
-
-	elog(INFO, "%s: assessing push-down safety...", __func__);
-
-	/* Assess if it is safe to push down aggregation and grouping. */
-	if (!foreign_grouping_ok(root, grouped_rel))
-		return;
-
-	elog(INFO, "%s: push-down safety OK.", __func__);
-
-	/* Estimate the cost of push down */
-	estimate_path_cost_size(root, grouped_rel, NIL, NIL, &rows,
-							&width, &startup_cost, &total_cost);
-
-	/* Now update this information in the fpinfo */
-	fpinfo->rows = rows;
-	fpinfo->width = width;
-	fpinfo->startup_cost = startup_cost;
-	fpinfo->total_cost = total_cost;
-
-	elog(INFO, "add_foreign_grouping_paths: adding path");
-
-	/* Create and add foreign path to the grouping relation. */
-	grouppath = create_foreignscan_path(root,
-										grouped_rel,
-										grouping_target,
-										rows,
-										startup_cost,
-										total_cost,
-										NIL,	/* no pathkeys */
-										NULL,	/* no required_outer */
-										NULL,
-										NIL);	/* no fdw_private */
-
-	/* Add generated path into grouped_rel by add_path(). */
-	add_path(grouped_rel, (Path *) grouppath);
-
-	{
-	  elog(INFO, "%s: searching for MVs...", __func__);
-	  
+    Query	   *parse = root->parse;
+    PgFdwRelationInfo *ifpinfo = input_rel->fdw_private;
+    PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+    ForeignPath *grouppath;
+    PathTarget *grouping_target;
+    double		rows;
+    int			width;
+    Cost		startup_cost;
+    Cost		total_cost;
+    
+    elog(INFO, "%s", __func__);
+    
+    //elog(INFO, "%s: root: %s", __func__, nodeToString (root));
+    //elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+    //elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
+    
+    /* Nothing to be done, if there is no grouping or aggregation required. */
+    if (!parse->groupClause && !parse->groupingSets && !parse->hasAggs &&
+        !root->hasHavingQual)
+        return;
+    
+    grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
+    
+    /* save the input_rel as outerrel in fpinfo */
+    fpinfo->outerrel = input_rel;
+    
+    /*
+     * Copy foreign table, foreign server, user mapping, FDW options etc.
+     * details from the input relation's fpinfo.
+     */
+    fpinfo->table = ifpinfo->table;
+    fpinfo->server = ifpinfo->server;
+    fpinfo->user = ifpinfo->user;
+    merge_fdw_options(fpinfo, ifpinfo, NULL);
+    
+    elog(INFO, "%s: assessing push-down safety...", __func__);
+    
+    /* Assess if it is safe to push down aggregation and grouping. */
+    if (!foreign_grouping_ok(root, grouped_rel))
+        return;
+    
+    elog(INFO, "%s: push-down safety OK.", __func__);
+    
+    /* Estimate the cost of push down */
+    estimate_path_cost_size(root, grouped_rel, NIL, NIL, &rows,
+                            &width, &startup_cost, &total_cost);
+    
+    /* Now update this information in the fpinfo */
+    fpinfo->rows = rows;
+    fpinfo->width = width;
+    fpinfo->startup_cost = startup_cost;
+    fpinfo->total_cost = total_cost;
+    
+    elog(INFO, "add_foreign_grouping_paths: adding path");
+    
+    /* Create and add foreign path to the grouping relation. */
+    grouppath = create_foreignscan_path(root,
+                                        grouped_rel,
+                                        grouping_target,
+                                        rows,
+                                        startup_cost,
+                                        total_cost,
+                                        NIL,	/* no pathkeys */
+                                        NULL,	/* no required_outer */
+                                        NULL,
+                                        NIL);	/* no fdw_private */
+    
+    /* Add generated path into grouped_rel by add_path(). */
+    add_path(grouped_rel, (Path *) grouppath);
+    
+    {
+        elog(INFO, "%s: searching for MVs...", __func__);
+        
         // See if there are any candidate MVs...
         List *mvs_schema = NIL;
         List *mvs_name = NIL;
         List *mvs_definition = NIL;
         
-	  find_related_matviews_for_relation (root, input_rel,
-										  &mvs_schema, &mvs_name, &mvs_definition);
-      
-      List	*retrieved_attrs;
-      
-      // Deparse:
-      //   1. the input relation (i.e., the ungrouped source table)
-      //   2. the grouped relation (i.e., the input relation with all the aggregates applied)
-      {
-        StringInfoData rel_sql;
+        find_related_matviews_for_relation (root, input_rel,
+                                            &mvs_schema, &mvs_name, &mvs_definition);
         
-        initStringInfo(&rel_sql);
+        List	*retrieved_attrs;
         
-        // FIXME: might be possible to do this search without deparsing the
-        // SQL...
-        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
-        
-        elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
-        
-        initStringInfo(&rel_sql);
-        
-        // FIXME: might be possible to do this search without deparsing the
-        // SQL...
-        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
-        
-        elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
-      }
-
-      // Evaluate each MV in turn...
-	  ListCell   *sc;
-	  ListCell   *nc;
-	  ListCell   *dc;
-	  forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
-	  {
-		StringInfo mv_schema = lfirst(sc);
-		StringInfo mv_name = lfirst(nc);
-		StringInfo mv_definition = lfirst(dc);
-          
-          // First, copy the grouped_rel. We'll begin the actual transformation
-          // later. Note that this is a shallow copy except for the fpinfo
-          RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
-          PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
-          *transformed_rel = *grouped_rel;
-          *tfpinfo = *fpinfo;
-          transformed_rel->fdw_private = tfpinfo;
-
-		elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
-
-	    // The alternative query we will submit if it matches.
-	    StringInfoData alternative_query;
-	    initStringInfo(&alternative_query);
-	    appendStringInfoString (&alternative_query, "SELECT ");
-
-        SelectStmt *mv_query;
-        Query *parsed_mv_query;
-        parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
-		
-        renumber_mv_vars_to_match_input_rel (root, parsed_mv_query, input_rel);
-          
-        List *mv_tlist_sqls = NIL;
-        List *mv_tlist_aliases = NIL;
-        deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
-        
-		// 1. Check the GROUP BY clause: it must match exactly
-		{
-		  elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-            List *tl = build_tlist_to_deparse(transformed_rel);
+        // Deparse:
+        //   1. the input relation (i.e., the ungrouped source table)
+        //   2. the grouped relation (i.e., the input relation with all the aggregates applied)
+        {
+            StringInfoData rel_sql;
             
-            //elog(INFO, "%s: target list: %s", __func__, nodeToString(tl));
+            initStringInfo(&rel_sql);
             
-            ListCell   *lc;
-            foreach (lc, root->parse->groupClause)
+            // FIXME: might be possible to do this search without deparsing the
+            // SQL...
+            deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
+            
+            elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
+            
+            initStringInfo(&rel_sql);
+            
+            // FIXME: might be possible to do this search without deparsing the
+            // SQL...
+            deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
+            
+            elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+        }
+        
+        // Evaluate each MV in turn...
+        ListCell   *sc;
+        ListCell   *nc;
+        ListCell   *dc;
+        forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
+        {
+            StringInfo mv_schema = lfirst(sc);
+            StringInfo mv_name = lfirst(nc);
+            StringInfo mv_definition = lfirst(dc);
+            
+            // First, copy the grouped_rel. We'll begin the actual transformation
+            // later. Note that this is a shallow copy except for the fpinfo
+            RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
+            PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
+            *transformed_rel = *grouped_rel;
+            *tfpinfo = *fpinfo;
+            transformed_rel->fdw_private = tfpinfo;
+            
+            elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+            
+            // The alternative query we will submit if it matches.
+            StringInfoData alternative_query;
+            initStringInfo(&alternative_query);
+            appendStringInfoString (&alternative_query, "SELECT ");
+            
+            SelectStmt *mv_query;
+            Query *parsed_mv_query;
+            parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
+            
+            renumber_mv_vars_to_match_input_rel (root, parsed_mv_query, input_rel);
+            
+            List *mv_tlist_sqls = NIL;
+            List *mv_tlist_aliases = NIL;
+            deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
+            
+            // 1. Check the GROUP BY clause: it must match exactly
             {
-                SortGroupClause *sgc = lfirst (lc);
-                Expr *expr = list_nth_node(TargetEntry, tl, (int) sgc->tleSortGroupRef - 1)->expr;
+                elog(INFO, "%s: checking GROUP BY clauses...", __func__);
+                List *tl = build_tlist_to_deparse(transformed_rel);
                 
-                //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
-
-                if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
+                //elog(INFO, "%s: target list: %s", __func__, nodeToString(tl));
+                
+                ListCell   *lc;
+                foreach (lc, root->parse->groupClause)
                 {
+                    SortGroupClause *sgc = lfirst (lc);
+                    Expr *expr = list_nth_node(TargetEntry, tl, (int) sgc->tleSortGroupRef - 1)->expr;
+                    
+                    //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
+                    
+                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
+                    {
                         elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
                         goto next_mv;
+                    }
+                }
+                // FIXME: the above check only checks some selected clauses; the balance of
+                // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
+                // check needs to be exact set equality.
+            }
+            
+            // FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer
+            // where it can be re-aggregated
+            
+            // 2. Check the FROM clause: it must match exactly
+            elog(INFO, "%s: checking FROM clauses...", __func__);
+            
+            // 3. Check the WHERE clause: they must match exactly
+            elog(INFO, "%s: checking WHERE clauses...", __func__);
+            {
+                //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+                
+                ListCell   *lc;
+                foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
+                {
+                    RestrictInfo *ri = lfirst (lc);
+                    Expr *expr;
+                    
+                    /* Extract clause from RestrictInfo, if required */
+                    if (IsA(ri, RestrictInfo))
+                    {
+                        expr = ((RestrictInfo *) ri)->clause;
+                        //elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
+                        
+                        if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
+                        {
+                            elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+                            goto next_mv;
+                        }
+                    }
+                    else
+                    {
+                        elog(ERROR, "%s: unrecognised clause type", __func__);
+                    }
                 }
             }
-          // FIXME: the above check only checks some selected clauses; the balance of
-          // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
-          // check needs to be exact set equality.
-        }
-
-		// FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer 
-		// where it can be re-aggregated
-
-		// 2. Check the FROM clause: it must match exactly
-		elog(INFO, "%s: checking FROM clauses...", __func__);
-
-		// 3. Check the WHERE clause: they must match exactly
-		elog(INFO, "%s: checking WHERE clauses...", __func__);
-		{
-		  //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
             
-		  ListCell   *lc;
-		  foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
-		  {
-		    RestrictInfo *ri = lfirst (lc);
-		    Expr *expr;
-		    
-		    /* Extract clause from RestrictInfo, if required */
-		    if (IsA(ri, RestrictInfo))
-		    {
-		      expr = ((RestrictInfo *) ri)->clause;
-		      //elog(INFO, "%s: clause: %s", __func__, nodeToString (expr));
-
-			  if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList))
-              {
-                elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
-				goto next_mv;
-              }
-		    }
-		    else
-		    {
-		      elog(ERROR, "%s: unrecognised clause type", __func__);
-		    }
-		  }
-		}
-
-		// FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
-
-		// 4. Check for HAVING clause: push them in to the WHERE list
-		elog(INFO, "%s: checking HAVING clauses...", __func__);
-
-		// FIXME: 5. Consider computing any missing aggregates from other components
-
-		// 6. Check the SELECT clauses: they must be a subset
-		{
-		  elog(INFO, "%s: checking SELECT clauses...", __func__);
-		  
-		  if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList))
-			goto next_mv;
-		}
-
-		// FIXME: 6a. Allow SELECT of an expression based on the fundamental
-		// MV's select tList. This may necessitate re-computing the expression list
-		// to contain direct ColumnRefs instead of Exprs where those are matched.
-		// In turn, this reuires recursive processing of the query tree to search 
-		// for matches. After that, the whole matter becomes a regular check for 
-		// push-down-ability.
-          
-          // FIXME: 7. Create a new grouped_rel and transform it
-          // FIXME: 7.1: Copy the grouped_rel
-          // FIXME: 7.2: Transform the grouped_rel.relid to target the MV
-          // FIXME: 7.2: Fix-up the RTE to match the MV
-          // FIXME: 7.3: Transform exprs that match exprs in the MV into Vars
-          // FIXME: 7.3: Fix-up the other remaining Var pointers
-          // FIXME: 7.4: Remove the residual GROUP BY clause
-          // FIXME: 7.5: Transform any HAVING clauses into WHERE clauses.
-
-	    // Complete the query...
-	    appendStringInfoString(&alternative_query, " ");
-	    appendStringInfoString(&alternative_query, " FROM ");
-	    appendStringInfoString(&alternative_query, mv_schema->data);
-	    appendStringInfoString(&alternative_query, ".");
-	    appendStringInfoString(&alternative_query, mv_name->data);
-
-		// Add there WHERE cluase too, if any.
-		{
-		  // FIXME: this fragment seems to crop up everywhere...
-		  deparse_expr_cxt context;
-		  context.buf = &alternative_query;
-		  context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
-		  context.root = root;
-		  context.foreignrel = transformed_rel;
-		  
-		  PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
-		  List *quals = ofpinfo->remote_conds;
-
-		  if (quals != NIL)
-		  {
-			appendStringInfo (&alternative_query, " WHERE ");
-			appendConditions (quals, &context);
-		  }
-		}
-
-		// FIXME: do we need to append the ORDER BY clause too?
-
-		elog(INFO, "%s: alternative qeury: %s", __func__, alternative_query.data);
-
-		// 7. If all is well, make a cost estimate
-		elog(INFO, "%s: making cost estimate...", __func__);
-		
-	    double		rows;
-	    int			width;
-	    Cost		startup_cost;
-	    Cost		total_cost;
-
-		estimate_query_cost (root, input_rel, transformed_rel,
-							 alternative_query.data, &rows, &width, &startup_cost, &total_cost);
-
-	    // FIXME: we consider that there are no locally-checked quals
-	    // to save building all that cruft here. But in reality, that 
-	    // might be wrong.
-
-		// 8. Finally, create and add the path
-		elog(INFO, "%s: creating and adding path...", __func__);
-	    
-	    List *fdw_private = list_make3 (makeString (alternative_query.data),
-										retrieved_attrs,
-										makeInteger (fpinfo->fetch_size));
-	    fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
-		
-        // We still add the path to the raw grouped_rel — the foreign query is
-          // the one that is modified to scan the MV, and the local planner need
-          // know nothing of it except for the reduced plan cost.
-	    grouppath = create_foreignscan_path(root,
-											transformed_rel,
-											grouping_target,
-											rows,
-											startup_cost,
-											total_cost,
-											NIL,	/* no pathkeys */
-											NULL,	/* no required_outer */
-											NULL,
-											fdw_private);	/* no fdw_private */
-	    
-	    /* Add generated path into transformed_rel by add_path(). */
-	    add_path(grouped_rel, (Path *) grouppath);
-	    
-	  next_mv:
-		//elog(INFO, "%s: done.", __func__);
-		NULL;
-	  }
-	}
+            // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
+            
+            // 4. Check for HAVING clause: push them in to the WHERE list
+            elog(INFO, "%s: checking HAVING clauses...", __func__);
+            
+            // FIXME: 5. Consider computing any missing aggregates from other components
+            
+            // 6. Check the SELECT clauses: they must be a subset
+            {
+                elog(INFO, "%s: checking SELECT clauses...", __func__);
+                
+                if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList))
+                    goto next_mv;
+            }
+            
+            // FIXME: 6a. Allow SELECT of an expression based on the fundamental
+            // MV's select tList. This may necessitate re-computing the expression list
+            // to contain direct ColumnRefs instead of Exprs where those are matched.
+            // In turn, this reuires recursive processing of the query tree to search
+            // for matches. After that, the whole matter becomes a regular check for
+            // push-down-ability.
+            
+            // FIXME: 7. Create a new grouped_rel and transform it
+            // FIXME: 7.1: Copy the grouped_rel
+            // FIXME: 7.2: Transform the grouped_rel.relid to target the MV
+            // FIXME: 7.2: Fix-up the RTE to match the MV
+            // FIXME: 7.3: Transform exprs that match exprs in the MV into Vars
+            // FIXME: 7.3: Fix-up the other remaining Var pointers
+            // FIXME: 7.4: Remove the residual GROUP BY clause
+            // FIXME: 7.5: Transform any HAVING clauses into WHERE clauses.
+            
+            // Complete the query...
+            appendStringInfoString(&alternative_query, " ");
+            appendStringInfoString(&alternative_query, " FROM ");
+            appendStringInfoString(&alternative_query, mv_schema->data);
+            appendStringInfoString(&alternative_query, ".");
+            appendStringInfoString(&alternative_query, mv_name->data);
+            
+            // Add there WHERE cluase too, if any.
+            {
+                // FIXME: this fragment seems to crop up everywhere...
+                deparse_expr_cxt context;
+                context.buf = &alternative_query;
+                context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
+                context.root = root;
+                context.foreignrel = transformed_rel;
+                
+                PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
+                List *quals = ofpinfo->remote_conds;
+                
+                if (quals != NIL)
+                {
+                    appendStringInfo (&alternative_query, " WHERE ");
+                    appendConditions (quals, &context);
+                }
+            }
+            
+            // FIXME: do we need to append the ORDER BY clause too?
+            
+            elog(INFO, "%s: alternative qeury: %s", __func__, alternative_query.data);
+            
+            // 7. If all is well, make a cost estimate
+            elog(INFO, "%s: making cost estimate...", __func__);
+            
+            double		rows;
+            int			width;
+            Cost		startup_cost;
+            Cost		total_cost;
+            
+            estimate_query_cost (root, input_rel, transformed_rel,
+                                 alternative_query.data, &rows, &width, &startup_cost, &total_cost);
+            
+            // FIXME: we consider that there are no locally-checked quals
+            // to save building all that cruft here. But in reality, that 
+            // might be wrong.
+            
+            // 8. Finally, create and add the path
+            elog(INFO, "%s: creating and adding path...", __func__);
+            
+            List *fdw_private = list_make3 (makeString (alternative_query.data),
+                                            retrieved_attrs,
+                                            makeInteger (fpinfo->fetch_size));
+            fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
+            
+            // We still add the path to the raw grouped_rel — the foreign query is
+            // the one that is modified to scan the MV, and the local planner need
+            // know nothing of it except for the reduced plan cost.
+            grouppath = create_foreignscan_path(root,
+                                                transformed_rel,
+                                                grouping_target,
+                                                rows,
+                                                startup_cost,
+                                                total_cost,
+                                                NIL,	/* no pathkeys */
+                                                NULL,	/* no required_outer */
+                                                NULL,
+                                                fdw_private);	/* no fdw_private */
+            
+            /* Add generated path into transformed_rel by add_path(). */
+            add_path(grouped_rel, (Path *) grouppath);
+            
+        next_mv:
+            //elog(INFO, "%s: done.", __func__);
+            NULL;
+        }
+    }
 }
 
 /*
