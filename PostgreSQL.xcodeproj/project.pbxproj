@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5A268E1FD9531000E3AD72 /* equalwalker.c */; };
 		BF8BEF121FD1EF6D003A7AC9 /* connection.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE81FD1E590003A7AC9 /* connection.c */; };
 		BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE91FD1E590003A7AC9 /* deparse.c */; };
 		BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */; };
@@ -30,6 +31,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
+		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
 		BF8BEEE81FD1E590003A7AC9 /* connection.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connection.c; sourceTree = "<group>"; };
 		BF8BEEE91FD1E590003A7AC9 /* deparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = deparse.c; sourceTree = "<group>"; };
 		BF8BEEEA1FD1E590003A7AC9 /* deparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = deparse.h; sourceTree = "<group>"; };
@@ -82,6 +85,7 @@
 		BF8BEEF61FD1E99D003A7AC9 /* Source code */ = {
 			isa = PBXGroup;
 			children = (
+				BF5A268E1FD9531000E3AD72 /* equalwalker.c */,
 				BF8BEEE81FD1E590003A7AC9 /* connection.c */,
 				BF8BEEE91FD1E590003A7AC9 /* deparse.c */,
 				BF8BEEED1FD1E590003A7AC9 /* option.c */,
@@ -114,6 +118,7 @@
 				BF8BEF9E1FD1F596003A7AC9 /* libpq */,
 				BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */,
 				BF8BEEEA1FD1E590003A7AC9 /* deparse.h */,
+				BF5A26901FD95A0600E3AD72 /* equalswalker.h */,
 			);
 			name = Headers;
 			sourceTree = "<group>";
@@ -186,6 +191,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */,
 				BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */,
 				BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */,
 				BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */,
