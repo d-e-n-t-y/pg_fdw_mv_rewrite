@@ -1147,7 +1147,7 @@ deparseTargetList(StringInfo buf,
 				appendStringInfoString(buf, " RETURNING ");
 			first = false;
 
-			deparseColumnRef(buf, rtindex, i, root, qualify_col);
+			deparseColumnRef(buf, rtindex, i, root, qualify_col, NULL);
 
 			*retrieved_attrs = lappend_int(*retrieved_attrs, i);
 		}
@@ -1588,7 +1588,7 @@ deparseInsertSql(StringInfo buf, PlannerInfo *root,
 				appendStringInfoString(buf, ", ");
 			first = false;
 
-			deparseColumnRef(buf, rtindex, attnum, root, false);
+			deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
 		}
 
 		appendStringInfoString(buf, ") VALUES (");
@@ -1649,7 +1649,7 @@ deparseUpdateSql(StringInfo buf, PlannerInfo *root,
 			appendStringInfoString(buf, ", ");
 		first = false;
 
-		deparseColumnRef(buf, rtindex, attnum, root, false);
+		deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
 		appendStringInfo(buf, " = $%d", pindex);
 		pindex++;
 	}
@@ -1711,7 +1711,7 @@ deparseDirectUpdateSql(StringInfo buf, PlannerInfo *root,
 			appendStringInfoString(buf, ", ");
 		first = false;
 
-		deparseColumnRef(buf, rtindex, attnum, root, false);
+		deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
 		appendStringInfoString(buf, " = ");
 		deparseExpr((Expr *) tle->expr, &context);
 	}
@@ -1912,10 +1912,13 @@ deparseAnalyzeSql(StringInfo buf, Relation rel, List **retrieved_attrs)
  * If it has a column_name FDW option, use that instead of attribute name.
  *
  * If qualify_col is true, qualify column name with the alias of relation.
+ *
+ * If varno is REWRITTEN_VAR, then the column name is taken from colnames,
+ * else it is sourced from the cache.
  */
 extern void
 deparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root,
-				 bool qualify_col)
+				 bool qualify_col, List /* Value* */ *colnames)
 {
 	RangeTblEntry *rte;
 
@@ -2013,41 +2016,49 @@ deparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root,
 	}
 	else
 	{
-		char	   *colname = NULL;
-		List	   *options;
-		ListCell   *lc;
+        char	   *colname = NULL;
 
-		/* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
-		Assert(!IS_SPECIAL_VARNO(varno));
-
-		/* Get RangeTblEntry from array in PlannerInfo. */
-		rte = planner_rt_fetch(varno, root);
-
-		/*
-		 * If it's a column of a foreign table, and it has the column_name FDW
-		 * option, use that value.
-		 */
-		options = GetForeignColumnOptions(rte->relid, varattno);
-		foreach(lc, options)
-		{
-			DefElem    *def = (DefElem *) lfirst(lc);
-
-			if (strcmp(def->defname, "column_name") == 0)
-			{
-				colname = defGetString(def);
-				break;
-			}
-		}
-
-		/*
-		 * If it's a column of a regular table or it doesn't have column_name
-		 * FDW option, use attribute name.
-		 */
-		if (colname == NULL)
-			colname = get_relid_attribute_name(rte->relid, varattno);
-
-		if (qualify_col)
-			ADD_REL_QUALIFIER(buf, varno);
+        if (varno == REWRITTEN_VAR)
+        {
+            colname = list_nth_node(Value, colnames, (int) varattno - 1)->val.str;
+        }
+        else
+        {
+            List	   *options;
+            ListCell   *lc;
+            
+            /* varno must not be any of OUTER_VAR, INNER_VAR and INDEX_VAR. */
+            Assert(!IS_SPECIAL_VARNO(varno));
+            
+            /* Get RangeTblEntry from array in PlannerInfo. */
+            rte = planner_rt_fetch(varno, root);
+            
+            /*
+             * If it's a column of a foreign table, and it has the column_name FDW
+             * option, use that value.
+             */
+            options = GetForeignColumnOptions(rte->relid, varattno);
+            foreach(lc, options)
+            {
+                DefElem    *def = (DefElem *) lfirst(lc);
+                
+                if (strcmp(def->defname, "column_name") == 0)
+                {
+                    colname = defGetString(def);
+                    break;
+                }
+            }
+            
+            /*
+             * If it's a column of a regular table or it doesn't have column_name
+             * FDW option, use attribute name.
+             */
+            if (colname == NULL)
+                colname = get_relid_attribute_name(rte->relid, varattno);
+            
+            if (qualify_col)
+                ADD_REL_QUALIFIER(buf, varno);
+        }
 
 		appendStringInfoString(buf, quote_identifier(colname));
 	}
@@ -2218,9 +2229,10 @@ deparseVar(Var *node, deparse_expr_cxt *context)
 		return;
 	}
 
-	if (bms_is_member(node->varno, relids) && node->varlevelsup == 0)
+	if (node->varno == REWRITTEN_VAR ||
+        (bms_is_member(node->varno, relids) && node->varlevelsup == 0))
 		deparseColumnRef(context->buf, node->varno, node->varattno,
-						 context->root, qualify_col);
+						 context->root, qualify_col, context->colnames);
 	else
 	{
 		/* Treat like a Param */

@@ -189,4 +189,6 @@ extern const char *get_jointype_name(JoinType jointype);
 extern bool is_builtin(Oid objectId);
 extern bool is_shippable(Oid objectId, Oid classId, PgFdwRelationInfo *fpinfo);
 
+#define REWRITTEN_VAR 65501 /* indicates the var has been re-written, and so comes from an alternate source of column names */
+
 #endif							/* POSTGRES_FDW_H */

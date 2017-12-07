@@ -41,6 +41,7 @@ typedef struct deparse_expr_cxt
 								 * a base relation. */
 	StringInfo	buf;			/* output buffer to append to */
 	List	  **params_list;	/* exprs that will become remote Params */
+    List /* Value* */ *colnames;/* for when Vars have varno==REWRITTEN_VAR */
 } deparse_expr_cxt;
 
 extern void
@@ -62,7 +63,7 @@ extern void
 deparseRTExpr (Node *t, StringInfo sql);
 
 extern void deparseColumnRef(StringInfo buf, int varno, int varattno,
-                             PlannerInfo *root, bool qualify_col);
+                             PlannerInfo *root, bool qualify_col, List /* Value* */ *colnames);
 
 extern void
 deparseExplicitTargetList(List *tlist, List **retrieved_attrs,

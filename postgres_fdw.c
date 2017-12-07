@@ -3472,7 +3472,7 @@ transform_todos_mutator (Node *node, struct transform_todo *todo_list)
         {
     
             Var *v = makeNode (Var);
-            v->varno = v->varnoold = 1;
+            v->varno = v->varnoold = REWRITTEN_VAR;
             v->varattno = v->varoattno = (int) i;
             v->varcollid = InvalidOid;
             v->varlevelsup = 0;
@@ -3879,7 +3879,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
             PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
             List /* TargetEntry * */ *transformed_tlist = NIL;
-            struct transform_todo transform_todo_list = { NULL, NIL, NIL };
+            struct transform_todo transform_todo_list = { NULL, NIL };
             {
                 *transformed_rel = *grouped_rel;
                 *tfpinfo = *fpinfo;
@@ -4012,7 +4012,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 context.buf = &alternative_query;
                 context.root = root;
                 context.foreignrel = grouped_rel;
-                //context.scanrel = IS_UPPER_REL(rel) ? fpinfo->outerrel : rel;
+                context.scanrel = grouped_rel;
+                context.params_list = NULL;
+                context.colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames; // FIXME: not clear that N should be 1
                 deparseExplicitTargetList (transformed_tlist, NULL, &context);
             }
             appendStringInfoString(&alternative_query, " ");
@@ -4021,6 +4023,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             appendStringInfoString(&alternative_query, ".");
             appendStringInfoString(&alternative_query, mv_name->data);
             
+            elog(INFO, "%s: alternative qeury: %s", __func__, alternative_query.data);
             // Add there WHERE cluase too, if any.
             {
                 // FIXME: this fragment seems to crop up everywhere...
@@ -4029,7 +4032,8 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
                 context.root = root;
                 context.foreignrel = transformed_rel;
-                
+                context.colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames; // FIXME: not clear that N should be 1
+
                 PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
                 List *quals = ofpinfo->remote_conds;
                 
