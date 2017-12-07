@@ -3681,21 +3681,21 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 }
 
 static bool
-check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
-                                  RelOptInfo *input_rel,
-                                  List /* TargetEntry* */ *tList,
+check_select_clauses_for_matview (PlannerInfo *root,
+                                  List /* TargetEntry* */ *selected_tlist,
+                                  List /* TargetEntry* */ *mv_tlist,
                                   struct transform_todo *transform_todo_list,
                                   List /* Value* */ *input_colnames,
                                   List /* Value* */ *mv_from_colnames)
 {
     ListCell   *lc;
-    foreach (lc, build_tlist_to_deparse(grouped_rel))
+    foreach (lc, selected_tlist)
     {
         Expr *expr = lfirst(lc);
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, expr, tList, transform_todo_list, input_colnames, mv_from_colnames))
+        if (!check_expr_targets_in_matview_tlist (root, expr, mv_tlist, transform_todo_list, input_colnames, mv_from_colnames))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
@@ -3784,24 +3784,17 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         StringInfo mv_name = lfirst(nc);
         StringInfo mv_definition = lfirst(dc);
         
-        // First, copy the grouped_rel. We'll begin the actual transformation
-        // later. Note that this is a shallow copy except for the fpinfo
-        RelOptInfo *transformed_rel = palloc (sizeof (RelOptInfo));
-        PgFdwRelationInfo *tfpinfo = palloc (sizeof (PgFdwRelationInfo));
+        // First, copy some structures from the grouped_rel. We'll begin the actual
+        // transformation later.
         List /* TargetEntry * */ *transformed_tlist = NIL;
         struct transform_todo transform_todo_list = { NULL, NIL };
+        List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
         {
-            *transformed_rel = *grouped_rel;
-            *tfpinfo = *fpinfo;
-            transformed_rel->fdw_private = tfpinfo;
-            List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
+            ListCell   *lc;
+            foreach (lc, grouped_tlist)
             {
-                ListCell   *lc;
-                foreach (lc, grouped_tlist)
-                {
-                    TargetEntry *tle = (TargetEntry *) lfirst(lc);
-                    transformed_tlist = lappend (transformed_tlist, copyObject (tle));
-                }
+                TargetEntry *tle = (TargetEntry *) lfirst(lc);
+                transformed_tlist = lappend (transformed_tlist, copyObject (tle));
             }
         }
         
@@ -3906,7 +3899,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
             List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
             List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
             
-            if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
+            if (!check_select_clauses_for_matview (root, grouped_tlist, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
                 goto next_mv;
         }
         
@@ -3958,9 +3951,9 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
             // FIXME: this fragment seems to crop up everywhere...
             deparse_expr_cxt context;
             context.buf = &alternative_query;
-            context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
+            context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
             context.root = root;
-            context.foreignrel = transformed_rel;
+            context.foreignrel = grouped_rel;
             context.colnames = matview_tlist_colnames (parsed_mv_query);
             
             PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
@@ -3988,7 +3981,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         Cost		startup_cost;
         Cost		total_cost;
         
-        estimate_query_cost (root, input_rel, transformed_rel,
+        estimate_query_cost (root, input_rel, grouped_rel,
                              alternative_query.data, &rows, &width, &startup_cost, &total_cost);
         
         // FIXME: we consider that there are no locally-checked quals
@@ -4017,7 +4010,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
                                             NULL,
                                             fdw_private);	/* no fdw_private */
         
-        /* Add generated path into transformed_rel by add_path(). */
+        /* Add generated path into grouped_rel by add_path(). */
         add_path(grouped_rel, (Path *) grouppath);
         
     next_mv:
