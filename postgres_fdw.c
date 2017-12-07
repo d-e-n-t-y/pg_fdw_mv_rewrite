@@ -3379,98 +3379,6 @@ parse_select_query (SelectStmt **mv_query, Query **parsed_mv_query,
   //elog(INFO, "%s: parsed query: %s", __func__, nodeToString (*parsed_mv_query));
 }
 
-struct renumber_mv_vars_undo_list
-{
-    List /* Var* */ *var;
-    List /* int */ *orig_varattno;
-};
-
-static void
-renumber_mv_vars_to_match_input_rel (PlannerInfo *root, Query *mv,
-                                     struct renumber_mv_vars_undo_list *undo_list)
-{
-    // FIXME: probably can't presue varno == 1
-    const Index varno = 1;
-    
-    List /* Value* */ *in_colnames = planner_rt_fetch((int) varno, root)->eref->colnames;
-
-    List /* Var* */ *varList = pull_var_clause ((Node *) mv->targetList, PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS);
-    
-    //elog(INFO, "%s: input column names: %s", __func__, nodeToString (in_colnames));
-    
-    //elog(INFO, "%s: considering query: %s", __func__, nodeToString (mv));
-
-    {
-        ListCell *lc;
-        foreach (lc, varList)
-        {
-            Var *v = lfirst(lc);
-            
-            Assert(!IS_SPECIAL_VARNO(varno));
-            
-            //elog(INFO, "%s: considering node: %s", __func__, nodeToString (v));
-            
-            //elog(INFO, "%s: processing %d, %d", __func__, (int) v->varno, (int) v->varattno);
-                
-            //elog(INFO, "%s: processing %s", __func__, nodeToString(planner_rt_fetch((int) v->varno, root)));
-                
-            Value *col_name = list_nth_node(Value, list_nth_node (RangeTblEntry, mv->rtable, (int) v->varno - 1)->eref->colnames, (int) v->varattno - 1);
-
-            //elog(INFO, "%s: column name %s", __func__, col_name->val.str);
-
-            bool matched = false;
-            Index varattno = 1;
-            ListCell *lc;
-            foreach (lc, in_colnames)
-            {
-                Value *in_colname = lfirst(lc);
-                
-                //elog(INFO, "%s: considering: %s", __func__, tListStr->val.str);
-                if (in_colname != NULL)
-                {
-                    if (0 == strcmp (col_name->val.str, in_colname->val.str))
-                    {
-                        //elog(INFO, "%s: mv columns RTE: %s", __func__, nodeToString (mv->rtable));
-
-                        elog(INFO, "%s: renumbered varattno: %d->%d (%s)", __func__, v->varattno, varattno, col_name->val.str);
-                        
-                        undo_list->var = lappend (undo_list->var, v);
-                        undo_list->orig_varattno = lappend_int (undo_list->orig_varattno, v->varattno);
-                        
-                        v->varattno = varattno;
-                        
-                        // FIXME: we perhaps outght to make the equal() infrastructure
-                        // based on a walker-pattern so as we can override what gets
-                        // considered for equality.
-                        v->varoattno = varattno; // mark old==new to promote better matching
-                        
-                        matched = true;
-                        break;
-                    }
-                }
-                varattno++;
-            }
-            if (!matched)
-            {
-                elog(INFO, "%s: no match for %s: renumbering to 9999", __func__, col_name->val.str);
-                v->varno = 9999;
-            }
-        }
-    }
-}
-
-static void
-renumber_mv_vars_undo (struct renumber_mv_vars_undo_list *undo_list)
-{
-    ListCell *lc1, *lc2;
-    forboth(lc1, undo_list->var, lc2, undo_list->orig_varattno)
-    {
-        Var *v = lfirst(lc1);
-        int orig_varattno = lfirst_int(lc2);
-        v->varattno = v->varoattno = orig_varattno;
-    }
-}
-
 struct transform_todo {
     List /* Var * */ *replacement_var;
     List /* Expr * */ *replaced_expr;
@@ -3981,9 +3889,6 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             Query *parsed_mv_query;
             parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
             
-            struct renumber_mv_vars_undo_list renumber_undo_list = { NIL, NIL };
-            //renumber_mv_vars_to_match_input_rel (root, parsed_mv_query, &renumber_undo_list);
-            
             List *mv_tlist_sqls = NIL;
             List *mv_tlist_aliases = NIL;
             deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
@@ -4078,9 +3983,6 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             // for matches. After that, the whole matter becomes a regular check for
             // push-down-ability.
             
-            // 7.1: Undo all the Var renumbering
-            renumber_mv_vars_undo (&renumber_undo_list);
-
             // FIXME: 7. Create a new grouped_rel and transform it
             // FIXME: 7.1: Copy the grouped_rel
             // FIXME: 7.2: Transform the grouped_rel.relid to target the MV
