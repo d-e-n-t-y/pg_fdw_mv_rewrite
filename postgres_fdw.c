@@ -3681,6 +3681,42 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 }
 
 static bool
+check_group_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
+                                 List *transformed_tlist,
+                                 struct transform_todo *todo_list,
+                                 List *in_colnames, List *mv_from_colnames)
+{
+    //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
+    
+    elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
+    elog(INFO, "%s: mv_from_colnames: %s", __func__, nodeToString(mv_from_colnames));
+    
+    // Check each GROUP BY clause (Expr) in turn...
+    ListCell   *lc;
+    foreach (lc, root->parse->groupClause)
+    {
+        SortGroupClause *sgc = lfirst (lc);
+        Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
+        
+        elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
+        
+        // Check that the Expr either direclty matches an TLE Expr in the MV target list, or
+        // is an expression that builds upon one of them.
+        //
+        // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
+        // MV TLE directly.
+        if (!check_expr_targets_in_matview_tlist (root, expr,
+                                                  parsed_mv_query->targetList, &(*todo_list), in_colnames, mv_from_colnames))
+        {
+            elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool
 check_select_clauses_for_matview (PlannerInfo *root,
                                   List /* TargetEntry* */ *selected_tlist,
                                   List /* TargetEntry* */ *mv_tlist,
@@ -3784,19 +3820,13 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         StringInfo mv_name = lfirst(nc);
         StringInfo mv_definition = lfirst(dc);
         
+        List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
+
         // First, copy some structures from the grouped_rel. We'll begin the actual
         // transformation later.
-        List /* TargetEntry * */ *transformed_tlist = NIL;
+        List /* TargetEntry * */ *transformed_tlist = list_copy (grouped_tlist);
+        
         struct transform_todo transform_todo_list = { NULL, NIL };
-        List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
-        {
-            ListCell   *lc;
-            foreach (lc, grouped_tlist)
-            {
-                TargetEntry *tle = (TargetEntry *) lfirst(lc);
-                transformed_tlist = lappend (transformed_tlist, copyObject (tle));
-            }
-        }
         
         elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
         
@@ -3808,47 +3838,22 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         List *mv_tlist_aliases = NIL;
         deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
         
-        // 1. Check the GROUP BY clause: it must match exactly
-        {
-            elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-            
-            //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
-            
-            // The groupClause's TLE's Vars reference columns in order of input_rel's columns
-            List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-
-            // The MV's TLE's Vars reference columns in order of the underlying relation's columns
-            List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
-            
-            elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
-            elog(INFO, "%s: mv_from_colnames: %s", __func__, nodeToString(mv_from_colnames));
-            
-            // Check each GROUP BY clause (Expr) in turn...
-            ListCell   *lc;
-            foreach (lc, root->parse->groupClause)
-            {
-                SortGroupClause *sgc = lfirst (lc);
-                Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
-                
-                elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
-                
-                // Check that the Expr either direclty matches an TLE Expr in the MV target list, or
-                // is an expression that builds upon one of them.
-                //
-                // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
-                // MV TLE directly.
-                if (!check_expr_targets_in_matview_tlist (root, expr,
-                                                          parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
-                {
-                    elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
-                    goto next_mv;
-                }
-            }
-            // FIXME: the above check only checks some selected clauses; the balance of
-            // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
-            // check needs to be exact set equality.
-        }
+        // The group_rel clauses reference TLE's Vars which reference columns in order of input_rel's columns
+        List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
         
+        // The MV's reference TLE Vars which reference columns in order of the underlying relation's columns
+        List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
+        
+        // 1. Check the GROUP BY clause: it must match exactly
+        elog(INFO, "%s: checking GROUP BY clauses...", __func__);
+        
+        if (!check_group_clauses_for_matview(root, parsed_mv_query, transformed_tlist, &transform_todo_list,in_colnames, mv_from_colnames))
+            goto next_mv;
+
+        // FIXME: the above check only checks some selected clauses; the balance of
+        // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
+        // check needs to be exact set equality.
+
         // FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer
         // where it can be re-aggregated
         
@@ -3872,9 +3877,6 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
                     expr = ((RestrictInfo *) expr)->clause;
                 }
                 
-                List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-                List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
-                
                 if (!check_expr_targets_in_matview_tlist (root, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
                 {
                     elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
@@ -3893,15 +3895,10 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         // FIXME: 5. Consider computing any missing aggregates from other components
         
         // 6. Check the SELECT clauses: they must be a subset
-        {
-            elog(INFO, "%s: checking SELECT clauses...", __func__);
+        elog(INFO, "%s: checking SELECT clauses...", __func__);
             
-            List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-            List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
-            
-            if (!check_select_clauses_for_matview (root, grouped_tlist, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
-                goto next_mv;
-        }
+        if (!check_select_clauses_for_matview (root, grouped_tlist, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
+            goto next_mv;
         
         // FIXME: 6a. Allow SELECT of an expression based on the fundamental
         // MV's select tList. This may necessitate re-computing the expression list
@@ -3925,10 +3922,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         // Build the alternative query.
         StringInfoData alternative_query;
         initStringInfo(&alternative_query);
-        appendStringInfoString (&alternative_query, "SELECT ");
         {
-            // FIXME: this seems not to work; make a more simplistic deparser to pull directly from the parsed MV query.
-            
             /* Fill portions of context common to upper, join and base relation */
             deparse_expr_cxt context;
             context.buf = &alternative_query;
@@ -3938,28 +3932,17 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
             context.params_list = NULL;
             context.colnames = matview_tlist_colnames (parsed_mv_query);
             
+            appendStringInfoString (&alternative_query, "SELECT ");
+            // FIXME: this seems not to work; make a more simplistic deparser to pull directly from the parsed MV query.
+            
             deparseExplicitTargetList (transformed_tlist, NULL, &context);
-        }
-        appendStringInfoString(&alternative_query, " ");
-        appendStringInfoString(&alternative_query, " FROM ");
-        appendStringInfoString(&alternative_query, mv_schema->data);
-        appendStringInfoString(&alternative_query, ".");
-        appendStringInfoString(&alternative_query, mv_name->data);
+            
+            appendStringInfo (&alternative_query, " FROM %s.%s", mv_schema->data, mv_name->data);
         
-        // Add there WHERE cluase too, if any.
-        {
-            // FIXME: this fragment seems to crop up everywhere...
-            deparse_expr_cxt context;
-            context.buf = &alternative_query;
-            context.scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
-            context.root = root;
-            context.foreignrel = grouped_rel;
-            context.colnames = matview_tlist_colnames (parsed_mv_query);
-            
             PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
-            List *quals = ofpinfo->remote_conds;
-            
-            quals = transform_todos (transformed_clist, &transform_todo_list);
+
+            List *quals = transform_todos (transformed_clist, &transform_todo_list);
+
             //elog(INFO, "%s: transformed quals list: %s", __func__, nodeToString (quals));
             
             if (quals != NIL)
@@ -3967,9 +3950,8 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
                 appendStringInfo (&alternative_query, " WHERE ");
                 appendConditions (quals, &context);
             }
+            // FIXME: do we need to append the ORDER BY clause too?
         }
-        
-        // FIXME: do we need to append the ORDER BY clause too?
         
         elog(INFO, "%s: alternative query: %s", __func__, alternative_query.data);
         
