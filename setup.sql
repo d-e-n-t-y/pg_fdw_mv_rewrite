@@ -44,3 +44,5 @@ group by hc1, hc2, ts_to_bucket (timestamp, 'minute', 15)
 order by ts_to_bucket (timestamp, 'minute', 15);
 
 alter server local_server options (add extensions 'ts');
+
+alter server local_server options (add use_remote_estimate 'true');
