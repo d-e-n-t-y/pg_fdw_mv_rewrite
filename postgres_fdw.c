@@ -3387,6 +3387,8 @@ struct transform_todo {
 static void
 transform_todo_list_add_match (struct transform_todo *todo_list, Index i, Expr *replaced_node, TargetEntry *replacement_te)
 {
+    //elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
+
     todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
     todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
 }
@@ -3433,7 +3435,7 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
                                      List /* TargetEntry* */ *tList,
                                      struct transform_todo *todo_list,
                                      List /* Value* */ *input_colnames,
-                                     List /* Value* */ *mv_colnames);
+                                     List /* Value* */ *mv_from_colnames);
 
 struct expr_targets_equals_ctx
 {
@@ -3444,11 +3446,11 @@ struct expr_targets_equals_ctx
 static bool
 expr_targets_equals_walker (Node *a, Node *b, struct expr_targets_equals_ctx *ctx)
 {
-    elog (INFO, "%s: comparing: %s with: %s", __func__, nodeToString (a), nodeToString (b));
+    //elog (INFO, "%s: comparing: %s with: %s", __func__, nodeToString (a), nodeToString (b));
     
     if (a != NULL && b != NULL && nodeTag(a) == nodeTag(b) && nodeTag(a) == T_Var)
     {
-        elog (INFO, "%s: comparing Var", __func__);
+        //elog (INFO, "%s: comparing Var", __func__);
 
         Value *a_col_name = list_nth_node(Value, ctx->a_colnames, (int) ((Var *)a)->varattno - 1);
         
@@ -3456,12 +3458,12 @@ expr_targets_equals_walker (Node *a, Node *b, struct expr_targets_equals_ctx *ct
 
         if (0 == strcmp (a_col_name->val.str, b_col_name->val.str))
         {
-            elog(INFO, "%s: match for Var: %d->%d (%s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str);
+            //elog(INFO, "%s: match for Var: %d->%d (%s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str);
             return true;
         }
         else
         {
-            elog(INFO, "%s: no match for Var: %d->%d (%s, %s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str, b_col_name->val.str);
+            //elog(INFO, "%s: no match for Var: %d->%d (%s, %s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str, b_col_name->val.str);
             return false;
         }
     }
@@ -3470,11 +3472,11 @@ expr_targets_equals_walker (Node *a, Node *b, struct expr_targets_equals_ctx *ct
 
     if (result)
     {
-        elog(INFO, "%s: matched", __func__);
+        //elog(INFO, "%s: matched", __func__);
     }
     else
     {
-        elog(INFO, "%s: not matched", __func__);
+        //elog(INFO, "%s: not matched", __func__);
     }
     
     return result;
@@ -3513,7 +3515,7 @@ expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview
 
     ctx->current_level++;
 
-    elog(INFO, "%s: checking expr: %s, current_level = %d", __func__, nodeToString (node), ctx->current_level);
+    //elog(INFO, "%s: checking expr: %s, current_level = %d", __func__, nodeToString (node), ctx->current_level);
     
     // If we've already found a match at a heigher level, unfortunately
     // we have no option but to continue the scan. However there's nothing
@@ -3536,7 +3538,7 @@ expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview
         {
             stop_search = false;
             done = true;
-            elog(INFO, "%s: NULL node", __func__);
+            //elog(INFO, "%s: NULL node", __func__);
         }
     }
 
@@ -3547,7 +3549,7 @@ expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview
             stop_search = false;
             local_match_found = true;
             done = true;
-            elog(INFO, "%s: constants are always acceptable", __func__);
+            //elog(INFO, "%s: constants are always acceptable", __func__);
         }
     }
     
@@ -3561,7 +3563,7 @@ expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview
         {
             TargetEntry *te = lfirst(lc);
             
-            elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
+            //elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
             
             // FIXME: I think we need to have re-numbered the TLEs in order that
             // we don't accidently match on an entity that is different
@@ -3569,7 +3571,7 @@ expr_targets_in_matview_tlist_walker (Expr *node, struct expr_targets_in_matview
             
             if (local_match_found)
             {
-                elog(INFO, "%s: matched!", __func__);
+                //elog(INFO, "%s: matched!", __func__);
                 
                 transform_todo_list_add_match (ctx->todo_list, i, node, te);
 
@@ -3659,6 +3661,23 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root, RelOptInfo *grouped_rel,
 
     return ctx.match_found;
 }
+
+static List /* Value* */ *
+matview_tlist_colnames (Query *mv_query)
+{
+    List *colnames = NIL;
+    
+    ListCell *mv_lc;
+    foreach (mv_lc, mv_query->targetList)
+    {
+        TargetEntry *mv_tle = lfirst_node (TargetEntry, mv_lc);
+        
+        colnames = lappend (colnames, makeString (mv_tle->resname));
+    }
+    
+    return colnames;
+}
+
 static void
 deparse_matview_tlist_expressions (SelectStmt *mv_query,
 								   List /* StringInfo* */ **expr_sql, 
@@ -3686,7 +3705,7 @@ check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
                                   List /* TargetEntry* */ *tList,
                                   struct transform_todo *transform_todo_list,
                                   List /* Value* */ *input_colnames,
-                                  List /* Value* */ *mv_colnames)
+                                  List /* Value* */ *mv_from_colnames)
 {
     ListCell   *lc;
     foreach (lc, build_tlist_to_deparse(grouped_rel))
@@ -3695,7 +3714,7 @@ check_select_clauses_for_matview (PlannerInfo *root, RelOptInfo *grouped_rel,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, tList, transform_todo_list, input_colnames, mv_colnames))
+        if (!check_expr_targets_in_matview_tlist (root, grouped_rel, input_rel, expr, tList, transform_todo_list, input_colnames, mv_from_colnames))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
@@ -3908,9 +3927,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                     //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
                     
                     List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-                    List /* Value* */ *mv_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
+                    List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
 
-                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_colnames))
+                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
                     {
                         elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
                         goto next_mv;
@@ -3936,19 +3955,18 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 ListCell   *lc;
                 foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
                 {
-                    RestrictInfo *ri = lfirst (lc);
-                    Expr *expr;
+                    Expr *expr = lfirst (lc);
                     
                     /* Extract clause from RestrictInfo, if required */
-                    if (IsA(ri, RestrictInfo))
+                    if (IsA(expr, RestrictInfo))
                     {
-                        expr = ((RestrictInfo *) ri)->clause;
+                        expr = ((RestrictInfo *) expr)->clause;
                     }
                     
                     List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-                    List /* Value* */ *mv_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
+                    List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
 
-                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_colnames))
+                    if (!check_expr_targets_in_matview_tlist (root, transformed_rel, input_rel, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
                     {
                         elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
                         goto next_mv;
@@ -3970,9 +3988,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 elog(INFO, "%s: checking SELECT clauses...", __func__);
 
                 List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-                List /* Value* */ *mv_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
+                List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
 
-                if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_colnames))
+                if (!check_select_clauses_for_matview (root, transformed_rel, input_rel, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
                     goto next_mv;
             }
             
@@ -4009,7 +4027,8 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 context.foreignrel = grouped_rel;
                 context.scanrel = grouped_rel;
                 context.params_list = NULL;
-                context.colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames; // FIXME: not clear that N should be 1
+                context.colnames = matview_tlist_colnames (parsed_mv_query);
+
                 deparseExplicitTargetList (transformed_tlist, NULL, &context);
             }
             appendStringInfoString(&alternative_query, " ");
@@ -4026,7 +4045,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
                 context.scanrel = IS_UPPER_REL(transformed_rel) ? fpinfo->outerrel : transformed_rel;
                 context.root = root;
                 context.foreignrel = transformed_rel;
-                context.colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames; // FIXME: not clear that N should be 1
+                context.colnames = matview_tlist_colnames (parsed_mv_query);
 
                 PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
                 List *quals = ofpinfo->remote_conds;
@@ -4072,7 +4091,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
             // the one that is modified to scan the MV, and the local planner need
             // know nothing of it except for the reduced plan cost.
             grouppath = create_foreignscan_path(root,
-                                                transformed_rel,
+                                                grouped_rel,
                                                 grouping_target,
                                                 rows,
                                                 startup_cost,
