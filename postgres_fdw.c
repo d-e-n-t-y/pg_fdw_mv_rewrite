@@ -2988,7 +2988,7 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
     int			i;
     List	   *tlist = NIL;
     
-    elog(INFO, "%s: checking for grouping sets...", __func__);
+    //elog(INFO, "%s: checking for grouping sets...", __func__);
     
     /* Grouping Sets are not pushable */
     if (query->groupingSets)
@@ -2997,9 +2997,9 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
     /* Get the fpinfo of the underlying scan relation. */
     ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
     
-    elog(INFO, "%s: checking for local conditions...", __func__);
+    //elog(INFO, "%s: checking for local conditions...", __func__);
     
-    elog(INFO, "%s: local conditions: %s", __func__, nodeToString (ofpinfo->local_conds));
+    //elog(INFO, "%s: local conditions: %s", __func__, nodeToString (ofpinfo->local_conds));
     
     /*
      * If underneath input relation has any local conditions, those conditions
@@ -3790,7 +3790,7 @@ estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
     appendStringInfoString(&sql, "EXPLAIN ");
     appendStringInfoString(&sql, query);
     
-    elog(INFO, "%s: explain SQL: %s", __func__, query);
+    //elog(INFO, "%s: explain SQL: %s", __func__, query);
     
     // TODO: factor this fragment from estimate_path_cost_size()?
     
@@ -3984,7 +3984,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
         
         // 7. If all is well, make a cost estimate
-        elog(INFO, "%s: making cost estimate...", __func__);
+        //elog(INFO, "%s: making cost estimate...", __func__);
         
         double		rows;
         int			width;
@@ -4071,13 +4071,13 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
     fpinfo->user = ifpinfo->user;
     merge_fdw_options(fpinfo, ifpinfo, NULL);
     
-    elog(INFO, "%s: assessing push-down safety...", __func__);
+    //elog(INFO, "%s: assessing push-down safety...", __func__);
     
     /* Assess if it is safe to push down aggregation and grouping. */
     if (!foreign_grouping_ok(root, grouped_rel))
         return;
     
-    elog(INFO, "%s: push-down safety OK.", __func__);
+    //elog(INFO, "%s: push-down safety OK.", __func__);
     
     /* Estimate the cost of push down */
     estimate_path_cost_size(root, grouped_rel, NIL, NIL, &rows,
@@ -4089,7 +4089,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
     fpinfo->startup_cost = startup_cost;
     fpinfo->total_cost = total_cost;
     
-    elog(INFO, "add_foreign_grouping_paths: adding path");
+    //elog(INFO, "add_foreign_grouping_paths: adding path");
     
     /* Create and add foreign path to the grouping relation. */
     grouppath = create_foreignscan_path(root,
