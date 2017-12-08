@@ -341,7 +341,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     const char *relname;
     const char *refname;
     
-    elog(INFO, "postgresGetForeignRelSize (root=%p, baserel=%p, foreigntableid=%x)", root, baserel, foreigntableid);
+    //elog(INFO, "postgresGetForeignRelSize (root=%p, baserel=%p, foreigntableid=%x)", root, baserel, foreigntableid);
     
     /*
      * We use PgFdwRelationInfo to pass various information to subsequent
@@ -740,7 +740,7 @@ postgresGetForeignPaths(PlannerInfo *root,
     List	   *ppi_list;
     ListCell   *lc;
     
-    elog(INFO, "postgresGetForeignPaths (root=%p, baserel=%p, foreigntableid=%x", root, baserel, foreigntableid);
+    //elog(INFO, "postgresGetForeignPaths (root=%p, baserel=%p, foreigntableid=%x", root, baserel, foreigntableid);
     
     /*
      * Create simplest ForeignScan path node and add it to baserel.  This path
@@ -959,7 +959,7 @@ postgresGetForeignPlan(PlannerInfo *root,
     StringInfoData sql;
     ListCell   *lc;
     
-    elog(INFO, "postgresGetForeignPlan (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
+    //elog(INFO, "postgresGetForeignPlan (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
     
     if (IS_SIMPLE_REL(foreignrel))
     {
@@ -1147,7 +1147,7 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
     int			rtindex;
     int			numParams;
     
-    elog(INFO, "postgresBeginForeignScan (node=%p, eflags=%x", node, eflags);
+    //elog(INFO, "postgresBeginForeignScan (node=%p, eflags=%x", node, eflags);
     
     /*
      * Do nothing in EXPLAIN (no ANALYZE) case.  node->fdw_state stays NULL.
@@ -1290,7 +1290,7 @@ postgresReScanForeignScan(ForeignScanState *node)
     char		sql[64];
     PGresult   *res;
     
-    elog(INFO, "postgresReScanForeignScan (node=%p", node);
+    //elog(INFO, "postgresReScanForeignScan (node=%p", node);
     
     /* If we haven't created the cursor yet, nothing to do. */
     if (!fsstate->cursor_exists)
@@ -1346,7 +1346,7 @@ postgresEndForeignScan(ForeignScanState *node)
 {
     PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
     
-    elog(INFO, "postgresEndForeignScan (node=%p", node);
+    //elog(INFO, "postgresEndForeignScan (node=%p", node);
     
     /* if fsstate is NULL, we are in EXPLAIN; nothing to do */
     if (fsstate == NULL)
@@ -1374,7 +1374,7 @@ postgresRecheckForeignScan(ForeignScanState *node, TupleTableSlot *slot)
     PlanState  *outerPlan = outerPlanState(node);
     TupleTableSlot *result;
     
-    elog(INFO, "postgresRecheckForeignScan (node=%p, slot=%p", node, slot);
+    //elog(INFO, "postgresRecheckForeignScan (node=%p, slot=%p", node, slot);
     
     /* For base foreign relations, it suffices to set fdw_recheck_quals */
     if (scanrelid > 0)
@@ -1404,7 +1404,7 @@ postgresExplainForeignScan(ForeignScanState *node, ExplainState *es)
     char	   *sql;
     char	   *relations;
     
-    elog(INFO, "postgresExplainForeignScan (node=%p, es=%p", node, es);
+    //elog(INFO, "postgresExplainForeignScan (node=%p, es=%p", node, es);
     
     fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
     
@@ -3215,7 +3215,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    elog(INFO, "postgresGetForeignUpperPaths (root=%p, stage=%d, input_rel=%p, output_rel=%p", root, stage, input_rel, output_rel);
+    //elog(INFO, "postgresGetForeignUpperPaths (root=%p, stage=%d, input_rel=%p, output_rel=%p", root, stage, input_rel, output_rel);
     
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
@@ -3295,75 +3295,74 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
     
     heap_close(rel, NoLock);
     
-    elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
+    //elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
+
+    UserMapping *mapping;
+    PGconn	   *conn;
+    
+    mapping = GetUserMapping(GetUserId(), GetForeignTable(rte->relid)->serverid);
+    
+    conn = GetConnection(mapping, false);
+    
+    PGresult   *volatile res = NULL;
+    
+    PG_TRY();
     {
-        UserMapping *mapping;
-        PGconn	   *conn;
+        const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
+        " FROM ("
+        "  SELECT tablename objname, schemaname FROM pg_tables"
+        "  UNION ALL SELECT viewname, schemaname FROM pg_views"
+        "  UNION ALL SELECT matviewname, schemaname FROM pg_matviews"
+        ") o, public.pgx_rewritable_matviews j, pg_matviews v"
+        " WHERE o.schemaname = j.tableschemaname"
+        " AND o.objname = j.tablename"
+        " AND j.matviewschemaname = v.schemaname"
+        " AND j.matviewname = v.matviewname"
+        " AND o.schemaname || '.' || o.objname = $1::text";
         
-        mapping = GetUserMapping(GetUserId(), GetForeignTable(rte->relid)->serverid);
+        const int nr_params = 1;
+        const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
+        const int paramLengths[nr_params] = { (int) strlen (foreign_table_name.data) };
         
-        conn = GetConnection(mapping, false);
+        res = pgfdw_exec_query_params(conn, find_mvs_query,
+                                      1, NULL/*paramTypes*/,
+                                      paramValues, paramLengths,
+                                      NULL /*paramFormats*/,
+                                      0 /*resultFormat=text*/);
         
-        PGresult   *volatile res = NULL;
+        // FIXME: is this the best way to deap with the error?
+        if (PQresultStatus(res) != PGRES_TUPLES_OK)
+            pgfdw_report_error(ERROR, res, conn, false, find_mvs_query);
         
-        PG_TRY();
+        int num_mvs = PQntuples(res);
+        
+        for (int i = 0; i < num_mvs; i++)
         {
-            const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
-            " FROM ("
-            "  SELECT tablename objname, schemaname FROM pg_tables"
-            "  UNION ALL SELECT viewname, schemaname FROM pg_views"
-            "  UNION ALL SELECT matviewname, schemaname FROM pg_matviews"
-            ") o, public.pgx_rewritable_matviews j, pg_matviews v"
-            " WHERE o.schemaname = j.tableschemaname"
-            " AND o.objname = j.tablename"
-            " AND j.matviewschemaname = v.schemaname"
-            " AND j.matviewname = v.matviewname"
-            " AND o.schemaname || '.' || o.objname = $1::text";
+            //elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
+            //     PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
             
-            const int nr_params = 1;
-            const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
-            const int paramLengths[nr_params] = { (int) strlen (foreign_table_name.data) };
+            StringInfo schema = makeStringInfo();
+            appendStringInfoString (schema, PQgetvalue(res, i, 0));
+            StringInfo name = makeStringInfo();
+            appendStringInfoString (name, PQgetvalue(res, i, 1));
+            StringInfo definition = makeStringInfo();
+            appendStringInfoString (definition, PQgetvalue(res, i, 2));
             
-            res = pgfdw_exec_query_params(conn, find_mvs_query,
-                                          1, NULL/*paramTypes*/,
-                                          paramValues, paramLengths,
-                                          NULL /*paramFormats*/,
-                                          0 /*resultFormat=text*/);
-            
-            // FIXME: is this the best way to deap with the error?
-            if (PQresultStatus(res) != PGRES_TUPLES_OK)
-                pgfdw_report_error(ERROR, res, conn, false, find_mvs_query);
-            
-            int num_mvs = PQntuples(res);
-            
-            for (int i = 0; i < num_mvs; i++)
-            {
-                //elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
-                //     PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
-                
-                StringInfo schema = makeStringInfo();
-                appendStringInfoString (schema, PQgetvalue(res, i, 0));
-                StringInfo name = makeStringInfo();
-                appendStringInfoString (name, PQgetvalue(res, i, 1));
-                StringInfo definition = makeStringInfo();
-                appendStringInfoString (definition, PQgetvalue(res, i, 2));
-                
-                *mvs_schema = lappend (*mvs_schema, schema);
-                *mvs_name = lappend (*mvs_name, name);
-                *mvs_definition = lappend (*mvs_definition, definition);
-            }
-            PQclear(res);
-            ReleaseConnection(conn);
+            *mvs_schema = lappend (*mvs_schema, schema);
+            *mvs_name = lappend (*mvs_name, name);
+            *mvs_definition = lappend (*mvs_definition, definition);
         }
-        PG_CATCH();
-        {
-            if (res)
-                PQclear(res);
-            ReleaseConnection(conn);
-            PG_RE_THROW();
-        }
-        PG_END_TRY();
+        PQclear(res);
+        ReleaseConnection(conn);
     }
+    PG_CATCH();
+    {
+        if (res)
+            PQclear(res);
+        ReleaseConnection(conn);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
 }
 
 static void
@@ -3688,8 +3687,8 @@ check_group_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
 {
     //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
     
-    elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
-    elog(INFO, "%s: mv_from_colnames: %s", __func__, nodeToString(mv_from_colnames));
+    //elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
+    //elog(INFO, "%s: mv_from_colnames: %s", __func__, nodeToString(mv_from_colnames));
     
     // Check each GROUP BY clause (Expr) in turn...
     ListCell   *lc;
@@ -3698,7 +3697,7 @@ check_group_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
         SortGroupClause *sgc = lfirst (lc);
         Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
         
-        elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
+        //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
         
         // Check that the Expr either direclty matches an TLE Expr in the MV target list, or
         // is an expression that builds upon one of them.
@@ -3805,7 +3804,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         
         // FIXME: might be possible to do this search without deparsing the
         // SQL...
-        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, input_rel);
+        deparse_statement_for_mv_search (&rel_sql, NULL, root, input_rel);
         
         elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
     }
@@ -4022,9 +4021,9 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
     Cost		startup_cost;
     Cost		total_cost;
     
-    elog(INFO, "%s", __func__);
+    //elog(INFO, "%s", __func__);
     
-    elog(INFO, "%s: root: %s", __func__, nodeToString (root));
+    //elog(INFO, "%s: root: %s", __func__, nodeToString (root));
     //elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
     //elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
     

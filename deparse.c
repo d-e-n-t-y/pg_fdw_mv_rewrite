@@ -1122,7 +1122,8 @@ deparseTargetList(StringInfo buf,
 	bool		first;
 	int			i;
 
-	*retrieved_attrs = NIL;
+    if (retrieved_attrs != NULL)
+        *retrieved_attrs = NIL;
 
 	/* If there's a whole-row reference, we'll need all the columns. */
 	have_wholerow = bms_is_member(0 - FirstLowInvalidHeapAttributeNumber,
@@ -1149,7 +1150,8 @@ deparseTargetList(StringInfo buf,
 
 			deparseColumnRef(buf, rtindex, i, root, qualify_col, NULL);
 
-			*retrieved_attrs = lappend_int(*retrieved_attrs, i);
+            if (retrieved_attrs != NULL)
+                *retrieved_attrs = lappend_int(*retrieved_attrs, i);
 		}
 	}
 
