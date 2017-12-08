@@ -3716,13 +3716,16 @@ check_group_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
 }
 
 static bool
-check_where_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
-                                 PgFdwRelationInfo *fpinfo,
+check_where_clauses_for_matview (PlannerInfo *root,
+                                 RelOptInfo *grouped_rel,
+                                 Query *parsed_mv_query,
                                  List **transformed_clist_p,
                                  struct transform_todo *todo_list,
                                  List *in_colnames,
                                  List *mv_from_colnames)
 {
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+
     //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
     ListCell   *lc;
@@ -3806,7 +3809,6 @@ estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
 static bool
 evaluate_matview_for_rewrite (PlannerInfo *root,
                               RelOptInfo *grouped_rel,
-                              PgFdwRelationInfo *fpinfo,
                               List *grouped_tlist,
                               StringInfo mv_name, StringInfo mv_schema, StringInfo mv_definition,
                               StringInfo *alternative_query)
@@ -3854,7 +3856,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     elog(INFO, "%s: checking WHERE clauses...", __func__);
     //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
-    if (!check_where_clauses_for_matview(root, parsed_mv_query, fpinfo, &transformed_clist,
+    if (!check_where_clauses_for_matview(root, grouped_rel, parsed_mv_query, &transformed_clist,
                                          &transform_todo_list, in_colnames, mv_from_colnames))
         return false;
     
@@ -3909,8 +3911,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
         deparseExplicitTargetList (transformed_tlist, NULL, &context);
         
         appendStringInfo (*alternative_query, " FROM %s.%s", mv_schema->data, mv_name->data);
-        
-        PgFdwRelationInfo *ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
         
         List *quals = transform_todos (transformed_clist, &transform_todo_list);
         
@@ -3978,7 +3978,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         
         StringInfo alternative_query;
         
-        if (!evaluate_matview_for_rewrite (root, grouped_rel, fpinfo, grouped_tlist, mv_name, mv_schema, mv_definition, &alternative_query))
+        if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, mv_definition, &alternative_query))
             continue;
         
         elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
