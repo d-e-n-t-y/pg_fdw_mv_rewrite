@@ -3705,13 +3705,46 @@ check_group_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
         if (!check_expr_targets_in_matview_tlist (root, expr,
-                                                  parsed_mv_query->targetList, &(*todo_list), in_colnames, mv_from_colnames))
+                                                  parsed_mv_query->targetList, todo_list, in_colnames, mv_from_colnames))
         {
             elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
         }
     }
 
+    return true;
+}
+
+static bool
+check_where_clauses_for_matview (PlannerInfo *root, Query *parsed_mv_query,
+                                 PgFdwRelationInfo *fpinfo,
+                                 List **transformed_clist_p,
+                                 struct transform_todo *todo_list,
+                                 List *in_colnames,
+                                 List *mv_from_colnames)
+{
+    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+    
+    ListCell   *lc;
+    foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
+    {
+        Expr *expr = lfirst (lc);
+        
+        /* Extract clause from RestrictInfo, if required */
+        if (IsA(expr, RestrictInfo))
+        {
+            expr = ((RestrictInfo *) expr)->clause;
+        }
+        
+        if (!check_expr_targets_in_matview_tlist (root, expr, parsed_mv_query->targetList, todo_list, in_colnames, mv_from_colnames))
+        {
+            elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            return false;
+        }
+        
+        *transformed_clist_p = lappend (*transformed_clist_p, expr);
+    }
+    
     return true;
 }
 
@@ -3847,7 +3880,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         elog(INFO, "%s: checking GROUP BY clauses...", __func__);
         
         if (!check_group_clauses_for_matview(root, parsed_mv_query, transformed_tlist, &transform_todo_list,in_colnames, mv_from_colnames))
-            goto next_mv;
+            continue;
 
         // FIXME: the above check only checks some selected clauses; the balance of
         // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
@@ -3862,29 +3895,11 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         // 3. Check the WHERE clause: they must match exactly
         List /* Expr* */ *transformed_clist = NIL;
         elog(INFO, "%s: checking WHERE clauses...", __func__);
-        {
-            //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+        //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
             
-            ListCell   *lc;
-            foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
-            {
-                Expr *expr = lfirst (lc);
-                
-                /* Extract clause from RestrictInfo, if required */
-                if (IsA(expr, RestrictInfo))
-                {
-                    expr = ((RestrictInfo *) expr)->clause;
-                }
-                
-                if (!check_expr_targets_in_matview_tlist (root, expr, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
-                {
-                    elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
-                    goto next_mv;
-                }
-                
-                transformed_clist = lappend (transformed_clist, expr);
-            }
-        }
+        if (!check_where_clauses_for_matview(root, parsed_mv_query, fpinfo, &transformed_clist,
+                                             &transform_todo_list, in_colnames, mv_from_colnames))
+            continue;
         
         // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
         
@@ -3897,7 +3912,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         elog(INFO, "%s: checking SELECT clauses...", __func__);
             
         if (!check_select_clauses_for_matview (root, grouped_tlist, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
-            goto next_mv;
+            continue;
         
         // FIXME: 6a. Allow SELECT of an expression based on the fundamental
         // MV's select tList. This may necessitate re-computing the expression list
@@ -3993,10 +4008,6 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         
         /* Add generated path into grouped_rel by add_path(). */
         add_path(grouped_rel, (Path *) grouppath);
-        
-    next_mv:
-        //elog(INFO, "%s: done.", __func__);
-        NULL;
     }
 }
 
