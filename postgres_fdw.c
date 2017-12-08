@@ -3815,6 +3815,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
 {
     // First, copy some structures from the grouped_rel. We'll begin the actual
     // transformation later.
+    List /* Expr* */ *transformed_clist = NIL;
     List /* TargetEntry * */ *transformed_tlist = list_copy (grouped_tlist);
     
     struct transform_todo transform_todo_list = { NULL, NIL };
@@ -3852,9 +3853,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     elog(INFO, "%s: checking FROM clauses...", __func__);
     
     // 3. Check the WHERE clause: they must match exactly
-    List /* Expr* */ *transformed_clist = NIL;
     elog(INFO, "%s: checking WHERE clauses...", __func__);
-    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
     if (!check_where_clauses_for_matview(root, grouped_rel, parsed_mv_query->targetList, &transformed_clist,
                                          &transform_todo_list, in_colnames, mv_from_colnames))
