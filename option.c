@@ -213,7 +213,7 @@ InitPgFdwOptions(void)
 	 * string.
 	 */
 	postgres_fdw_options = (PgFdwOption *)
-		malloc(sizeof(PgFdwOption) * num_libpq_opts +
+		malloc(sizeof(PgFdwOption) * (size_t) num_libpq_opts +
 			   sizeof(non_libpq_options));
 	if (postgres_fdw_options == NULL)
 		ereport(ERROR,

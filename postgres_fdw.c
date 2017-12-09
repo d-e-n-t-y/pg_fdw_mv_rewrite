@@ -336,7 +336,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
 {
     PgFdwRelationInfo *fpinfo;
     ListCell   *lc;
-    RangeTblEntry *rte = planner_rt_fetch(baserel->relid, root);
+    RangeTblEntry *rte = planner_rt_fetch((int) baserel->relid, root);
     const char *namespace;
     const char *relname;
     const char *refname;
@@ -418,7 +418,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
      */
     fpinfo->local_conds_sel = clauselist_selectivity(root,
                                                      fpinfo->local_conds,
-                                                     baserel->relid,
+                                                     (int) baserel->relid,
                                                      JOIN_INNER,
                                                      NULL);
     
@@ -469,7 +469,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
         {
             baserel->pages = 10;
             baserel->tuples =
-            (10 * BLCKSZ) / (baserel->reltarget->width +
+            (10 * BLCKSZ) / ((size_t) baserel->reltarget->width +
                              MAXALIGN(SizeofHeapTupleHeader));
         }
         
@@ -504,7 +504,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     fpinfo->make_innerrel_subquery = false;
     fpinfo->lower_subquery_rels = NULL;
     /* Set the relation index. */
-    fpinfo->relation_index = baserel->relid;
+    fpinfo->relation_index = (int) baserel->relid;
 }
 
 /*
@@ -804,7 +804,7 @@ postgresGetForeignPaths(PlannerInfo *root,
         required_outer = bms_union(rinfo->clause_relids,
                                    baserel->lateral_relids);
         /* We do not want the foreign rel itself listed in required_outer */
-        required_outer = bms_del_member(required_outer, baserel->relid);
+        required_outer = bms_del_member(required_outer, (int) baserel->relid);
         
         /*
          * required_outer probably can't be empty here, but if it were, we
@@ -879,7 +879,7 @@ postgresGetForeignPaths(PlannerInfo *root,
                 /* Calculate required outer rels for the resulting path */
                 required_outer = bms_union(rinfo->clause_relids,
                                            baserel->lateral_relids);
-                required_outer = bms_del_member(required_outer, baserel->relid);
+                required_outer = bms_del_member(required_outer, (int) baserel->relid);
                 if (bms_is_empty(required_outer))
                     continue;
                 
@@ -1168,7 +1168,7 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
      * result from any.
      */
     if (fsplan->scan.scanrelid > 0)
-        rtindex = fsplan->scan.scanrelid;
+        rtindex = (int) fsplan->scan.scanrelid;
     else
         rtindex = bms_next_member(fsplan->fs_relids, -1);
     rte = rt_fetch(rtindex, estate->es_range_table);
@@ -1520,7 +1520,7 @@ estimate_path_cost_size(PlannerInfo *root,
         /* Factor in the selectivity of the locally-checked quals */
         local_sel = clauselist_selectivity(root,
                                            local_param_join_conds,
-                                           foreignrel->relid,
+                                           (int) foreignrel->relid,
                                            JOIN_INNER,
                                            NULL);
         local_sel *= fpinfo->local_conds_sel;
@@ -1967,7 +1967,7 @@ fetch_more_data(ForeignScanState *node)
         
         /* Convert the data into HeapTuples */
         numrows = PQntuples(res);
-        fsstate->tuples = (HeapTuple *) palloc0(numrows * sizeof(HeapTuple));
+        fsstate->tuples = (HeapTuple *) palloc0((size_t) numrows * sizeof(HeapTuple));
         fsstate->num_tuples = numrows;
         fsstate->next_tuple = 0;
         
@@ -2093,7 +2093,7 @@ prepare_query_params(PlanState *node,
     Assert(numParams > 0);
     
     /* Prepare for output conversion of parameters used in remote query. */
-    *param_flinfo = (FmgrInfo *) palloc0(sizeof(FmgrInfo) * numParams);
+    *param_flinfo = (FmgrInfo *) palloc0(sizeof(FmgrInfo) * (size_t) numParams);
     
     i = 0;
     foreach(lc, fdw_exprs)
@@ -2118,7 +2118,7 @@ prepare_query_params(PlanState *node,
     *param_exprs = ExecInitExprList(fdw_exprs, node);
     
     /* Allocate buffer for text form of query parameters. */
-    *param_values = (const char **) palloc0(numParams * sizeof(char *));
+    *param_values = (const char **) palloc0((size_t) numParams * sizeof(char *));
 }
 
 /*
@@ -4133,10 +4133,10 @@ make_tuple_from_result_row(PGresult *res,
         tupdesc = fdw_sstate->tupdesc;
     }
     
-    values = (Datum *) palloc0(tupdesc->natts * sizeof(Datum));
-    nulls = (bool *) palloc(tupdesc->natts * sizeof(bool));
+    values = (Datum *) palloc0((size_t) tupdesc->natts * sizeof(Datum));
+    nulls = (bool *) palloc((size_t) tupdesc->natts * sizeof(bool));
     /* Initialize to nulls for any columns not present in result */
-    memset(nulls, true, tupdesc->natts * sizeof(bool));
+    memset(nulls, true, (size_t) tupdesc->natts * sizeof(bool));
     
     /*
      * Set up and install callback to report where conversion error occurs.
@@ -4305,7 +4305,7 @@ conversion_error_callback(void *arg)
             RangeTblEntry *rte;
             Var		   *var = (Var *) tle->expr;
             
-            rte = rt_fetch(var->varno, estate->es_range_table);
+            rte = rt_fetch((int) var->varno, estate->es_range_table);
             
             if (var->varattno == 0)
                 is_wholerow = true;

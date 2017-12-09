@@ -239,8 +239,8 @@ connect_pg_server(ForeignServer *server, UserMapping *user)
 		 * for fallback_application_name, client_encoding, end marker.
 		 */
 		n = list_length(server->options) + list_length(user->options) + 3;
-		keywords = (const char **) palloc(n * sizeof(char *));
-		values = (const char **) palloc(n * sizeof(char *));
+		keywords = (const char **) palloc((size_t) n * sizeof(char *));
+		values = (const char **) palloc((size_t) n * sizeof(char *));
 
 		n = 0;
 		n += ExtractConnectionOptions(server->options,

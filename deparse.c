@@ -285,7 +285,7 @@ foreign_expr_walker(Node *node,
 				 * Param's collation, ie it's not safe for it to have a
 				 * non-default collation.
 				 */
-				if (bms_is_member(var->varno, glob_cxt->relids) &&
+				if (bms_is_member((int) var->varno, glob_cxt->relids) &&
 					var->varlevelsup == 0)
 				{
 					/* Var belongs to foreign table */
@@ -1052,7 +1052,7 @@ deparseSelectSql(List *tlist, bool is_subquery, List **retrieved_attrs,
 		 * For a base relation fpinfo->attrs_used gives the list of columns
 		 * required to be fetched from the foreign server.
 		 */
-		RangeTblEntry *rte = planner_rt_fetch(foreignrel->relid, root);
+		RangeTblEntry *rte = planner_rt_fetch((int) foreignrel->relid, root);
 
 		/*
 		 * Core code already has some lock on each rel being planned, so we
@@ -1148,7 +1148,7 @@ deparseTargetList(StringInfo buf,
 				appendStringInfoString(buf, " RETURNING ");
 			first = false;
 
-			deparseColumnRef(buf, rtindex, i, root, qualify_col, NULL);
+			deparseColumnRef(buf, (int) rtindex, i, root, qualify_col, NULL);
 
             if (retrieved_attrs != NULL)
                 *retrieved_attrs = lappend_int(*retrieved_attrs, i);
@@ -1243,7 +1243,7 @@ deparseLockingClause(deparse_expr_cxt *context)
 		}
 		else
 		{
-			PlanRowMark *rc = get_plan_rowmark(root->rowMarks, relid);
+			PlanRowMark *rc = get_plan_rowmark(root->rowMarks, (Index) relid);
 
 			if (rc)
 			{
@@ -1479,7 +1479,7 @@ deparseFromExprForRel(StringInfo buf, PlannerInfo *root, RelOptInfo *foreignrel,
 	}
 	else
 	{
-		RangeTblEntry *rte = planner_rt_fetch(foreignrel->relid, root);
+		RangeTblEntry *rte = planner_rt_fetch((int) foreignrel->relid, root);
 
 		/*
 		 * Core code already has some lock on each rel being planned, so we
@@ -1590,7 +1590,7 @@ deparseInsertSql(StringInfo buf, PlannerInfo *root,
 				appendStringInfoString(buf, ", ");
 			first = false;
 
-			deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
+			deparseColumnRef(buf, (int) rtindex, attnum, root, false, NULL);
 		}
 
 		appendStringInfoString(buf, ") VALUES (");
@@ -1651,7 +1651,7 @@ deparseUpdateSql(StringInfo buf, PlannerInfo *root,
 			appendStringInfoString(buf, ", ");
 		first = false;
 
-		deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
+		deparseColumnRef(buf, (int) rtindex, attnum, root, false, NULL);
 		appendStringInfo(buf, " = $%d", pindex);
 		pindex++;
 	}
@@ -1713,7 +1713,7 @@ deparseDirectUpdateSql(StringInfo buf, PlannerInfo *root,
 			appendStringInfoString(buf, ", ");
 		first = false;
 
-		deparseColumnRef(buf, rtindex, attnum, root, false, NULL);
+		deparseColumnRef(buf, (int) rtindex, attnum, root, false, NULL);
 		appendStringInfoString(buf, " = ");
 		deparseExpr((Expr *) tle->expr, &context);
 	}
@@ -2005,7 +2005,7 @@ deparseColumnRef(StringInfo buf, int varno, int varattno, PlannerInfo *root,
 		}
 
 		appendStringInfoString(buf, "ROW(");
-		deparseTargetList(buf, root, varno, rel, false, attrs_used, qualify_col,
+		deparseTargetList(buf, root, (Index) varno, rel, false, attrs_used, qualify_col,
 						  &retrieved_attrs);
 		appendStringInfoString(buf, ")");
 
@@ -2232,8 +2232,8 @@ deparseVar(Var *node, deparse_expr_cxt *context)
 	}
 
 	if (node->varno == REWRITTEN_VAR ||
-        (bms_is_member(node->varno, relids) && node->varlevelsup == 0))
-		deparseColumnRef(context->buf, node->varno, node->varattno,
+        (bms_is_member((int) node->varno, relids) && node->varlevelsup == 0))
+		deparseColumnRef(context->buf, (int) node->varno, node->varattno,
 						 context->root, qualify_col, context->colnames);
 	else
 	{
@@ -3137,10 +3137,10 @@ is_subquery_var(Var *node, RelOptInfo *foreignrel, int *relno, int *colno)
 	 * If the Var doesn't belong to any lower subqueries, it isn't a subquery
 	 * output column.
 	 */
-	if (!bms_is_member(node->varno, fpinfo->lower_subquery_rels))
+	if (!bms_is_member((int) node->varno, fpinfo->lower_subquery_rels))
 		return false;
 
-	if (bms_is_member(node->varno, outerrel->relids))
+	if (bms_is_member((int) node->varno, outerrel->relids))
 	{
 		/*
 		 * If outer relation is deparsed as a subquery, the Var is an output
