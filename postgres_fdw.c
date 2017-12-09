@@ -3450,11 +3450,9 @@ transform_todos (List /* TargetEntry* */ *tlist, struct transform_todo *todo_lis
 
 static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root,
+                                     Query *parsed_mv_query,
                                      Expr *expr,
-                                     List /* TargetEntry* */ *tList,
-                                     struct transform_todo *todo_list,
-                                     List /* Value* */ *input_colnames,
-                                     List /* Value* */ *mv_from_colnames);
+                                     struct transform_todo *todo_list);
 
 struct expr_targets_equals_ctx
 {
@@ -3639,20 +3637,18 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
 
 static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root,
+                                     Query *parsed_mv_query,
                                      Expr *expr,
-                                     List /* TargetEntry* */ *tList,
-                                     struct transform_todo *todo_list,
-                                     List /* Value* */ *input_colnames,
-                                     List /* Value* */ *tlist_colnames)
+                                     struct transform_todo *todo_list)
 {
     if (expr == NULL)
         return true;
     
     struct expr_targets_equals_ctx col_names = {
-        input_colnames, tlist_colnames
+        planner_rt_fetch((int) 1, root)->eref->colnames, list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames
     };
     struct expr_targets_in_matview_tlist_ctx ctx = {
-        root, tList
+        root, parsed_mv_query->targetList
     };
     ctx.match_found = true; // walker will set to false if not matched
     ctx.todo_list = todo_list;
@@ -3702,10 +3698,9 @@ deparse_matview_tlist_expressions (SelectStmt *mv_query,
 
 static bool
 check_group_clauses_for_matview (PlannerInfo *root,
-                                 List /* TargetEntry* */ *mv_tlist,
+                                 Query *parsed_mv_query,
                                  List *transformed_tlist,
-                                 struct transform_todo *todo_list,
-                                 List *in_colnames, List *mv_from_colnames)
+                                 struct transform_todo *todo_list)
 {
     //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
     
@@ -3726,7 +3721,7 @@ check_group_clauses_for_matview (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!check_expr_targets_in_matview_tlist (root, expr, mv_tlist, todo_list, in_colnames, mv_from_colnames))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
         {
             elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
@@ -3738,12 +3733,10 @@ check_group_clauses_for_matview (PlannerInfo *root,
 
 static bool
 check_where_clauses_for_matview (PlannerInfo *root,
+                                 Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
-                                 List /* TargetEntry* */ *mv_tlist,
                                  List **transformed_clist_p,
-                                 struct transform_todo *todo_list,
-                                 List *in_colnames,
-                                 List *mv_from_colnames)
+                                 struct transform_todo *todo_list)
 {
     PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
 
@@ -3760,7 +3753,7 @@ check_where_clauses_for_matview (PlannerInfo *root,
             expr = ((RestrictInfo *) expr)->clause;
         }
         
-        if (!check_expr_targets_in_matview_tlist (root, expr, mv_tlist, todo_list, in_colnames, mv_from_colnames))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
         {
             elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
@@ -3774,11 +3767,9 @@ check_where_clauses_for_matview (PlannerInfo *root,
 
 static bool
 check_select_clauses_for_matview (PlannerInfo *root,
+                                  Query *parsed_mv_query,
                                   List /* TargetEntry* */ *selected_tlist,
-                                  List /* TargetEntry* */ *mv_tlist,
-                                  struct transform_todo *todo_list,
-                                  List /* Value* */ *in_colnames,
-                                  List /* Value* */ *mv_from_colnames)
+                                  struct transform_todo *todo_list)
 {
     ListCell   *lc;
     foreach (lc, selected_tlist)
@@ -3787,7 +3778,7 @@ check_select_clauses_for_matview (PlannerInfo *root,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, expr, mv_tlist, todo_list, in_colnames, mv_from_colnames))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
@@ -3851,16 +3842,10 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     List *mv_tlist_aliases = NIL;
     deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
     
-    // The group_rel clauses reference TLE's Vars which reference columns in order of input_rel's columns
-    List /* Value* */ *in_colnames = planner_rt_fetch((int) 1, root)->eref->colnames;
-    
-    // The MV's reference TLE Vars which reference columns in order of the underlying relation's columns
-    List /* Value* */ *mv_from_colnames = list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames;
-    
     // 1. Check the GROUP BY clause: it must match exactly
     elog(INFO, "%s: checking GROUP BY clauses...", __func__);
     
-    if (!check_group_clauses_for_matview(root, parsed_mv_query->targetList, transformed_tlist, &transform_todo_list,in_colnames, mv_from_colnames))
+    if (!check_group_clauses_for_matview(root, parsed_mv_query, transformed_tlist, &transform_todo_list))
         return false;
     
     // FIXME: the above check only checks some selected clauses; the balance of
@@ -3876,8 +3861,8 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // 3. Check the WHERE clause: they must match exactly
     elog(INFO, "%s: checking WHERE clauses...", __func__);
     
-    if (!check_where_clauses_for_matview(root, grouped_rel, parsed_mv_query->targetList, &transformed_clist,
-                                         &transform_todo_list, in_colnames, mv_from_colnames))
+    if (!check_where_clauses_for_matview(root, parsed_mv_query, grouped_rel, &transformed_clist,
+                                         &transform_todo_list))
         return false;
     
     // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
@@ -3890,7 +3875,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // 6. Check the SELECT clauses: they must be a subset
     elog(INFO, "%s: checking SELECT clauses...", __func__);
     
-    if (!check_select_clauses_for_matview (root, grouped_tlist, parsed_mv_query->targetList, &transform_todo_list, in_colnames, mv_from_colnames))
+    if (!check_select_clauses_for_matview (root, parsed_mv_query, grouped_tlist, &transform_todo_list))
         return false;
     
     // FIXME: 6a. Allow SELECT of an expression based on the fundamental

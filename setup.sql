@@ -56,3 +56,5 @@ update public.pgx_rewritable_matviews t set tables = array[t.tableschemaname || 
 alter table public.pgx_rewritable_matviews drop column tableschemaname;
 
 alter table public.pgx_rewritable_matviews drop column tablename;
+
+insert into pgx_rewritable_matviews values ('public', 'events_all_room_rollup_15m', array['public.events_all', 'public.room']);
