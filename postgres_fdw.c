@@ -3456,8 +3456,8 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root,
 
 struct expr_targets_equals_ctx
 {
-    List /* Value* */ *a_colnames;
-    List /* Value* */ *b_colnames;
+    PlannerInfo *root;
+    List *parsed_mv_query_rtable; // parsed_mv_query->rtable;
 };
 
 static bool
@@ -3469,18 +3469,22 @@ expr_targets_equals_walker (Node *a, Node *b, struct expr_targets_equals_ctx *ct
     {
         //elog (INFO, "%s: comparing Var", __func__);
         
-        Value *a_col_name = list_nth_node(Value, ctx->a_colnames, (int) ((Var *)a)->varattno - 1);
+        Value *a_col_name = list_nth_node(Value,
+                                          planner_rt_fetch((int) ((Var *)a)->varno, ctx->root)->eref->colnames,
+                                          (int) ((Var *)a)->varattno - 1);
         
-        Value *b_col_name = list_nth_node(Value, ctx->b_colnames, (int) ((Var *)b)->varattno - 1);
+        Value *b_col_name = list_nth_node(Value,
+                                          list_nth_node (RangeTblEntry, ctx->parsed_mv_query_rtable, (int) ((Var *)b)->varno - 1)->eref->colnames,
+                                          (int) ((Var *)b)->varattno - 1);
         
         if (0 == strcmp (a_col_name->val.str, b_col_name->val.str))
         {
-            //elog(INFO, "%s: match for Var: %d->%d (%s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str);
+            //elog(INFO, "%s: match for Var: %d/%d->%d/%d (%s)", __func__, ((Var *)a)->varno, ((Var *)a)->varattno, ((Var *)b)->varno, ((Var *)b)->varattno, a_col_name->val.str);
             return true;
         }
         else
         {
-            //elog(INFO, "%s: no match for Var: %d->%d (%s, %s)", __func__, ((Var *)a)->varattno, ((Var *)b)->varattno, a_col_name->val.str, b_col_name->val.str);
+            //elog(INFO, "%s: no match for Var: %d/%d, %d/%d (%s, %s)", __func__, ((Var *)a)->varno, ((Var *)a)->varattno, ((Var *)b)->varno, ((Var *)b)->varattno, a_col_name->val.str, b_col_name->val.str);
             return false;
         }
     }
@@ -3645,7 +3649,7 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root,
         return true;
     
     struct expr_targets_equals_ctx col_names = {
-        planner_rt_fetch((int) 1, root)->eref->colnames, list_nth_node (RangeTblEntry, parsed_mv_query->rtable, 1 - 1)->eref->colnames
+        root, parsed_mv_query->rtable
     };
     struct expr_targets_in_matview_tlist_ctx ctx = {
         root, parsed_mv_query->targetList
