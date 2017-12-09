@@ -3507,10 +3507,8 @@ struct expr_targets_in_matview_tlist_ctx
 {
     PlannerInfo *root;
     List /* TargetEntry* */ *tList;
-    int current_level;
     bool match_found;
     bool did_search_anything;
-    int match_found_at_level;
     struct transform_todo *todo_list;
     struct expr_targets_equals_ctx *col_names;
 };
@@ -3518,7 +3516,6 @@ struct expr_targets_in_matview_tlist_ctx
 static bool
 expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview_tlist_ctx *ctx)
 {
-    bool stop_search;
     bool done = false;
     bool local_match_found = false;
     
@@ -3532,15 +3529,12 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         return false;
     }
     
-    ctx->current_level++;
-    
-    //elog(INFO, "%s: checking expr: %s, current_level = %d", __func__, nodeToString (node), ctx->current_level);
+    //elog(INFO, "%s: checking expr: %s", __func__, nodeToString (node));
     
     if (!done)
     {
         if (node == NULL)
         {
-            stop_search = false;
             done = true;
             //elog(INFO, "%s: NULL node", __func__);
         }
@@ -3550,7 +3544,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
     {
         if (IsA (node, Const))
         {
-            stop_search = false;
             local_match_found = true;
             done = true;
             //elog(INFO, "%s: constants are always acceptable", __func__);
@@ -3569,8 +3562,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
             
             //elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
             
-            // FIXME: I think we need to have re-numbered the TLEs in order that
-            // we don't accidently match on an entity that is different
             local_match_found = expr_targets_equals_walker ((Node *) node, (Node *) te->expr, ctx->col_names);
             
             if (local_match_found)
@@ -3579,9 +3570,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
                 
                 transform_todo_list_add_match (ctx->todo_list, i, (Expr *) node, te);
                 
-                stop_search = false;
-                local_match_found = true;
-                ctx->match_found_at_level = ctx->current_level;
                 done = true;
                 
                 break;
@@ -3598,8 +3586,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         sub_ctx.match_found = true; // walker will set to false if not matched
         sub_ctx.did_search_anything = false; // indicates whether match_found is valid
         
-        sub_ctx.current_level++;
-        
         //elog(INFO, "%s: walking sub-expressions...", __func__);
         
         // Look at the sub-expressions inside the Node. All must either match
@@ -3613,8 +3599,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         //elog(INFO, "%s: done walking sub-expressions.", __func__);
         
         local_match_found = sub_ctx.did_search_anything && sub_ctx.match_found;
-        
-        sub_ctx.current_level++;
         
         done = true;
     }
@@ -3630,8 +3614,6 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         
         //elog(INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
     }
-    
-    ctx->current_level--;
     
     //elog(INFO, "%s: <<<<", __func__);
     
