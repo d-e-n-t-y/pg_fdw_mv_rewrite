@@ -3696,9 +3696,131 @@ check_group_clauses_for_matview (PlannerInfo *root,
 }
 
 static bool
+check_from_join_clauses_for_matview (PlannerInfo *root,
+                                     Query *parsed_mv_query,
+                                     RelOptInfo *grouped_rel,
+                                     List **additional_where_clauses,
+                                     struct transform_todo *todo_list)
+{
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+    RelOptInfo *scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
+    PgFdwRelationInfo *sfpinfo = (PgFdwRelationInfo *) scanrel->fdw_private;
+    
+    // 1. We don't need to check the rels involved — they must be joined
+    //    by the MV otherwise they wouldn't have been selected for evaluation.
+        
+    // 2. However, we do need to check the type of JOIN (INNER, OUTER, etc.)
+
+    // 3. Go through each JOIN clause in the MV.
+
+    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (parsed_mv_query->jointree));
+
+    List *quals = NIL; // additional qualifiers over and above the join clauses
+   
+    // Aggregate all the join expressions and qualifiers
+    if (parsed_mv_query->jointree != NULL)
+    {
+        if (parsed_mv_query->jointree->quals != NULL)
+        {
+            if (IsA (parsed_mv_query->jointree->quals, BoolExpr) &&
+                ((BoolExpr *) (parsed_mv_query->jointree->quals))->boolop == AND_EXPR)
+            {
+                quals = list_concat (quals, ((BoolExpr *) (parsed_mv_query->jointree->quals))->args);
+            }
+            else
+            {
+                quals = lappend (quals, (Node *) parsed_mv_query->jointree->quals);
+            }
+        }
+        
+        if (parsed_mv_query->jointree->fromlist != NULL)
+        {
+            ListCell   *lc1;
+            foreach (lc1, parsed_mv_query->jointree->fromlist)
+            {
+                Node *n = lfirst (lc1);
+                if (IsA (n, JoinExpr))
+                {
+                    JoinExpr *je = (JoinExpr *) n;
+                
+                    if (je->quals != NULL)
+                    {
+                        if (IsA (((JoinExpr *)je)->quals, BoolExpr))
+                            if (((BoolExpr *) ((JoinExpr *)je)->quals)->boolop == AND_EXPR)
+                                quals = list_concat (quals, ((BoolExpr *) ((JoinExpr *)je)->quals)->args);
+                            else
+                                quals = lappend (quals, ((JoinExpr *)je)->quals);
+                        else
+                            quals = lappend (quals, ((JoinExpr *)je)->quals);
+                    }
+                }
+            }
+        }
+    }
+    
+    // elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
+    
+    // 3.1. We must find all its expressions present in our grouped_rel query
+    //      otherwise the MV is potentially too restrictive.
+
+    List /* RestrictInfo* */ *grouped_rel_clauses = sfpinfo->joinclauses;
+    List /* RestrictInfo* */ *found_grouped_rel_clauses = NIL;
+
+    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (grouped_rel_clauses));
+    
+    struct expr_targets_equals_ctx col_names = {
+        root, parsed_mv_query->rtable
+    };
+
+    ListCell *lc2;
+    foreach (lc2, quals)
+    {
+        Expr *je = lfirst (lc2);
+
+        //elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (je));
+
+        bool found = false;
+        
+        ListCell *lc3;
+        foreach (lc3, grouped_rel_clauses)
+        {
+            RestrictInfo *ri = lfirst (lc3);
+            
+            //elog(INFO, "%s: against expression: %s", __func__, nodeToString (ri));
+
+            if (expr_targets_equals_walker ((Node *) ri->clause, (Node *) je, &col_names))
+            {
+                found_grouped_rel_clauses = lappend (found_grouped_rel_clauses, ri);
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found)
+        {
+            elog(INFO, "%s: expression not found in grouped rel: %s", __func__, nodeToString (je));
+            return false;
+        }
+    }
+
+    elog(INFO, "%s: all MV JOIN expressions found in grouped rel", __func__);
+    
+    // 4. The balance of clauses must now be treated as if they were part of the
+    //    WHERE clause list. Return them so the WHERE clause processing can handle
+    //    them appropriately.
+    
+    *additional_where_clauses = list_difference (grouped_rel_clauses, found_grouped_rel_clauses);
+
+    //elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
+    
+    return true;
+}
+
+static bool
 check_where_clauses_for_matview (PlannerInfo *root,
                                  Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
+                                 List *additional_clauses,
                                  List **transformed_clist_p,
                                  struct transform_todo *todo_list)
 {
@@ -3707,7 +3829,8 @@ check_where_clauses_for_matview (PlannerInfo *root,
     //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
     ListCell   *lc;
-    foreach (lc, ((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds)
+    foreach (lc, list_concat (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds,
+                              additional_clauses))
     {
         Expr *expr = lfirst (lc);
         
@@ -3804,16 +3927,19 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer
     // where it can be re-aggregated
     
+    List *additional_where_clauses = NIL;
+    
     // 2. Check the FROM clause: it must match exactly
     elog(INFO, "%s: checking FROM clauses...", __func__);
-    
-    // FIXME: actually check the FROM and JOIN clauses...
+    if (!check_from_join_clauses_for_matview (root, parsed_mv_query, grouped_rel, &additional_where_clauses,
+                                              &transform_todo_list))
+        return false;
     
     // 3. Check the WHERE clause: they must match exactly
     elog(INFO, "%s: checking WHERE clauses...", __func__);
     
-    if (!check_where_clauses_for_matview(root, parsed_mv_query, grouped_rel, &transformed_clist,
-                                         &transform_todo_list))
+    if (!check_where_clauses_for_matview(root, parsed_mv_query, grouped_rel, additional_where_clauses,
+                                         &transformed_clist, &transform_todo_list))
         return false;
     
     // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
