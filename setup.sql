@@ -46,3 +46,5 @@ order by ts_to_bucket (timestamp, 'minute', 15);
 alter server local_server options (add extensions 'ts');
 
 alter server local_server options (add use_remote_estimate 'true');
+
+CREATE FOREIGN TABLE room_remote (name character varying(64), hc1 text, hc2 text) server local_server OPTIONS (schema_name 'public', table_name 'room');

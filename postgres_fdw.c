@@ -341,7 +341,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     const char *relname;
     const char *refname;
     
-    //elog(INFO, "postgresGetForeignRelSize (root=%p, baserel=%p, foreigntableid=%x)", root, baserel, foreigntableid);
+    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * We use PgFdwRelationInfo to pass various information to subsequent
@@ -740,7 +740,7 @@ postgresGetForeignPaths(PlannerInfo *root,
     List	   *ppi_list;
     ListCell   *lc;
     
-    //elog(INFO, "postgresGetForeignPaths (root=%p, baserel=%p, foreigntableid=%x", root, baserel, foreigntableid);
+    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * Create simplest ForeignScan path node and add it to baserel.  This path
@@ -959,7 +959,7 @@ postgresGetForeignPlan(PlannerInfo *root,
     StringInfoData sql;
     ListCell   *lc;
     
-    //elog(INFO, "postgresGetForeignPlan (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
+    elog(INFO, "%s (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", __func__, root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
     
     if (IS_SIMPLE_REL(foreignrel))
     {
@@ -1147,7 +1147,7 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
     int			rtindex;
     int			numParams;
     
-    //elog(INFO, "postgresBeginForeignScan (node=%p, eflags=%x", node, eflags);
+    elog(INFO, "%s (node=%p, eflags=%x)", __func__, node, eflags);
     
     /*
      * Do nothing in EXPLAIN (no ANALYZE) case.  node->fdw_state stays NULL.
@@ -1246,7 +1246,7 @@ postgresIterateForeignScan(ForeignScanState *node)
     PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
     TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
     
-    //elog(INFO, "postgresIterateForeignScan (node=%p", node);
+    elog(INFO, "%s (node=%p", __func__, node);
     
     /*
      * If this is the first call after Begin or ReScan, we need to create the
@@ -1290,7 +1290,7 @@ postgresReScanForeignScan(ForeignScanState *node)
     char		sql[64];
     PGresult   *res;
     
-    //elog(INFO, "postgresReScanForeignScan (node=%p", node);
+    elog(INFO, "%s (node=%p", __func__, node);
     
     /* If we haven't created the cursor yet, nothing to do. */
     if (!fsstate->cursor_exists)
@@ -1346,7 +1346,7 @@ postgresEndForeignScan(ForeignScanState *node)
 {
     PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
     
-    //elog(INFO, "postgresEndForeignScan (node=%p", node);
+    elog(INFO, "%s (node=%p", __func__, node);
     
     /* if fsstate is NULL, we are in EXPLAIN; nothing to do */
     if (fsstate == NULL)
@@ -1374,7 +1374,7 @@ postgresRecheckForeignScan(ForeignScanState *node, TupleTableSlot *slot)
     PlanState  *outerPlan = outerPlanState(node);
     TupleTableSlot *result;
     
-    //elog(INFO, "postgresRecheckForeignScan (node=%p, slot=%p", node, slot);
+    elog(INFO, "%s (node=%p, slot=%p", __func__, node, slot);
     
     /* For base foreign relations, it suffices to set fdw_recheck_quals */
     if (scanrelid > 0)
@@ -1404,7 +1404,7 @@ postgresExplainForeignScan(ForeignScanState *node, ExplainState *es)
     char	   *sql;
     char	   *relations;
     
-    //elog(INFO, "postgresExplainForeignScan (node=%p, es=%p", node, es);
+    elog(INFO, "%s (node=%p, es=%p", __func__, node, es);
     
     fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
     
@@ -2860,7 +2860,9 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     Cost		total_cost;
     Path	   *epq_path;		/* Path to create plan to be executed when
                                  * EvalPlanQual gets triggered. */
-    
+
+    elog(INFO, "%s (root=%p, joinrel=%p, outerrel=%p, innerrel=%p, jointype=%d, extra=%p)", __func__, root, joinrel, outerrel, innerrel, jointype, extra);
+
     /*
      * Skip if this join combination has been considered already.
      */
@@ -3215,7 +3217,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    //elog(INFO, "postgresGetForeignUpperPaths (root=%p, stage=%d, input_rel=%p, output_rel=%p", root, stage, input_rel, output_rel);
+    elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
     
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
