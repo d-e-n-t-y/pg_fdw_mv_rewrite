@@ -3710,6 +3710,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     //    by the MV otherwise they wouldn't have been selected for evaluation.
         
     // 2. However, we do need to check the type of JOIN (INNER, OUTER, etc.)
+    // FIXME!
 
     // 3. Go through each JOIN clause in the MV.
 
