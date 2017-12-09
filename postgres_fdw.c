@@ -3810,14 +3810,7 @@ estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
     
     // TODO: factor this fragment from estimate_path_cost_size()?
     
-    PGconn	   *conn;
-    RangeTblEntry *rte = planner_rt_fetch(input_rel->relid, root);
-    Oid			userid = rte->checkAsUser ? rte->checkAsUser : GetUserId();
-    UserMapping *user = GetUserMapping(userid, fpinfo->server->serverid);
-    
-    elog(INFO, "%s: connection user mapping=%p", __func__, user);
-    
-    conn = GetConnection(user, false);
+    PGconn	   *conn = GetConnection(fpinfo->user, false);
     get_remote_estimate(sql.data, conn, rows, width, startup_cost, total_cost);
     ReleaseConnection(conn);
 }
@@ -3861,6 +3854,8 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     // 2. Check the FROM clause: it must match exactly
     elog(INFO, "%s: checking FROM clauses...", __func__);
+    
+    // FIXME: actually check the FROM and JOIN clauses...
     
     // 3. Check the WHERE clause: they must match exactly
     elog(INFO, "%s: checking WHERE clauses...", __func__);
@@ -3922,6 +3917,8 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
         appendStringInfo (*alternative_query, " FROM %s.%s", mv_schema->data, mv_name->data);
         
         List *quals = transform_todos (transformed_clist, &transform_todo_list);
+        
+        // FIXME: this seems not to append the JOIN info...
         
         //elog(INFO, "%s: transformed quals list: %s", __func__, nodeToString (quals));
         
