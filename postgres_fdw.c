@@ -3386,15 +3386,14 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
     PG_END_TRY();
 }
 
-static void
-parse_select_query (SelectStmt **mv_query, Query **parsed_mv_query,
-                    const char *mv_sql)
+static Query *
+parse_select_query (const char *mv_sql)
 {
     RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
-    *mv_query = (SelectStmt *) mv_parsetree->stmt;
     
     List *qtList = pg_analyze_and_rewrite (mv_parsetree, mv_sql, NULL, 0, NULL);
-    *parsed_mv_query = list_nth_node (Query, qtList, 0);
+    
+    return list_nth_node (Query, qtList, 0);
     
     //elog(INFO, "%s: parsed query: %s", __func__, nodeToString (*parsed_mv_query));
 }
@@ -3790,9 +3789,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
-    SelectStmt *mv_query;
-    Query *parsed_mv_query;
-    parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
+    Query *parsed_mv_query = parse_select_query ((const char *) mv_definition->data);
     
     // 1. Check the GROUP BY clause: it must match exactly
     elog(INFO, "%s: checking GROUP BY clauses...", __func__);
