@@ -3679,27 +3679,6 @@ matview_tlist_colnames (Query *mv_query)
     return colnames;
 }
 
-static void
-deparse_matview_tlist_expressions (SelectStmt *mv_query,
-                                   List /* StringInfo* */ **expr_sql,
-                                   List /* StringInfo* */ **expr_alias)
-{
-    ListCell *mv_lc;
-    foreach (mv_lc, mv_query->targetList)
-    {
-        ResTarget *mv_tle = lfirst_node (ResTarget, mv_lc);
-        StringInfo mv_expr_sql = makeStringInfo();
-        StringInfo mv_expr_alias = makeStringInfo();
-        
-        deparseResTarget (mv_tle, mv_expr_sql, mv_expr_alias);
-        
-        // elog(INFO, "%s: deparsed: %s (alias %s)", __func__, mv_expr_sql->data, mv_expr_alias->data);
-        
-        *expr_sql = lappend (*expr_sql, mv_expr_sql);
-        *expr_alias = lappend (*expr_alias, mv_expr_alias);
-    }
-}
-
 static bool
 check_group_clauses_for_matview (PlannerInfo *root,
                                  Query *parsed_mv_query,
@@ -3808,8 +3787,6 @@ estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
     
     //elog(INFO, "%s: explain SQL: %s", __func__, query);
     
-    // TODO: factor this fragment from estimate_path_cost_size()?
-    
     PGconn	   *conn = GetConnection(fpinfo->user, false);
     get_remote_estimate(sql.data, conn, rows, width, startup_cost, total_cost);
     ReleaseConnection(conn);
@@ -3834,10 +3811,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     SelectStmt *mv_query;
     Query *parsed_mv_query;
     parse_select_query (&mv_query, &parsed_mv_query, (const char *) mv_definition->data);
-    
-    List *mv_tlist_sqls = NIL;
-    List *mv_tlist_aliases = NIL;
-    deparse_matview_tlist_expressions (mv_query, &mv_tlist_sqls, &mv_tlist_aliases);
     
     // 1. Check the GROUP BY clause: it must match exactly
     elog(INFO, "%s: checking GROUP BY clauses...", __func__);

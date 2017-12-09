@@ -48,9 +48,6 @@ extern void
 deparseExpr(Expr *node, deparse_expr_cxt *context);
 
 extern void
-deparseResTarget (ResTarget *t, StringInfo sql, StringInfo alias);
-
-extern void
 deparseRelation(StringInfo buf, Relation rel);
 
 extern Node *
