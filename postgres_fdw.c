@@ -1246,7 +1246,7 @@ postgresIterateForeignScan(ForeignScanState *node)
     PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
     TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
     
-    elog(INFO, "%s (node=%p", __func__, node);
+    //elog(INFO, "%s (node=%p)", __func__, node);
     
     /*
      * If this is the first call after Begin or ReScan, we need to create the
@@ -3279,62 +3279,81 @@ static void deparse_statement_for_mv_search (StringInfo /*OUT*/ rel_sql,
 
 static void
 find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
-                                    List **mvs_schema,
-                                    List **mvs_name,
-                                    List **mvs_definition)
+                                    List /* StringInfo */ **mvs_schema,
+                                    List /* StringInfo */ **mvs_name,
+                                    List /* StringInfo */ **mvs_definition)
 {
-    StringInfoData foreign_table_name;
-    initStringInfo(&foreign_table_name);
-    
-    RangeTblEntry *rte = planner_rt_fetch(input_rel->relid, root);
-    
-    /*
-     * Core code already has some lock on each rel being planned, so we
-     * can use NoLock here.
-     */
-    Relation	rel = heap_open(rte->relid, NoLock);
-    deparseRelation (&foreign_table_name, rel);
-    
-    heap_close(rel, NoLock);
-    
-    //elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
-
     UserMapping *mapping;
     PGconn	   *conn;
     
-    mapping = GetUserMapping(GetUserId(), GetForeignTable(rte->relid)->serverid);
+    mapping = GetUserMapping(GetUserId(), GetForeignTable(planner_rt_fetch(1, root)->relid)->serverid);
     
     conn = GetConnection(mapping, false);
     
+    *mvs_schema = NIL, *mvs_name = NIL, *mvs_definition = NIL;
+    
+    elog(INFO, "%s: relid=%d, relids=%s", __func__, input_rel->relid, bmsToString(input_rel->relids));
+    
+    StringInfoData find_mvs_query;
+    initStringInfo (&find_mvs_query);
+    
+    appendStringInfoString (&find_mvs_query,
+                            "SELECT v.schemaname, v.matviewname, v.definition"
+                            " FROM "
+                            "   public.pgx_rewritable_matviews j, pg_matviews v"
+                            " WHERE "
+                            " j.matviewschemaname = v.schemaname"
+                            " AND j.matviewname = v.matviewname"
+                            " AND j.tables @> ");
+
+    appendStringInfoString (&find_mvs_query, "array[");
+    int i = 0;
+    for (int x = bms_next_member (input_rel->relids, -1); x >= 0; x = bms_next_member (input_rel->relids, x))
+    {
+        StringInfoData foreign_table_name;
+        initStringInfo (&foreign_table_name);
+
+        RangeTblEntry *rte = planner_rt_fetch(x, root);
+        
+        /*
+         * Core code already has some lock on each rel being planned, so we
+         * can use NoLock here.
+         */
+        Relation	rel = heap_open(rte->relid, NoLock);
+    
+        deparseRelation (&foreign_table_name, rel);
+        
+        heap_close(rel, NoLock);
+        
+        char *str = PQescapeLiteral (conn, foreign_table_name.data, (size_t) foreign_table_name.len);
+        
+        if (i++ > 0)
+            appendStringInfoString(&find_mvs_query, ", ");
+
+        appendStringInfoString(&find_mvs_query, str);
+        
+        free (str);
+    }
+    appendStringInfoString (&find_mvs_query, "]::text[]");
+    
+    elog(INFO, "%s: relids query: %s", __func__, find_mvs_query.data);
+
+    //elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
+
     PGresult   *volatile res = NULL;
     
     PG_TRY();
     {
-        const char *find_mvs_query = "SELECT v.schemaname, v.matviewname, v.definition"
-        " FROM ("
-        "  SELECT tablename objname, schemaname FROM pg_tables"
-        "  UNION ALL SELECT viewname, schemaname FROM pg_views"
-        "  UNION ALL SELECT matviewname, schemaname FROM pg_matviews"
-        ") o, public.pgx_rewritable_matviews j, pg_matviews v"
-        " WHERE o.schemaname = j.tableschemaname"
-        " AND o.objname = j.tablename"
-        " AND j.matviewschemaname = v.schemaname"
-        " AND j.matviewname = v.matviewname"
-        " AND o.schemaname || '.' || o.objname = $1::text";
         
-        const int nr_params = 1;
-        const char *paramValues[nr_params] = { (const char *) foreign_table_name.data };
-        const int paramLengths[nr_params] = { (int) strlen (foreign_table_name.data) };
-        
-        res = pgfdw_exec_query_params(conn, find_mvs_query,
-                                      1, NULL/*paramTypes*/,
-                                      paramValues, paramLengths,
+        res = pgfdw_exec_query_params(conn, find_mvs_query.data,
+                                      0, NULL/*paramTypes*/,
+                                      NULL /*paramValues*/, NULL /*paramLengths*/,
                                       NULL /*paramFormats*/,
                                       0 /*resultFormat=text*/);
         
         // FIXME: is this the best way to deap with the error?
         if (PQresultStatus(res) != PGRES_TUPLES_OK)
-            pgfdw_report_error(ERROR, res, conn, false, find_mvs_query);
+            pgfdw_report_error(ERROR, res, conn, false, find_mvs_query.data);
         
         int num_mvs = PQntuples(res);
         
@@ -3935,9 +3954,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
     elog(INFO, "%s: searching for MVs...", __func__);
     
     // See if there are any candidate MVs...
-    List *mvs_schema = NIL;
-    List *mvs_name = NIL;
-    List *mvs_definition = NIL;
+    List *mvs_schema, *mvs_name, *mvs_definition;
     
     find_related_matviews_for_relation (root, input_rel,
                                         &mvs_schema, &mvs_name, &mvs_definition);
@@ -3970,9 +3987,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
     List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
     
     // Evaluate each MV in turn...
-    ListCell   *sc;
-    ListCell   *nc;
-    ListCell   *dc;
+    ListCell   *sc, *nc, *dc;
     forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
     {
         StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc), mv_definition = lfirst(dc);

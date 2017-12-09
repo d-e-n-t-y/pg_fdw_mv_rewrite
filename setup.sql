@@ -48,3 +48,11 @@ alter server local_server options (add extensions 'ts');
 alter server local_server options (add use_remote_estimate 'true');
 
 CREATE FOREIGN TABLE room_remote (name character varying(64), hc1 text, hc2 text) server local_server OPTIONS (schema_name 'public', table_name 'room');
+
+alter table public.pgx_rewritable_matviews add column tables text[];
+
+update public.pgx_rewritable_matviews t set tables = array[t.tableschemaname || '.' || t.tablename];
+
+alter table public.pgx_rewritable_matviews drop column tableschemaname;
+
+alter table public.pgx_rewritable_matviews drop column tablename;
