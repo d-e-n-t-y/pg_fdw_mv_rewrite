@@ -341,7 +341,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     const char *relname;
     const char *refname;
     
-    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
+    //elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * We use PgFdwRelationInfo to pass various information to subsequent
@@ -740,7 +740,7 @@ postgresGetForeignPaths(PlannerInfo *root,
     List	   *ppi_list;
     ListCell   *lc;
     
-    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
+    //elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * Create simplest ForeignScan path node and add it to baserel.  This path
@@ -959,7 +959,7 @@ postgresGetForeignPlan(PlannerInfo *root,
     StringInfoData sql;
     ListCell   *lc;
     
-    elog(INFO, "%s (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", __func__, root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
+    //elog(INFO, "%s (root=%p, foreignrel=%p, foreigntableid=%x, best_path=%p, tlist=%p, scan_clauses=%p, outer_plan=%p", __func__, root, foreignrel, foreigntableid, best_path, tlist, scan_clauses, outer_plan);
     
     if (IS_SIMPLE_REL(foreignrel))
     {
@@ -1147,7 +1147,7 @@ postgresBeginForeignScan(ForeignScanState *node, int eflags)
     int			rtindex;
     int			numParams;
     
-    elog(INFO, "%s (node=%p, eflags=%x)", __func__, node, eflags);
+    //elog(INFO, "%s (node=%p, eflags=%x)", __func__, node, eflags);
     
     /*
      * Do nothing in EXPLAIN (no ANALYZE) case.  node->fdw_state stays NULL.
@@ -1290,7 +1290,7 @@ postgresReScanForeignScan(ForeignScanState *node)
     char		sql[64];
     PGresult   *res;
     
-    elog(INFO, "%s (node=%p", __func__, node);
+    //elog(INFO, "%s (node=%p", __func__, node);
     
     /* If we haven't created the cursor yet, nothing to do. */
     if (!fsstate->cursor_exists)
@@ -1346,7 +1346,7 @@ postgresEndForeignScan(ForeignScanState *node)
 {
     PgFdwScanState *fsstate = (PgFdwScanState *) node->fdw_state;
     
-    elog(INFO, "%s (node=%p", __func__, node);
+    //elog(INFO, "%s (node=%p", __func__, node);
     
     /* if fsstate is NULL, we are in EXPLAIN; nothing to do */
     if (fsstate == NULL)
@@ -1374,7 +1374,7 @@ postgresRecheckForeignScan(ForeignScanState *node, TupleTableSlot *slot)
     PlanState  *outerPlan = outerPlanState(node);
     TupleTableSlot *result;
     
-    elog(INFO, "%s (node=%p, slot=%p", __func__, node, slot);
+    //elog(INFO, "%s (node=%p, slot=%p", __func__, node, slot);
     
     /* For base foreign relations, it suffices to set fdw_recheck_quals */
     if (scanrelid > 0)
@@ -2871,7 +2871,7 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     Path	   *epq_path;		/* Path to create plan to be executed when
                                  * EvalPlanQual gets triggered. */
 
-    elog(INFO, "%s (root=%p, joinrel=%p, outerrel=%p, innerrel=%p, jointype=%d, extra=%p)", __func__, root, joinrel, outerrel, innerrel, jointype, extra);
+    //elog(INFO, "%s (root=%p, joinrel=%p, outerrel=%p, innerrel=%p, jointype=%d, extra=%p)", __func__, root, joinrel, outerrel, innerrel, jointype, extra);
 
     /*
      * Skip if this join combination has been considered already.
@@ -2983,7 +2983,7 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     /* XXX Consider parameterized paths for the join relation */
     
     // Consider rewritten MV paths to fulfil the join...
-    add_rewritten_mv_paths (root, NULL, innerrel, outerrel, joinrel, fpinfo, NULL);
+    //add_rewritten_mv_paths (root, NULL, innerrel, outerrel, joinrel, fpinfo, NULL);
 }
 
 /*
@@ -3230,7 +3230,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
+    //elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
     
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
@@ -3352,7 +3352,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
         relids = recurse_relation_relids (root, outer_rel->relids, relids);
     }
     
-    elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
+    //elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
     
     mapping = GetUserMapping(GetUserId(), GetForeignTable(bms_next_member (relids, -1))->serverid);
     
@@ -3398,7 +3398,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
     }
     appendStringInfoString (&find_mvs_query, "]::text[]");
     
-    elog(INFO, "%s: relids query: %s", __func__, find_mvs_query.data);
+    //elog(INFO, "%s: relids query: %s", __func__, find_mvs_query.data);
 
     //elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
 
@@ -3866,7 +3866,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         }
     }
 
-    elog(INFO, "%s: all MV JOIN expressions found in grouped rel", __func__);
+    //elog(INFO, "%s: all MV JOIN expressions found in grouped rel", __func__);
     
     // 4. The balance of clauses must now be treated as if they were part of the
     //    WHERE clause list. Return them so the WHERE clause processing can handle
@@ -3973,12 +3973,12 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     struct transform_todo transform_todo_list = { NULL, NIL };
     
-    elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+    //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
     Query *parsed_mv_query = parse_select_query ((const char *) mv_definition->data);
     
     // 1. Check the GROUP BY clause: it must match exactly
-    elog(INFO, "%s: checking GROUP BY clauses...", __func__);
+    //elog(INFO, "%s: checking GROUP BY clauses...", __func__);
     
     if (!check_group_clauses_for_matview(root, parsed_mv_query, transformed_tlist, &transform_todo_list))
         return false;
@@ -3993,13 +3993,13 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     List *additional_where_clauses = NIL;
     
     // 2. Check the FROM clause: it must match exactly
-    elog(INFO, "%s: checking FROM clauses...", __func__);
+    //elog(INFO, "%s: checking FROM clauses...", __func__);
     if (!check_from_join_clauses_for_matview (root, parsed_mv_query, grouped_rel, &additional_where_clauses,
                                               &transform_todo_list))
         return false;
     
     // 3. Check the WHERE clause: they must match exactly
-    elog(INFO, "%s: checking WHERE clauses...", __func__);
+    //elog(INFO, "%s: checking WHERE clauses...", __func__);
     
     if (!check_where_clauses_for_matview(root, parsed_mv_query, grouped_rel, additional_where_clauses,
                                          &transformed_clist, &transform_todo_list))
@@ -4008,12 +4008,12 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
     
     // 4. Check for HAVING clause: push them in to the WHERE list
-    elog(INFO, "%s: checking HAVING clauses...", __func__);
+    //elog(INFO, "%s: checking HAVING clauses...", __func__);
     
     // FIXME: 5. Consider computing any missing aggregates from other components
     
     // 6. Check the SELECT clauses: they must be a subset
-    elog(INFO, "%s: checking SELECT clauses...", __func__);
+    //elog(INFO, "%s: checking SELECT clauses...", __func__);
     
     if (!check_select_clauses_for_matview (root, parsed_mv_query, grouped_tlist, &transform_todo_list))
         return false;
@@ -4082,7 +4082,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
 {
     ForeignPath *grouppath;
 
-    elog(INFO, "%s: searching for MVs...", __func__);
+    //elog(INFO, "%s: searching for MVs...", __func__);
     
     // See if there are any candidate MVs...
     List *mvs_schema, *mvs_name, *mvs_definition;
@@ -4129,7 +4129,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, mv_definition, &alternative_query))
             continue;
         
-        elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
+        //elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
         
         // 7. If all is well, make a cost estimate
         //elog(INFO, "%s: making cost estimate...", __func__);
@@ -4147,7 +4147,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         // might be wrong.
         
         // 8. Finally, create and add the path
-        elog(INFO, "%s: creating and adding path...", __func__);
+        //elog(INFO, "%s: creating and adding path...", __func__);
         
         List *fdw_private = list_make3 (makeString (alternative_query->data),
                                         retrieved_attrs,
