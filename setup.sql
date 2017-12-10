@@ -58,3 +58,9 @@ alter table public.pgx_rewritable_matviews drop column tableschemaname;
 alter table public.pgx_rewritable_matviews drop column tablename;
 
 insert into pgx_rewritable_matviews values ('public', 'events_all_room_rollup_15m', array['public.events_all', 'public.room']);
+
+CREATE FOREIGN TABLE event_remote (timestamp timestamp with time zone, hc1 text, hc2 text, addr smallint, ctrl smallint, category text, subcategory text, advices jsonb, warnings text, detail float) server local_server OPTIONS (schema_name 'public', table_name 'event');
+
+alter foreign table event_remote add column id integer;
+
+insert into pgx_rewritable_matviews values ('public', 'event_sdr_device', array['public.event']);

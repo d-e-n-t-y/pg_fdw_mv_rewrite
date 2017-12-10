@@ -504,11 +504,18 @@ foreign_expr_walker(Node *node,
 				 * If operator's input collation is not derived from a foreign
 				 * Var, it can't be sent to remote.
 				 */
-				if (oe->inputcollid == InvalidOid)
+                if (oe->inputcollid == InvalidOid ||
+                    (oe->inputcollid != InvalidOid &&
+                     inner_cxt.state == FDW_COLLATE_NONE))
 					 /* OK, inputs are all noncollatable */ ;
-				else if (inner_cxt.state != FDW_COLLATE_SAFE ||
-						 oe->inputcollid != inner_cxt.collation)
+				else if (inner_cxt.state != FDW_COLLATE_SAFE)
+                {
+                    return false;
+                }
+                else if (oe->inputcollid != inner_cxt.collation)
+                {
 					return false;
+                }
 
 				/* Result-collation handling is same as for functions */
 				collation = oe->opcollid;

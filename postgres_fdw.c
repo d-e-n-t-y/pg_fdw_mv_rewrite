@@ -2484,7 +2484,11 @@ foreign_join_ok(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
      * not be pushed down.
      */
     if (fpinfo_o->local_conds || fpinfo_i->local_conds)
+    {
+        elog(INFO, "%s: join not pushdown safe due to local conds: %s %s", __func__, nodeToString(fpinfo_i->local_conds), nodeToString(fpinfo_o->local_conds));
+
         return false;
+    }
     
     /*
      * Merge FDW options.  We might be tempted to do this after we have deemed
@@ -2840,6 +2844,12 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     }
 }
 
+void add_rewritten_mv_paths (PlannerInfo *root,
+                             RelOptInfo *input_rel, // if grouping
+                             RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
+                             RelOptInfo *grouped_rel,
+                             PgFdwRelationInfo *fpinfo, PathTarget *grouping_target);
+
 /*
  * postgresGetForeignJoinPaths
  *		Add possible ForeignPath to joinrel, if join is safe to push down.
@@ -2971,6 +2981,9 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     add_paths_with_pathkeys_for_rel(root, joinrel, epq_path);
     
     /* XXX Consider parameterized paths for the join relation */
+    
+    // Consider rewritten MV paths to fulfil the join...
+    add_rewritten_mv_paths (root, NULL, innerrel, outerrel, joinrel, fpinfo, NULL);
 }
 
 /*
@@ -3277,8 +3290,50 @@ static void deparse_statement_for_mv_search (StringInfo /*OUT*/ rel_sql,
     // FIXME: what about freeing fdw_scan_tlist?
 }
 
+Bitmapset *
+recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *relids);
+
+Bitmapset *
+recurse_relation_relids (PlannerInfo *root, Bitmapset *initial_relids, Bitmapset *out_relids)
+{
+    for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
+    {
+        RangeTblEntry *rte = planner_rt_fetch(x, root);
+        //elog(INFO, "%s: recurse relid %d (rtekind %d)", __func__, x, rte->rtekind);
+        out_relids = recurse_relation_relids_from_rte (root, rte, out_relids);
+    }
+    
+    return out_relids;
+}
+
+Bitmapset *
+recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
+{
+    if (rte->rtekind == RTE_RELATION)
+    {
+        //elog(INFO, "%s: add relation: %d", __func__, rte->relid);
+        out_relids = bms_add_member (out_relids, (int) rte->relid);
+    }
+    else if (rte->rtekind == RTE_SUBQUERY)
+    {
+        if (rte->subquery != NULL)
+            if (rte->subquery->rtable != NULL)
+            {
+                ListCell *lc;
+                foreach (lc, rte->subquery->rtable)
+                {
+                    RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
+                    out_relids = recurse_relation_relids_from_rte (root, srte, out_relids);
+                }
+            }
+    }
+    return out_relids;
+}
+
 static void
-find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
+find_related_matviews_for_relation (PlannerInfo *root,
+                                    RelOptInfo *input_rel, // if grouping
+                                    RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                                     List /* StringInfo */ **mvs_schema,
                                     List /* StringInfo */ **mvs_name,
                                     List /* StringInfo */ **mvs_definition)
@@ -3286,13 +3341,22 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
     UserMapping *mapping;
     PGconn	   *conn;
     
-    mapping = GetUserMapping(GetUserId(), GetForeignTable(planner_rt_fetch(1, root)->relid)->serverid);
-    
-    conn = GetConnection(mapping, false);
-    
     *mvs_schema = NIL, *mvs_name = NIL, *mvs_definition = NIL;
     
-    elog(INFO, "%s: relid=%d, relids=%s", __func__, input_rel->relid, bmsToString(input_rel->relids));
+    Bitmapset *relids = NULL;
+    if (input_rel != NULL)
+        relids = recurse_relation_relids (root, input_rel->relids, NULL);
+    else if (inner_rel != NULL && outer_rel != NULL)
+    {
+        relids = recurse_relation_relids (root, inner_rel->relids, NULL);
+        relids = recurse_relation_relids (root, outer_rel->relids, relids);
+    }
+    
+    elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
+    
+    mapping = GetUserMapping(GetUserId(), GetForeignTable(bms_next_member (relids, -1))->serverid);
+    
+    conn = GetConnection(mapping, false);
     
     StringInfoData find_mvs_query;
     initStringInfo (&find_mvs_query);
@@ -3305,21 +3369,19 @@ find_related_matviews_for_relation (PlannerInfo *root, RelOptInfo *input_rel,
                             " j.matviewschemaname = v.schemaname"
                             " AND j.matviewname = v.matviewname"
                             " AND j.tables @> ");
-
+    
     appendStringInfoString (&find_mvs_query, "array[");
     int i = 0;
-    for (int x = bms_next_member (input_rel->relids, -1); x >= 0; x = bms_next_member (input_rel->relids, x))
+    for (int x = bms_next_member (relids, -1); x >= 0; x = bms_next_member (relids, x))
     {
         StringInfoData foreign_table_name;
         initStringInfo (&foreign_table_name);
-
-        RangeTblEntry *rte = planner_rt_fetch(x, root);
         
         /*
          * Core code already has some lock on each rel being planned, so we
          * can use NoLock here.
          */
-        Relation	rel = heap_open(rte->relid, NoLock);
+        Relation	rel = heap_open(x, NoLock);
     
         deparseRelation (&foreign_table_name, rel);
         
@@ -3878,7 +3940,7 @@ check_select_clauses_for_matview (PlannerInfo *root,
 }
 
 static void
-estimate_query_cost (PlannerInfo *root, RelOptInfo *input_rel,
+estimate_query_cost (PlannerInfo *root,
                      RelOptInfo *grouped_rel,
                      const char *query,
                      double *rows, int *width, Cost *startup_cost, Cost *total_cost)
@@ -4012,7 +4074,11 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     return true;
 }
 
-void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo *grouped_rel, PgFdwRelationInfo *fpinfo, PathTarget *grouping_target)
+void add_rewritten_mv_paths (PlannerInfo *root,
+                             RelOptInfo *input_rel, // if grouping
+                             RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
+                             RelOptInfo *grouped_rel,
+                             PgFdwRelationInfo *fpinfo, PathTarget *grouping_target)
 {
     ForeignPath *grouppath;
 
@@ -4021,9 +4087,9 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
     // See if there are any candidate MVs...
     List *mvs_schema, *mvs_name, *mvs_definition;
     
-    find_related_matviews_for_relation (root, input_rel,
+    find_related_matviews_for_relation (root, input_rel, inner_rel, outer_rel,
                                         &mvs_schema, &mvs_name, &mvs_definition);
-    
+
     List	*retrieved_attrs;
     
     // Deparse:
@@ -4034,19 +4100,18 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         
         initStringInfo(&rel_sql);
         
-        // FIXME: might be possible to do this search without deparsing the
-        // SQL...
         deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
         
         elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
         
-        initStringInfo(&rel_sql);
+        if (input_rel != NULL)
+        {
+            initStringInfo (&rel_sql);
+            
+            deparse_statement_for_mv_search (&rel_sql, NULL, root, input_rel);
         
-        // FIXME: might be possible to do this search without deparsing the
-        // SQL...
-        deparse_statement_for_mv_search (&rel_sql, NULL, root, input_rel);
-        
-        elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+            elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+        }
     }
     
     List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
@@ -4057,6 +4122,8 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
     {
         StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc), mv_definition = lfirst(dc);
         
+        elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+
         StringInfo alternative_query;
         
         if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, mv_definition, &alternative_query))
@@ -4072,7 +4139,7 @@ void add_rewritten_mv_paths(PlannerInfo *root, RelOptInfo *input_rel, RelOptInfo
         Cost		startup_cost;
         Cost		total_cost;
         
-        estimate_query_cost (root, input_rel, grouped_rel,
+        estimate_query_cost (root, grouped_rel,
                              alternative_query->data, &rows, &width, &startup_cost, &total_cost);
         
         // FIXME: we consider that there are no locally-checked quals
@@ -4187,7 +4254,7 @@ add_foreign_grouping_paths(PlannerInfo *root, RelOptInfo *input_rel,
     /* Add generated path into grouped_rel by add_path(). */
     add_path(grouped_rel, (Path *) grouppath);
     
-    add_rewritten_mv_paths(root, input_rel, grouped_rel, fpinfo, grouping_target);
+    add_rewritten_mv_paths(root, input_rel, NULL, NULL, grouped_rel, fpinfo, grouping_target);
 }
 
 /*
