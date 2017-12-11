@@ -1,6 +1,6 @@
-create extension postgres_fdw;
+create extension pg_fdw_mv_rewrite;
 
-create server local_server FOREIGN DATA WRAPPER postgres_fdw OPTIONS (host '127.0.0.1', port '5433', dbname 'denty');
+create server local_server FOREIGN DATA WRAPPER pg_fdw_mv_rewrite OPTIONS (host '127.0.0.1', port '5433', dbname 'denty');
 
 CREATE USER MAPPING FOR denty server local_server OPTIONS (user 'denty', password 'password');
 

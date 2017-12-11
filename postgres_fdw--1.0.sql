@@ -1,18 +1,18 @@
-/* contrib/postgres_fdw/postgres_fdw--1.0.sql */
+/* contrib/pg_fdw_mv_rewrite/pg_fdw_mv_rewrite--0.1.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION postgres_fdw" to load this file. \quit
+\echo Use "CREATE EXTENSION pg_fdw_mv_rewrite" to load this file. \quit
 
-CREATE FUNCTION postgres_fdw_handler()
+CREATE FUNCTION pg_fdw_mv_rewrite_handler()
 RETURNS fdw_handler
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
-CREATE FUNCTION postgres_fdw_validator(text[], oid)
+CREATE FUNCTION pg_fdw_mv_rewrite_validator(text[], oid)
 RETURNS void
 AS 'MODULE_PATHNAME'
 LANGUAGE C STRICT;
 
-CREATE FOREIGN DATA WRAPPER postgres_fdw
-  HANDLER postgres_fdw_handler
-  VALIDATOR postgres_fdw_validator;
+CREATE FOREIGN DATA WRAPPER pg_fdw_mv_rewrite
+  HANDLER pg_fdw_mv_rewrite_handler
+  VALIDATOR pg_fdw_mv_rewrite_validator;

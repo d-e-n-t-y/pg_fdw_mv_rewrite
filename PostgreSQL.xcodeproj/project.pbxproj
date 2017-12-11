@@ -14,7 +14,7 @@
 		BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEF31FD1E590003A7AC9 /* shippable.c */; };
 		BF8BEF191FD1EFD4003A7AC9 /* libpq.5.10.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */; };
 		BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEED1FD1E590003A7AC9 /* option.c */; };
-		BF8BEFB11FD2C346003A7AC9 /* postgres_fdw.so in CopyFiles */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* postgres_fdw.so */; };
+		BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.so in CopyFiles */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.so */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -24,7 +24,7 @@
 			dstPath = "/Users/denty/junk/postgresql-10.1/lib";
 			dstSubfolderSpec = 0;
 			files = (
-				BF8BEFB11FD2C346003A7AC9 /* postgres_fdw.so in CopyFiles */,
+				BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.so in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,7 +47,7 @@
 		BF8BEEF31FD1E590003A7AC9 /* shippable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = shippable.c; sourceTree = "<group>"; };
 		BF8BEEF41FD1E590003A7AC9 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
 		BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = postgres_fdw.sql; path = sql/postgres_fdw.sql; sourceTree = "<group>"; };
-		BF8BEF0E1FD1EF5D003A7AC9 /* postgres_fdw.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = postgres_fdw.so; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = pg_fdw_mv_rewrite.so; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = ../../lib/libpq.5.10.dylib; sourceTree = "<group>"; };
 		BF8BEF9C1FD1F559003A7AC9 /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../../src/include; sourceTree = "<group>"; };
 		BF8BEF9E1FD1F596003A7AC9 /* libpq */ = {isa = PBXFileReference; lastKnownFileType = folder; name = libpq; path = ../../src/interfaces/libpq; sourceTree = "<group>"; };
@@ -98,7 +98,7 @@
 		BF8BEEFC1FD1EBD0003A7AC9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BF8BEF0E1FD1EF5D003A7AC9 /* postgres_fdw.so */,
+				BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.so */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -136,9 +136,9 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
-		BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw */ = {
+		BF8BEF0D1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "postgres_fdw" */;
+			buildConfigurationList = BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "pg_fdw_mv_rewrite" */;
 			buildPhases = (
 				BF8BEFAD1FD2C2DF003A7AC9 /* CopyFiles */,
 				BF8BEF0B1FD1EF5D003A7AC9 /* Frameworks */,
@@ -149,9 +149,9 @@
 			);
 			dependencies = (
 			);
-			name = postgres_fdw;
+			name = pg_fdw_mv_rewrite;
 			productName = postgres_fdw.so;
-			productReference = BF8BEF0E1FD1EF5D003A7AC9 /* postgres_fdw.so */;
+			productReference = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.so */;
 			productType = "com.apple.product-type.library.dynamic";
 		};
 /* End PBXNativeTarget section */
@@ -181,7 +181,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				BF8BEF0D1FD1EF5D003A7AC9 /* postgres_fdw */,
+				BF8BEF0D1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite */,
 			);
 		};
 /* End PBXProject section */
@@ -362,7 +362,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "postgres_fdw" */ = {
+		BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "pg_fdw_mv_rewrite" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BF8BEF101FD1EF5D003A7AC9 /* Debug */,
