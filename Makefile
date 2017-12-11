@@ -1,7 +1,7 @@
 # contrib/pg_fdw_mv_rewrite/Makefile
 
 MODULE_big = pg_fdw_mv_rewrite
-OBJS = postgres_fdw.o option.o deparse.o connection.o shippable.o equalwalker.c $(WIN32RES)
+OBJS = postgres_fdw.o option.o deparse.o connection.o shippable.o equalwalker.o $(WIN32RES)
 PGFILEDESC = "pg_fdw_mv_rewrite - MV-rewriting foreign data wrapper for PostgreSQL"
 
 PG_CPPFLAGS = -I$(libpq_srcdir)

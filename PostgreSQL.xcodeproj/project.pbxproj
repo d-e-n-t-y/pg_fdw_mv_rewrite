@@ -39,9 +39,9 @@
 		BF8BEEEB1FD1E590003A7AC9 /* expected */ = {isa = PBXFileReference; lastKnownFileType = folder; path = expected; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		BF8BEEED1FD1E590003A7AC9 /* option.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = option.c; sourceTree = "<group>"; };
-		BF8BEEEE1FD1E590003A7AC9 /* postgres_fdw--1.0.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "postgres_fdw--1.0.sql"; sourceTree = "<group>"; };
+		BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1.sql"; sourceTree = "<group>"; };
 		BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = postgres_fdw.c; sourceTree = "<group>"; };
-		BF8BEEF01FD1E590003A7AC9 /* postgres_fdw.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = postgres_fdw.control; sourceTree = "<group>"; };
+		BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pg_fdw_mv_rewrite.control; sourceTree = "<group>"; };
 		BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = postgres_fdw.h; sourceTree = "<group>"; };
 		BF8BEEF21FD1E590003A7AC9 /* setup.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = setup.sql; sourceTree = "<group>"; };
 		BF8BEEF31FD1E590003A7AC9 /* shippable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = shippable.c; sourceTree = "<group>"; };
@@ -70,10 +70,10 @@
 			children = (
 				BF8BEEEB1FD1E590003A7AC9 /* expected */,
 				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
-				BF8BEEEE1FD1E590003A7AC9 /* postgres_fdw--1.0.sql */,
+				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
-				BF8BEEF01FD1E590003A7AC9 /* postgres_fdw.control */,
+				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
 				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,
 				BF8BEEF41FD1E590003A7AC9 /* sql */,
 				BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */,
