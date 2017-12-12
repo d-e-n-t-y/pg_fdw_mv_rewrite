@@ -171,7 +171,7 @@ typedef struct
 /*
  * SQL functions
  */
-PG_FUNCTION_INFO_V1(postgres_fdw_handler);
+PG_FUNCTION_INFO_V1(pg_fdw_mv_rewrite_handler);
 
 /*
  * FDW callback routines
@@ -273,7 +273,7 @@ static void merge_fdw_options(PgFdwRelationInfo *fpinfo,
  * to my callback routines.
  */
 Datum
-postgres_fdw_handler(PG_FUNCTION_ARGS)
+pg_fdw_mv_rewrite_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine *routine = makeNode(FdwRoutine);
     
