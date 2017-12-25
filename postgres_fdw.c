@@ -341,7 +341,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     const char *relname;
     const char *refname;
     
-    //elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
+    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * We use PgFdwRelationInfo to pass various information to subsequent

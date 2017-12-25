@@ -106,6 +106,7 @@ static void deparseDistinctExpr(DistinctExpr *node, deparse_expr_cxt *context);
 static void deparseScalarArrayOpExpr(ScalarArrayOpExpr *node,
 						 deparse_expr_cxt *context);
 static void deparseRelabelType(RelabelType *node, deparse_expr_cxt *context);
+static void deparseCoerceViaIOType(CoerceViaIO *node, deparse_expr_cxt *context);
 static void deparseBoolExpr(BoolExpr *node, deparse_expr_cxt *context);
 static void deparseNullTest(NullTest *node, deparse_expr_cxt *context);
 static void deparseArrayExpr(ArrayExpr *node, deparse_expr_cxt *context);
@@ -780,7 +781,38 @@ foreign_expr_walker(Node *node,
 					state = FDW_COLLATE_UNSAFE;
 			}
 			break;
+        case T_CoerceViaIO:
+            {
+                //elog(INFO, "%s: handling T_CoerceViaIO.", __func__);
+                
+                CoerceViaIO *r = (CoerceViaIO *) node;
+                
+                /*
+                 * Recurse to input subexpression.
+                 */
+                if (!foreign_expr_walker((Node *) r->arg,
+                                         glob_cxt, &inner_cxt))
+                    return false;
+                
+                /*
+                 * CoerceViaIO must not introduce a collation not derived from
+                 * an input foreign Var (same logic as for a real function).
+                 */
+                collation = r->resultcollid;
+                if (collation == InvalidOid)
+                    state = FDW_COLLATE_NONE;
+                else if (inner_cxt.state == FDW_COLLATE_SAFE &&
+                         collation == inner_cxt.collation)
+                    state = FDW_COLLATE_SAFE;
+                else if (collation == DEFAULT_COLLATION_OID)
+                    state = FDW_COLLATE_NONE;
+                else
+                    state = FDW_COLLATE_UNSAFE;
+                
+                break;
+            }
 		default:
+            //elog(INFO, "%s: default handler: return type not shippable.", __func__);
 
 			/*
 			 * If it's anything else, assume it's unsafe.  This list can be
@@ -2200,6 +2232,9 @@ deparseExpr(Expr *node, deparse_expr_cxt *context)
 		case T_Aggref:
 			deparseAggref((Aggref *) node, context);
 			break;
+        case T_CoerceViaIO:
+            deparseCoerceViaIOType((CoerceViaIO *) node, context);
+            break;
 		default:
 			elog(ERROR, "unsupported expression type for deparse: %d",
 				 (int) nodeTag(node));
@@ -2679,6 +2714,19 @@ deparseRelabelType(RelabelType *node, deparse_expr_cxt *context)
 		appendStringInfo(context->buf, "::%s",
 						 deparse_type_name(node->resulttype,
 										   node->resulttypmod));
+}
+
+/*
+ * Deparse a CoerceViaIO (textual-coercive cast) node.
+ */
+static void
+deparseCoerceViaIOType(CoerceViaIO *node, deparse_expr_cxt *context)
+{
+    deparseExpr(node->arg, context);
+    if (node->coerceformat != COERCE_IMPLICIT_CAST)
+        appendStringInfo(context->buf, "::%s",
+                         deparse_type_name(node->resulttype,
+                                           -1));
 }
 
 /*
