@@ -3354,7 +3354,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
     
     //elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
     
-    mapping = GetUserMapping(GetUserId(), GetForeignTable(bms_next_member (relids, -1))->serverid);
+    mapping = GetUserMapping(GetUserId(), GetForeignTable((Oid) bms_next_member (relids, -1))->serverid);
     
     conn = GetConnection(mapping, false);
     
@@ -3381,7 +3381,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
          * Core code already has some lock on each rel being planned, so we
          * can use NoLock here.
          */
-        Relation	rel = heap_open(x, NoLock);
+        Relation	rel = heap_open((Oid) x, NoLock);
     
         deparseRelation (&foreign_table_name, rel);
         
