@@ -3259,3 +3259,55 @@ get_relation_column_alias_ids(Var *node, RelOptInfo *foreignrel,
 	/* Shouldn't get here */
 	elog(ERROR, "unexpected expression in subquery output");
 }
+
+extern const char *
+deparseNode (Node *node, PlannerInfo *root,
+             RelOptInfo *rel)
+{
+    StringInfoData *str = makeStringInfo();
+    
+    if (node == NULL)
+    {
+        appendStringInfoString (str, "NULL");
+        return str->data;
+    }
+    
+    /* Fill portions of context common to upper, join and base relation */
+    deparse_expr_cxt context;
+    context.buf = str;
+    context.root = root;
+    context.foreignrel = rel;
+    context.scanrel = rel;
+    context.params_list = NULL;
+    
+    switch (nodeTag (node))
+    {
+        case T_List:
+            appendStringInfoString (str, "List (");
+            bool first = true;
+            ListCell *lc;
+            foreach (lc, (List *) node)
+            {
+                if (!first)
+                    appendStringInfoString (str, ", ");
+                appendStringInfoString (str, deparseNode ((Node *) lfirst (lc), root, rel));
+                first = false;
+            }
+            appendStringInfoString (str, ")");
+            break;
+        case T_RestrictInfo:
+            appendStringInfoString (str, "RestrictInfo (");
+            deparseExpr (((RestrictInfo *) node)->clause, &context);
+            appendStringInfoString (str, ")");
+            break;
+        case T_OpExpr:
+        case T_Expr:
+            deparseExpr ((Expr *) node, &context);
+            break;
+        default:
+            elog(ERROR, "unsupported nodetype supplied: %d", nodeTag (node));
+            break;
+    }
+    
+    return str->data;
+}

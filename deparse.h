@@ -65,3 +65,7 @@ extern void deparseColumnRef(StringInfo buf, int varno, int varattno,
 extern void
 deparseExplicitTargetList(List *tlist, List **retrieved_attrs,
                           deparse_expr_cxt *context);
+
+extern const char *
+deparseNode (Node *node, PlannerInfo *root,
+             RelOptInfo *grouped_rel);

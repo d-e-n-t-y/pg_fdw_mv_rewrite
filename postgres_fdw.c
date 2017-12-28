@@ -3757,6 +3757,9 @@ check_group_clauses_for_matview (PlannerInfo *root,
     return true;
 }
 
+static bool enable_join_clause_check_trace = false;
+static bool enable_join_clause_check_debug = false;
+
 static bool
 check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
@@ -3776,7 +3779,8 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 
     // 3. Go through each JOIN clause in the MV.
 
-    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (parsed_mv_query->jointree));
+    if (enable_join_clause_check_debug)
+        elog(INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 
     List *quals = NIL; // additional qualifiers over and above the join clauses
    
@@ -3821,15 +3825,17 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         }
     }
     
-    // elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
+    if (enable_join_clause_check_debug)
+        elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
     
     // 3.1. We must find all its expressions present in our grouped_rel query
     //      otherwise the MV is potentially too restrictive.
 
-    List /* RestrictInfo* */ *grouped_rel_clauses = sfpinfo->joinclauses;
+    List /* RestrictInfo* */ *grouped_rel_clauses = list_copy (sfpinfo->joinclauses);
     List /* RestrictInfo* */ *found_grouped_rel_clauses = NIL;
 
-    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (grouped_rel_clauses));
+    if (enable_join_clause_check_debug)
+        elog(INFO, "%s: clauses: %s", __func__, nodeToString (grouped_rel_clauses));
     
     struct expr_targets_equals_ctx col_names = {
         root, parsed_mv_query->rtable
@@ -3840,7 +3846,8 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     {
         Expr *je = lfirst (lc2);
 
-        //elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (je));
+        if (enable_join_clause_check_debug)
+            elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (je));
 
         bool found = false;
         
@@ -3849,11 +3856,20 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         {
             RestrictInfo *ri = lfirst (lc3);
             
-            //elog(INFO, "%s: against expression: %s", __func__, nodeToString (ri));
+            if (enable_join_clause_check_trace)
+                elog(INFO, "%s: against expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
+            if (enable_join_clause_check_trace)
+                elog(INFO, "%s: against expression: %s", __func__, nodeToString (ri));
 
             if (expr_targets_equals_walker ((Node *) ri->clause, (Node *) je, &col_names))
             {
+                if (enable_join_clause_check_debug)
+                    elog(INFO, "%s: matched expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
+                if (enable_join_clause_check_debug)
+                    elog(INFO, "%s: matched expression: %s", __func__, nodeToString (ri));
+
                 found_grouped_rel_clauses = lappend (found_grouped_rel_clauses, ri);
+                grouped_rel_clauses = list_delete (grouped_rel_clauses, ri);
                 found = true;
                 break;
             }
@@ -3872,24 +3888,30 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     //    WHERE clause list. Return them so the WHERE clause processing can handle
     //    them appropriately.
     
-    *additional_where_clauses = list_difference (grouped_rel_clauses, found_grouped_rel_clauses);
+    *additional_where_clauses = grouped_rel_clauses;
 
-    //elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
+    if (enable_join_clause_check_debug)
+        elog(INFO, "%s: balance of clauses: %s", __func__, deparseNode (*additional_where_clauses, root, grouped_rel));
+    if (enable_join_clause_check_debug)
+        elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
     
     return true;
 }
 
+static bool enable_where_clause_soruce_check_trace = true;
+
 static bool
-check_where_clauses_for_matview (PlannerInfo *root,
-                                 Query *parsed_mv_query,
-                                 RelOptInfo *grouped_rel,
-                                 List *additional_clauses,
-                                 List **transformed_clist_p,
-                                 struct transform_todo *todo_list)
+check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
+                                               Query *parsed_mv_query,
+                                               RelOptInfo *grouped_rel,
+                                               List *additional_clauses,
+                                               List **transformed_clist_p,
+                                               struct transform_todo *todo_list)
 {
     PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
 
-    //elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+    if (enable_where_clause_soruce_check_trace)
+        elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
     ListCell   *lc;
     foreach (lc, list_concat (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds,
@@ -3916,10 +3938,10 @@ check_where_clauses_for_matview (PlannerInfo *root,
 }
 
 static bool
-check_select_clauses_for_matview (PlannerInfo *root,
-                                  Query *parsed_mv_query,
-                                  List /* TargetEntry* */ *selected_tlist,
-                                  struct transform_todo *todo_list)
+check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
+                                                Query *parsed_mv_query,
+                                                List /* TargetEntry* */ *selected_tlist,
+                                                struct transform_todo *todo_list)
 {
     ListCell   *lc;
     foreach (lc, selected_tlist)
@@ -3992,20 +4014,17 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     List *additional_where_clauses = NIL;
     
-    // 2. Check the FROM clause: it must match exactly
+    // 2. Check the FROM and WHERE clauses: they must match exactly
     //elog(INFO, "%s: checking FROM clauses...", __func__);
     if (!check_from_join_clauses_for_matview (root, parsed_mv_query, grouped_rel, &additional_where_clauses,
                                               &transform_todo_list))
         return false;
     
-    // 3. Check the WHERE clause: they must match exactly
-    //elog(INFO, "%s: checking WHERE clauses...", __func__);
+    // 3a. Allow more WHERE clauses only where they source from MV tlist cols
     
-    if (!check_where_clauses_for_matview(root, parsed_mv_query, grouped_rel, additional_where_clauses,
-                                         &transformed_clist, &transform_todo_list))
+    if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, grouped_rel, additional_where_clauses,
+                                                       &transformed_clist, &transform_todo_list))
         return false;
-    
-    // FIXME: 3a. Allow more WHERE clauses only when they match a GROUP BY expression
     
     // 4. Check for HAVING clause: push them in to the WHERE list
     //elog(INFO, "%s: checking HAVING clauses...", __func__);
@@ -4015,7 +4034,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // 6. Check the SELECT clauses: they must be a subset
     //elog(INFO, "%s: checking SELECT clauses...", __func__);
     
-    if (!check_select_clauses_for_matview (root, parsed_mv_query, grouped_tlist, &transform_todo_list))
+    if (!check_select_clauses_source_from_matview_tlist (root, parsed_mv_query, grouped_tlist, &transform_todo_list))
         return false;
     
     // FIXME: 6a. Allow SELECT of an expression based on the fundamental
