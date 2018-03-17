@@ -143,6 +143,22 @@ pg_fdw_mv_rewrite_validator(PG_FUNCTION_ARGS)
 						 errmsg("%s requires a non-negative integer value",
 								def->defname)));
 		}
+        else if (strcmp (def->defname, "trace_join_clause_check") == 0)
+        {
+            (void) defGetBoolean(def);
+        }
+        else if (strcmp (def->defname, "debug_join_clause_check") == 0)
+        {
+            (void) defGetBoolean(def);
+        }
+        else if (strcmp (def->defname, "trace_where_clause_source_check") == 0)
+        {
+            (void) defGetBoolean(def);
+        }
+        else if (strcmp (def->defname, "trace_parse_select_query") == 0)
+        {
+            (void) defGetBoolean(def);
+        }
 	}
 
 	PG_RETURN_VOID();
@@ -177,6 +193,10 @@ InitPgFdwOptions(void)
 		/* fetch_size is available on both server and table */
 		{"fetch_size", ForeignServerRelationId, false},
 		{"fetch_size", ForeignTableRelationId, false},
+        {"trace_join_clause_check", ForeignServerRelationId, false},
+        {"debug_join_clause_check", ForeignServerRelationId, false},
+        {"trace_where_clause_source_check", ForeignServerRelationId, false},
+        {"trace_parse_select_query", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 

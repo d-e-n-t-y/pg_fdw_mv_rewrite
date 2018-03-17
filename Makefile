@@ -8,7 +8,7 @@ PG_CPPFLAGS = -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
 EXTENSION = pg_fdw_mv_rewrite
-DATA = pg_fdw_mv_rewrite--0.1.sql
+DATA = pg_fdw_mv_rewrite--0.1.sql pg_fdw_mv_rewrite--0.2.2.sql pg_fdw_mv_rewrite--0.1--0.2.2.sql
 
 REGRESS = pg_fdw_mv_rewrite
 

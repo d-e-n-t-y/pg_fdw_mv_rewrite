@@ -2765,6 +2765,14 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
             ExtractExtensionList(defGetString(def), false);
         else if (strcmp(def->defname, "fetch_size") == 0)
             fpinfo->fetch_size = (int) strtol(defGetString(def), NULL, 10);
+        else if (strcmp(def->defname, "trace_join_clause_check") == 0)
+            fpinfo->trace_join_clause_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "debug_join_clause_check") == 0)
+            fpinfo->debug_join_clause_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_where_clause_source_check") == 0)
+            fpinfo->trace_where_clause_source_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_parse_select_query") == 0)
+            fpinfo->trace_parse_select_query = defGetBoolean(def);
     }
 }
 
@@ -2820,6 +2828,11 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     fpinfo->shippable_extensions = fpinfo_o->shippable_extensions;
     fpinfo->use_remote_estimate = fpinfo_o->use_remote_estimate;
     fpinfo->fetch_size = fpinfo_o->fetch_size;
+    
+    fpinfo->debug_join_clause_check = fpinfo_o->debug_join_clause_check;
+    fpinfo->trace_join_clause_check = fpinfo_o->trace_join_clause_check;
+    fpinfo->trace_where_clause_source_check = fpinfo_o->trace_where_clause_source_check;
+    fpinfo->trace_parse_select_query = fpinfo_o->trace_parse_select_query;
     
     /* Merge the table level options from either side of the join. */
     if (fpinfo_i)
@@ -3230,7 +3243,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    //elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
+    elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
     
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
@@ -3449,15 +3462,23 @@ find_related_matviews_for_relation (PlannerInfo *root,
 }
 
 static Query *
-parse_select_query (const char *mv_sql)
+parse_select_query (RelOptInfo *grouped_rel, const char *mv_sql)
 {
+    PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
+
     RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
+    
+    if (fpinfo->trace_parse_select_query)
+        elog(INFO, "%s: parse tree: %s", __func__, nodeToString (mv_parsetree));
     
     List *qtList = pg_analyze_and_rewrite (mv_parsetree, mv_sql, NULL, 0, NULL);
     
-    return list_nth_node (Query, qtList, 0);
+    Query *query = list_nth_node (Query, qtList, 0);
     
-    //elog(INFO, "%s: parsed query: %s", __func__, nodeToString (*parsed_mv_query));
+    if (fpinfo->trace_parse_select_query)
+        elog(INFO, "%s: query: %s", __func__, nodeToString (query));
+
+    return query;
 }
 
 struct transform_todo {
@@ -3757,9 +3778,6 @@ check_group_clauses_for_matview (PlannerInfo *root,
     return true;
 }
 
-static bool enable_join_clause_check_trace = false;
-static bool enable_join_clause_check_debug = false;
-
 static bool
 check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
@@ -3768,9 +3786,10 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
                                      struct transform_todo *todo_list)
 {
     PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
-    RelOptInfo *scanrel = IS_UPPER_REL(grouped_rel) ? fpinfo->outerrel : grouped_rel;
-    PgFdwRelationInfo *sfpinfo = (PgFdwRelationInfo *) scanrel->fdw_private;
     
+    if (fpinfo->trace_join_clause_check)
+        elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
+
     // 1. We don't need to check the rels involved — they must be joined
     //    by the MV otherwise they wouldn't have been selected for evaluation.
         
@@ -3779,7 +3798,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 
     // 3. Go through each JOIN clause in the MV.
 
-    if (enable_join_clause_check_debug)
+    if (fpinfo->debug_join_clause_check)
         elog(INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 
     List *quals = NIL; // additional qualifiers over and above the join clauses
@@ -3825,17 +3844,27 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         }
     }
     
-    if (enable_join_clause_check_debug)
+    if (fpinfo->debug_join_clause_check)
         elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
     
     // 3.1. We must find all its expressions present in our grouped_rel query
     //      otherwise the MV is potentially too restrictive.
 
-    List /* RestrictInfo* */ *grouped_rel_clauses = list_copy (sfpinfo->joinclauses);
+    List /* RestrictInfo* */ *grouped_rel_clauses;
+    
+    // For upper relations, the WHERE clause is built from the remote
+    // conditions of the underlying scan relation.
+    {
+        PgFdwRelationInfo *ofpinfo;
+        
+        ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
+        grouped_rel_clauses = list_copy (ofpinfo->remote_conds);
+    }
+    
     List /* RestrictInfo* */ *found_grouped_rel_clauses = NIL;
 
-    if (enable_join_clause_check_debug)
-        elog(INFO, "%s: clauses: %s", __func__, nodeToString (grouped_rel_clauses));
+    if (fpinfo->debug_join_clause_check)
+        elog(INFO, "%s: grouped_rel clauses: %s", __func__, nodeToString (grouped_rel_clauses));
     
     struct expr_targets_equals_ctx col_names = {
         root, parsed_mv_query->rtable
@@ -3846,7 +3875,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     {
         Expr *je = lfirst (lc2);
 
-        if (enable_join_clause_check_debug)
+        if (fpinfo->debug_join_clause_check)
             elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (je));
 
         bool found = false;
@@ -3856,16 +3885,16 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         {
             RestrictInfo *ri = lfirst (lc3);
             
-            if (enable_join_clause_check_trace)
+            if (fpinfo->trace_join_clause_check)
                 elog(INFO, "%s: against expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
-            if (enable_join_clause_check_trace)
+            if (fpinfo->trace_join_clause_check)
                 elog(INFO, "%s: against expression: %s", __func__, nodeToString (ri));
 
             if (expr_targets_equals_walker ((Node *) ri->clause, (Node *) je, &col_names))
             {
-                if (enable_join_clause_check_debug)
+                if (fpinfo->debug_join_clause_check)
                     elog(INFO, "%s: matched expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
-                if (enable_join_clause_check_debug)
+                if (fpinfo->debug_join_clause_check)
                     elog(INFO, "%s: matched expression: %s", __func__, nodeToString (ri));
 
                 found_grouped_rel_clauses = lappend (found_grouped_rel_clauses, ri);
@@ -3890,15 +3919,13 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     
     *additional_where_clauses = grouped_rel_clauses;
 
-    if (enable_join_clause_check_debug)
-        elog(INFO, "%s: balance of clauses: %s", __func__, deparseNode (*additional_where_clauses, root, grouped_rel));
-    if (enable_join_clause_check_debug)
+    if (fpinfo->debug_join_clause_check)
+        elog(INFO, "%s: balance of clauses: %s", __func__, deparseNode ((Node *) *additional_where_clauses, root, grouped_rel));
+    if (fpinfo->debug_join_clause_check)
         elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
     
     return true;
 }
-
-static bool enable_where_clause_soruce_check_trace = true;
 
 static bool
 check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
@@ -3910,7 +3937,7 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
 {
     PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
 
-    if (enable_where_clause_soruce_check_trace)
+    if (fpinfo->trace_where_clause_source_check)
         elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
     ListCell   *lc;
@@ -3997,7 +4024,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
-    Query *parsed_mv_query = parse_select_query ((const char *) mv_definition->data);
+    Query *parsed_mv_query = parse_select_query (grouped_rel, (const char *) mv_definition->data);
     
     // 1. Check the GROUP BY clause: it must match exactly
     //elog(INFO, "%s: checking GROUP BY clauses...", __func__);

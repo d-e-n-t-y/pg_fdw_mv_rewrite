@@ -31,6 +31,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2.sql"; sourceTree = "<group>"; };
+		BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1--0.2.2.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
 		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
 		BF8BEEE81FD1E590003A7AC9 /* connection.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connection.c; sourceTree = "<group>"; };
@@ -71,6 +73,8 @@
 				BF8BEEEB1FD1E590003A7AC9 /* expected */,
 				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
 				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
+				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
+				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
 				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
@@ -290,7 +294,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
-				BUNDLE_LOADER = ../../src/backend/postgres;
+				BUNDLE_LOADER = "/Users/denty/junk/postgresql-10.1/src/backend/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
@@ -303,9 +307,9 @@
 				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				INSTALL_PATH = "/Users/denty/junk/postgresql-10.1/lib/";
 				LIBRARY_SEARCH_PATHS = (
-					../../src/interfaces/libpq,
-					../../src/port,
-					../../src/common,
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"",
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/port\"",
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/common\"",
 				);
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
@@ -314,7 +318,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
-				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
+				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/../../../junk/postgresql-10.1/src/include\" \"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"";
 			};
 			name = Debug;
 		};
@@ -322,7 +326,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
-				BUNDLE_LOADER = ../../src/backend/postgres;
+				BUNDLE_LOADER = "/Users/denty/junk/postgresql-10.1/src/backend/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
@@ -332,12 +336,11 @@
 				EXECUTABLE_EXTENSION = so;
 				EXECUTABLE_PREFIX = "";
 				HEADER_SEARCH_PATHS = "";
-				"HEADER_SEARCH_PATHS[arch=*]" = "";
 				INSTALL_PATH = "/Users/denty/junk/postgresql-10.1/lib/";
 				LIBRARY_SEARCH_PATHS = (
-					../../src/interfaces/libpq,
-					../../src/port,
-					../../src/common,
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"",
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/port\"",
+					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/common\"",
 				);
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
@@ -346,7 +349,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
-				USER_HEADER_SEARCH_PATHS = "../../src/include ../../src/interfaces/libpq";
+				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/../../../junk/postgresql-10.1/src/include\" \"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"";
 			};
 			name = Release;
 		};
