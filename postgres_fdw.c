@@ -3534,7 +3534,8 @@ static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root,
                                      Query *parsed_mv_query,
                                      Expr *expr,
-                                     struct transform_todo *todo_list);
+                                     struct transform_todo *todo_list,
+                                     bool trace);
 
 struct expr_targets_equals_ctx
 {
@@ -3589,6 +3590,7 @@ struct expr_targets_in_matview_tlist_ctx
 {
     PlannerInfo *root;
     List /* TargetEntry* */ *tList;
+    bool trace; // enable trace logging
     bool match_found;
     bool did_search_anything;
     struct transform_todo *todo_list;
@@ -3601,24 +3603,30 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
     bool done = false;
     bool local_match_found = false;
     
-    //elog(INFO, "%s: >>>>", __func__);
+    if (ctx->trace)
+        elog(INFO, "%s: >>>>", __func__);
     
     ctx->did_search_anything = true;
     
     if (!ctx->match_found)
     {
-        //elog(INFO, "%s: previous expr didn't match; no point continuing...", __func__);
+        if (ctx->trace)
+            elog(INFO, "%s: previous expr didn't match; no point continuing...", __func__);
+
         return false;
     }
     
-    //elog(INFO, "%s: checking expr: %s", __func__, nodeToString (node));
+    if (ctx->trace)
+        elog(INFO, "%s: checking expr: %s", __func__, nodeToString (node));
     
     if (!done)
     {
         if (node == NULL)
         {
             done = true;
-            //elog(INFO, "%s: NULL node", __func__);
+            
+            if (ctx->trace)
+                elog(INFO, "%s: NULL node", __func__);
         }
     }
     
@@ -3628,7 +3636,9 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         {
             local_match_found = true;
             done = true;
-            //elog(INFO, "%s: constants are always acceptable", __func__);
+            
+            if (ctx->trace)
+                elog(INFO, "%s: constants are always acceptable", __func__);
         }
     }
     
@@ -3642,13 +3652,15 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         {
             TargetEntry *te = lfirst(lc);
             
-            //elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
+            if (ctx->trace)
+                elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
             
             local_match_found = expr_targets_equals_walker ((Node *) node, (Node *) te->expr, ctx->col_names);
             
             if (local_match_found)
             {
-                //elog(INFO, "%s: matched!", __func__);
+                if (ctx->trace)
+                    elog(INFO, "%s: matched!", __func__);
                 
                 transform_todo_list_add_match (ctx->todo_list, i, (Expr *) node, te);
                 
@@ -3668,17 +3680,20 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
         sub_ctx.match_found = true; // walker will set to false if not matched
         sub_ctx.did_search_anything = false; // indicates whether match_found is valid
         
-        //elog(INFO, "%s: walking sub-expressions...", __func__);
+        if (ctx->trace)
+            elog(INFO, "%s: walking sub-expressions...", __func__);
         
         // Look at the sub-expressions inside the Node. All must either match
         // exactly, or derive from something that does.
         expression_tree_walker (node, expr_targets_in_matview_tlist_walker, &sub_ctx);
         
         if (!sub_ctx.did_search_anything) {
-            //elog(INFO, "%s: (no sub-expressions walked)", __func__);
+            if (ctx->trace)
+                elog(INFO, "%s: (no sub-expressions walked)", __func__);
         }
         
-        //elog(INFO, "%s: done walking sub-expressions.", __func__);
+        if (ctx->trace)
+            elog(INFO, "%s: done walking sub-expressions.", __func__);
         
         local_match_found = sub_ctx.did_search_anything && sub_ctx.match_found;
         
@@ -3687,17 +3702,20 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
     
     if (done)
     {
-        //elog(INFO, "%s: done; local match found: %d", __func__, local_match_found);
+        if (ctx->trace)
+            elog(INFO, "%s: done; local match found: %d", __func__, local_match_found);
         
         // We got a match: record it, but we can't abort the walk because
         // there may be adjacent arguments. Unfortunately, we can't directly
         // signal to go no deepper, but continue with the adjacent walk.
         ctx->match_found = ctx->match_found && local_match_found;
         
-        //elog(INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
+        if (ctx->trace)
+            elog(INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
     }
     
-    //elog(INFO, "%s: <<<<", __func__);
+    if (ctx->trace)
+        elog(INFO, "%s: <<<<", __func__);
     
     // Always continue to search adjacent expressions, even if we didn't dive down.
     return false;
@@ -3707,7 +3725,8 @@ static bool
 check_expr_targets_in_matview_tlist (PlannerInfo *root,
                                      Query *parsed_mv_query,
                                      Expr *expr,
-                                     struct transform_todo *todo_list)
+                                     struct transform_todo *todo_list,
+                                     bool trace)
 {
     if (expr == NULL)
         return true;
@@ -3716,7 +3735,7 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root,
         root, parsed_mv_query->rtable
     };
     struct expr_targets_in_matview_tlist_ctx ctx = {
-        root, parsed_mv_query->targetList
+        root, parsed_mv_query->targetList, trace
     };
     ctx.match_found = true; // walker will set to false if not matched
     ctx.todo_list = todo_list;
@@ -3768,7 +3787,7 @@ check_group_clauses_for_matview (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, false))
         {
             elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
@@ -3952,7 +3971,7 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
             expr = ((RestrictInfo *) expr)->clause;
         }
         
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_where_clause_source_check))
         {
             elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
@@ -3977,7 +3996,7 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, false))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
