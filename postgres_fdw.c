@@ -2773,6 +2773,8 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
             fpinfo->trace_where_clause_source_check = defGetBoolean(def);
         else if (strcmp(def->defname, "trace_parse_select_query") == 0)
             fpinfo->trace_parse_select_query = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_shippable_check") == 0)
+            fpinfo->trace_shippable_check = defGetBoolean(def);
     }
 }
 
@@ -2833,7 +2835,8 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     fpinfo->trace_join_clause_check = fpinfo_o->trace_join_clause_check;
     fpinfo->trace_where_clause_source_check = fpinfo_o->trace_where_clause_source_check;
     fpinfo->trace_parse_select_query = fpinfo_o->trace_parse_select_query;
-    
+    fpinfo->trace_shippable_check = fpinfo_o->trace_shippable_check;
+
     /* Merge the table level options from either side of the join. */
     if (fpinfo_i)
     {

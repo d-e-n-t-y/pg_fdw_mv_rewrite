@@ -159,6 +159,10 @@ pg_fdw_mv_rewrite_validator(PG_FUNCTION_ARGS)
         {
             (void) defGetBoolean(def);
         }
+        else if (strcmp (def->defname, "trace_shippable_check") == 0)
+        {
+            (void) defGetBoolean(def);
+        }
 	}
 
 	PG_RETURN_VOID();
@@ -197,6 +201,7 @@ InitPgFdwOptions(void)
         {"debug_join_clause_check", ForeignServerRelationId, false},
         {"trace_where_clause_source_check", ForeignServerRelationId, false},
         {"trace_parse_select_query", ForeignServerRelationId, false},
+        {"trace_shippable_check", ForeignServerRelationId, false},
 		{NULL, InvalidOid, false}
 	};
 

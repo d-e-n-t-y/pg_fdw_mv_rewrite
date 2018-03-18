@@ -72,12 +72,12 @@
 			children = (
 				BF8BEEEB1FD1E590003A7AC9 /* expected */,
 				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
+				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
 				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
 				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
 				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
-				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
 				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,
 				BF8BEEF41FD1E590003A7AC9 /* sql */,
 				BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */,

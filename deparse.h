@@ -7,6 +7,7 @@ typedef struct foreign_glob_cxt
 	RelOptInfo *foreignrel;		/* the foreign relation we are planning for */
 	Relids		relids;			/* relids of base relations in the underlying
 								 * scan */
+    bool        trace_shippable_check;
 } foreign_glob_cxt;
 
 /*

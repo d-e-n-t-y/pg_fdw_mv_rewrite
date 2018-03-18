@@ -100,6 +100,8 @@ static void deparseConst(Const *node, deparse_expr_cxt *context, int showtype);
 static void deparseParam(Param *node, deparse_expr_cxt *context);
 static void deparseArrayRef(ArrayRef *node, deparse_expr_cxt *context);
 static void deparseFuncExpr(FuncExpr *node, deparse_expr_cxt *context);
+static void deparseCaseExpr(CaseExpr *node, deparse_expr_cxt *context);
+static void deparseCaseWhenExpr(CaseWhen *node, deparse_expr_cxt *context);
 static void deparseOpExpr(OpExpr *node, deparse_expr_cxt *context);
 static void deparseOperatorName(StringInfo buf, Form_pg_operator opform);
 static void deparseDistinctExpr(DistinctExpr *node, deparse_expr_cxt *context);
@@ -152,7 +154,9 @@ classifyConditions(PlannerInfo *root,
 				   List **remote_conds,
 				   List **local_conds)
 {
-	ListCell   *lc;
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) (baserel->fdw_private);
+
+    ListCell   *lc;
 
 	*remote_conds = NIL;
 	*local_conds = NIL;
@@ -161,15 +165,22 @@ classifyConditions(PlannerInfo *root,
 	{
 		RestrictInfo *ri = lfirst_node(RestrictInfo, lc);
 
-		if (is_foreign_expr(root, baserel, ri->clause))
+        if (fpinfo->trace_shippable_check)
+            elog(INFO, "%s: classifying expression: %s", __func__, nodeToString (ri));
+
+        if (is_foreign_expr(root, baserel, ri->clause))
 		{
 			*remote_conds = lappend(*remote_conds, ri);
-			//elog(INFO, "%s: expression is remote: %s", __func__, nodeToString (ri));
+			
+            if (fpinfo->trace_shippable_check)
+                elog(INFO, "%s: expression will be remote.", __func__);
 		}
 		else
 		{
 			*local_conds = lappend(*local_conds, ri);
-			//elog(INFO, "%s: expression is local: %s", __func__, nodeToString (ri));
+
+            if (fpinfo->trace_shippable_check)
+                elog(INFO, "%s: expression must be local.", __func__);
 		}
 	}
 }
@@ -193,7 +204,8 @@ is_foreign_expr(PlannerInfo *root,
 	glob_cxt.root = root;
 	glob_cxt.foreignrel = baserel;
 
-	//elog(INFO, "%s: evanluating expression using walker: %s", __func__, nodeToString (expr));
+    if (fpinfo->trace_shippable_check)
+        elog(INFO, "%s: evaluating expression: %s", __func__, nodeToString (expr));
 
 	/*
 	 * For an upper relation, use relids from its underneath scan relation,
@@ -206,19 +218,26 @@ is_foreign_expr(PlannerInfo *root,
 		glob_cxt.relids = baserel->relids;
 	loc_cxt.collation = InvalidOid;
 	loc_cxt.state = FDW_COLLATE_NONE;
-	if (!foreign_expr_walker((Node *) expr, &glob_cxt, &loc_cxt))
-		return false;
+    
+    glob_cxt.trace_shippable_check = fpinfo->trace_shippable_check;
 
-	//elog(INFO, "%s: checking for unsafe collation...", __func__);
+    if (!foreign_expr_walker((Node *) expr, &glob_cxt, &loc_cxt)) {
+        if (fpinfo->trace_shippable_check)
+            elog(INFO, "%s: expression walker indicates not shippable.", __func__);
+
+        return false;
+    }
 
 	/*
 	 * If the expression has a valid collation that does not arise from a
 	 * foreign var, the expression can not be sent over.
 	 */
-	if (loc_cxt.state == FDW_COLLATE_UNSAFE)
-		return false;
+    if (loc_cxt.state == FDW_COLLATE_UNSAFE) {
+        if (fpinfo->trace_shippable_check)
+            elog(INFO, "%s: expression collation is unsafe.", __func__);
 
-	//elog(INFO, "%s: checking for mutable expression...", __func__);
+        return false;
+    }
 
 	/*
 	 * An expression which includes any mutable functions can't be sent over
@@ -227,12 +246,16 @@ is_foreign_expr(PlannerInfo *root,
 	 * be able to make this choice with more granularity.  (We check this last
 	 * because it requires a lot of expensive catalog lookups.)
 	 */
-	if (contain_mutable_functions((Node *) expr))
+    if (contain_mutable_functions((Node *) expr)) {
+        if (fpinfo->trace_shippable_check)
+            elog(INFO, "%s: expression contains mutable functions.", __func__);
+
 		return false;
+    }
 
-	//elog(INFO, "%s: all OK.", __func__);
+    if (fpinfo->trace_shippable_check)
+        elog(INFO, "%s: expression is shippable.", __func__);
 
-	/* OK to evaluate on the remote server */
 	return true;
 }
 
@@ -260,11 +283,16 @@ foreign_expr_walker(Node *node,
 	Oid			collation;
 	FDWCollateState state;
 
-	//elog(INFO, "%s: walking expression: %s", __func__, nodeToString (node));
+	if (glob_cxt->trace_shippable_check)
+        elog(INFO, "%s: walking expression: %s", __func__, nodeToString (node));
 
 	/* Need do nothing for empty subexpressions */
-	if (node == NULL)
-		return true;
+    if (node == NULL) {
+        if (glob_cxt->trace_shippable_check)
+            elog(INFO, "%s: NULL node.", __func__);
+
+        return true;
+    }
 
 	/* May need server info from baserel's fdw_private struct */
 	fpinfo = (PgFdwRelationInfo *) (glob_cxt->foreignrel->fdw_private);
@@ -811,13 +839,70 @@ foreign_expr_walker(Node *node,
                 
                 break;
             }
-		default:
-            //elog(INFO, "%s: default handler: return type not shippable.", __func__);
+        case T_CaseExpr:
+        {
+            CaseExpr  *c = (CaseExpr *) node;
+            
+            /*
+             * Recurse to input subexpressions.
+             */
+            if (!foreign_expr_walker((Node *) c->args,
+                                     glob_cxt, &inner_cxt))
+                return false;
 
+            if (!foreign_expr_walker((Node *) c->defresult,
+                                     glob_cxt, &inner_cxt))
+                return false;
+
+            /*
+             * ArrayExpr must not introduce a collation not derived from
+             * an input foreign Var (same logic as for a function).
+             */
+            collation = c->casecollid;
+            if (collation == InvalidOid)
+                state = FDW_COLLATE_NONE;
+            else if (inner_cxt.state == FDW_COLLATE_SAFE &&
+                     collation == inner_cxt.collation)
+                state = FDW_COLLATE_SAFE;
+            else if (collation == DEFAULT_COLLATION_OID)
+                state = FDW_COLLATE_NONE;
+            else
+                state = FDW_COLLATE_UNSAFE;
+        }
+            break;
+        case T_CaseWhen:
+        {
+            CaseWhen  *w = (CaseWhen *) node;
+            
+            /*
+             * Recurse to input subexpressions.
+             */
+            if (!foreign_expr_walker((Node *) w->expr,
+                                     glob_cxt, &inner_cxt))
+                return false;
+
+            if (!foreign_expr_walker((Node *) w->result,
+                                     glob_cxt, &inner_cxt))
+                return false;
+
+            /*
+             * ArrayExpr must not introduce a collation not derived from
+             * an input foreign Var (same logic as for a function).
+             */
+            collation = inner_cxt.collation;
+            state = inner_cxt.state;
+            
+            check_type = false;
+        }
+            break;
+		default:
 			/*
 			 * If it's anything else, assume it's unsafe.  This list can be
 			 * expanded later, but don't forget to add deparse support below.
 			 */
+            if (glob_cxt->trace_shippable_check)
+                elog(INFO, "%s: default handler: type not shippable.", __func__);
+
 			return false;
 	}
 
@@ -827,8 +912,10 @@ foreign_expr_walker(Node *node,
 	 */
 	if (check_type && !is_shippable(exprType(node), TypeRelationId, fpinfo))
 	{
-	        //elog(INFO, "%s: return type not shippable.", __func__);
-		return false;
+        if (glob_cxt->trace_shippable_check)
+	        elog(INFO, "%s: expression result type not shippable.", __func__);
+
+            return false;
 	}
 
 	//elog(INFO, "%s: merging collation.", __func__);
@@ -885,7 +972,8 @@ foreign_expr_walker(Node *node,
 		}
 	}
 
-	//elog(INFO, "%s: done.", __func__);
+    if (glob_cxt->trace_shippable_check)
+        elog(INFO, "%s: expression walked.", __func__);
 
 	/* It looks OK */
 	return true;
@@ -2235,6 +2323,9 @@ deparseExpr(Expr *node, deparse_expr_cxt *context)
         case T_CoerceViaIO:
             deparseCoerceViaIOType((CoerceViaIO *) node, context);
             break;
+        case T_CaseExpr:
+            deparseCaseExpr((CaseExpr *) node, context);
+            break;
 		default:
 			elog(ERROR, "unsupported expression type for deparse: %d",
 				 (int) nodeTag(node));
@@ -2558,6 +2649,50 @@ deparseFuncExpr(FuncExpr *node, deparse_expr_cxt *context)
 		first = false;
 	}
 	appendStringInfoChar(buf, ')');
+}
+
+/*
+ * Deparse a CASE expression.
+ */
+static void
+deparseCaseExpr(CaseExpr *node, deparse_expr_cxt *context)
+{
+    StringInfo	buf = context->buf;
+    
+    appendStringInfo(buf, "CASE ");
+
+    ListCell   *when;
+    foreach (when, node->args)
+    {
+        deparseCaseWhenExpr ((CaseWhen *) lfirst(when), context);
+    }
+
+    if (node->defresult != NULL)
+    {
+        appendStringInfo(buf, "ELSE ");
+
+        deparseExpr((Expr *) node->defresult, context);
+    }
+    
+    appendStringInfo(buf, " END");
+
+}
+
+/*
+ * Deparse a CASE expression.
+ */
+static void
+deparseCaseWhenExpr(CaseWhen *node, deparse_expr_cxt *context)
+{
+    StringInfo	buf = context->buf;
+    
+    appendStringInfo(buf, "WHEN ");
+    
+    deparseExpr((Expr *) node->expr, context);
+    
+    appendStringInfo(buf, " THEN ");
+        
+    deparseExpr((Expr *) node->result, context);
 }
 
 /*
