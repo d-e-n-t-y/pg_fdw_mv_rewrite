@@ -2669,7 +2669,7 @@ deparseCaseExpr(CaseExpr *node, deparse_expr_cxt *context)
 
     if (node->defresult != NULL)
     {
-        appendStringInfo(buf, "ELSE ");
+        appendStringInfo(buf, " ELSE ");
 
         deparseExpr((Expr *) node->defresult, context);
     }

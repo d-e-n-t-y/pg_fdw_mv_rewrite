@@ -76,6 +76,8 @@ typedef struct PgFdwRelationInfo
     bool        debug_join_clause_check;
     bool        trace_parse_select_query;
     bool        trace_shippable_check;
+    bool        trace_group_clause_source_check;
+    bool        trace_select_clause_source_check;
     
 	/* Cached catalog information. */
 	ForeignTable *table;

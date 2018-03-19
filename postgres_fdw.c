@@ -2775,6 +2775,10 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
             fpinfo->trace_parse_select_query = defGetBoolean(def);
         else if (strcmp(def->defname, "trace_shippable_check") == 0)
             fpinfo->trace_shippable_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_group_clause_source_check") == 0)
+            fpinfo->trace_group_clause_source_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_select_clause_source_check") == 0)
+            fpinfo->trace_select_clause_source_check = defGetBoolean(def);
     }
 }
 
@@ -2836,6 +2840,8 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     fpinfo->trace_where_clause_source_check = fpinfo_o->trace_where_clause_source_check;
     fpinfo->trace_parse_select_query = fpinfo_o->trace_parse_select_query;
     fpinfo->trace_shippable_check = fpinfo_o->trace_shippable_check;
+    fpinfo->trace_group_clause_source_check = fpinfo_o->trace_group_clause_source_check;
+    fpinfo->trace_select_clause_source_check = fpinfo_o->trace_select_clause_source_check;
 
     /* Merge the table level options from either side of the join. */
     if (fpinfo_i)
@@ -3478,6 +3484,22 @@ parse_select_query (RelOptInfo *grouped_rel, const char *mv_sql)
     
     Query *query = list_nth_node (Query, qtList, 0);
     
+    ListCell *e;
+    foreach (e, query->targetList)
+    {
+        TargetEntry *tle = lfirst_node (TargetEntry, e);
+        
+        if (fpinfo->trace_parse_select_query)
+            elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
+        
+        Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
+        
+        tle->expr = new_expr;
+
+        if (fpinfo->trace_parse_select_query)
+            elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
+    }
+    
     if (fpinfo->trace_parse_select_query)
         elog(INFO, "%s: query: %s", __func__, nodeToString (query));
 
@@ -3768,9 +3790,12 @@ matview_tlist_colnames (Query *mv_query)
 static bool
 check_group_clauses_for_matview (PlannerInfo *root,
                                  Query *parsed_mv_query,
+                                 RelOptInfo *grouped_rel,
                                  List *transformed_tlist,
                                  struct transform_todo *todo_list)
 {
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+
     //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
     
     //elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
@@ -3790,7 +3815,7 @@ check_group_clauses_for_matview (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, false))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_group_clause_source_check))
         {
             elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             return false;
@@ -3989,9 +4014,12 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
 static bool
 check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                 Query *parsed_mv_query,
+                                                RelOptInfo *grouped_rel,
                                                 List /* TargetEntry* */ *selected_tlist,
                                                 struct transform_todo *todo_list)
 {
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+
     ListCell   *lc;
     foreach (lc, selected_tlist)
     {
@@ -3999,7 +4027,7 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, false))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_select_clause_source_check))
         {
             elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             return false;
@@ -4051,7 +4079,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // 1. Check the GROUP BY clause: it must match exactly
     //elog(INFO, "%s: checking GROUP BY clauses...", __func__);
     
-    if (!check_group_clauses_for_matview(root, parsed_mv_query, transformed_tlist, &transform_todo_list))
+    if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
         return false;
     
     // FIXME: the above check only checks some selected clauses; the balance of
@@ -4083,7 +4111,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // 6. Check the SELECT clauses: they must be a subset
     //elog(INFO, "%s: checking SELECT clauses...", __func__);
     
-    if (!check_select_clauses_source_from_matview_tlist (root, parsed_mv_query, grouped_tlist, &transform_todo_list))
+    if (!check_select_clauses_source_from_matview_tlist (root, parsed_mv_query, grouped_rel, grouped_tlist, &transform_todo_list))
         return false;
     
     // FIXME: 6a. Allow SELECT of an expression based on the fundamental
