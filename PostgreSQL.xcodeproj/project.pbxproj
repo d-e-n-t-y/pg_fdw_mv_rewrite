@@ -31,6 +31,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.3.sql"; sourceTree = "<group>"; };
+		BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2--0.3.sql"; sourceTree = "<group>"; };
 		BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2.sql"; sourceTree = "<group>"; };
 		BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1--0.2.2.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
@@ -75,7 +77,9 @@
 				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
 				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
 				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
+				BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */,
 				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
+				BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
 				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,

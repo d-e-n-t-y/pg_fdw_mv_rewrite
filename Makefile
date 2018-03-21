@@ -1,6 +1,6 @@
 # contrib/pg_fdw_mv_rewrite/Makefile
 
-MODULE_big = pg_fdw_mv_rewrite
+MODULE_big = pg_fdw_mv_rewrite.0.3
 OBJS = postgres_fdw.o option.o deparse.o connection.o shippable.o equalwalker.o $(WIN32RES)
 PGFILEDESC = "pg_fdw_mv_rewrite - MV-rewriting foreign data wrapper for PostgreSQL"
 
@@ -8,7 +8,7 @@ PG_CPPFLAGS = -I$(libpq_srcdir)
 SHLIB_LINK = $(libpq)
 
 EXTENSION = pg_fdw_mv_rewrite
-DATA = pg_fdw_mv_rewrite--0.1.sql pg_fdw_mv_rewrite--0.2.2.sql pg_fdw_mv_rewrite--0.1--0.2.2.sql
+DATA = pg_fdw_mv_rewrite--0.1.sql pg_fdw_mv_rewrite--0.2.2.sql pg_fdw_mv_rewrite--0.1--0.2.2.sql pg_fdw_mv_rewrite--0.3.sql pg_fdw_mv_rewrite--0.2.2--0.3.sql
 
 REGRESS = pg_fdw_mv_rewrite
 

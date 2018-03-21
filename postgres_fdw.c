@@ -341,7 +341,7 @@ postgresGetForeignRelSize(PlannerInfo *root,
     const char *relname;
     const char *refname;
     
-    elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
+    //elog(INFO, "%s (root=%p, baserel=%p, foreigntableid=%x)", __func__, root, baserel, foreigntableid);
     
     /*
      * We use PgFdwRelationInfo to pass various information to subsequent
@@ -1404,7 +1404,7 @@ postgresExplainForeignScan(ForeignScanState *node, ExplainState *es)
     char	   *sql;
     char	   *relations;
     
-    elog(INFO, "%s (node=%p, es=%p", __func__, node, es);
+    //elog(INFO, "%s (node=%p, es=%p", __func__, node, es);
     
     fdw_private = ((ForeignScan *) node->ss.ps.plan)->fdw_private;
     
@@ -2485,7 +2485,7 @@ foreign_join_ok(PlannerInfo *root, RelOptInfo *joinrel, JoinType jointype,
      */
     if (fpinfo_o->local_conds || fpinfo_i->local_conds)
     {
-        elog(INFO, "%s: join not pushdown safe due to local conds: %s %s", __func__, nodeToString(fpinfo_i->local_conds), nodeToString(fpinfo_o->local_conds));
+        //elog(INFO, "%s: join not pushdown safe due to local conds: %s %s", __func__, nodeToString(fpinfo_i->local_conds), nodeToString(fpinfo_o->local_conds));
 
         return false;
     }
@@ -2779,6 +2779,8 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
             fpinfo->trace_group_clause_source_check = defGetBoolean(def);
         else if (strcmp(def->defname, "trace_select_clause_source_check") == 0)
             fpinfo->trace_select_clause_source_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "log_match_progress") == 0)
+            fpinfo->log_match_progress = defGetBoolean(def);
     }
 }
 
@@ -2842,6 +2844,7 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     fpinfo->trace_shippable_check = fpinfo_o->trace_shippable_check;
     fpinfo->trace_group_clause_source_check = fpinfo_o->trace_group_clause_source_check;
     fpinfo->trace_select_clause_source_check = fpinfo_o->trace_select_clause_source_check;
+    fpinfo->log_match_progress = fpinfo_o->log_match_progress;
 
     /* Merge the table level options from either side of the join. */
     if (fpinfo_i)
@@ -2931,7 +2934,7 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
         epq_path = GetExistingLocalJoinPath(joinrel);
         if (!epq_path)
         {
-            elog(DEBUG3, "could not push down foreign join because a local path suitable for EPQ checks was not found");
+            //elog(DEBUG3, "could not push down foreign join because a local path suitable for EPQ checks was not found");
             return;
         }
     }
@@ -3252,7 +3255,7 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
+    //elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
     
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
@@ -3817,7 +3820,9 @@ check_group_clauses_for_matview (PlannerInfo *root,
         // MV TLE directly.
         if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_group_clause_source_check))
         {
-            elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            if (fpinfo->log_match_progress)
+                elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            
             return false;
         }
     }
@@ -3953,7 +3958,9 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         
         if (!found)
         {
-            elog(INFO, "%s: expression not found in grouped rel: %s", __func__, nodeToString (je));
+            if (fpinfo->log_match_progress)
+                elog(INFO, "%s: expression not found in grouped rel: %s", __func__, nodeToString (je));
+            
             return false;
         }
     }
@@ -4001,7 +4008,9 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
         
         if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_where_clause_source_check))
         {
-            elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            if (fpinfo->log_match_progress)
+                elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            
             return false;
         }
         
@@ -4029,7 +4038,9 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
         
         if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_select_clause_source_check))
         {
-            elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
+            if (fpinfo->log_match_progress)
+                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
+            
             return false;
         }
     }
@@ -4198,7 +4209,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         
         deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
         
-        elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
+        //elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
         
         if (input_rel != NULL)
         {
@@ -4206,7 +4217,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
             
             deparse_statement_for_mv_search (&rel_sql, NULL, root, input_rel);
         
-            elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
+            //elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
         }
     }
     
@@ -4218,7 +4229,8 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     {
         StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc), mv_definition = lfirst(dc);
         
-        elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+        if (fpinfo->log_match_progress)
+            elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
         StringInfo alternative_query;
         
