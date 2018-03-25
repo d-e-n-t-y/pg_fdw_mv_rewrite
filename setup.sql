@@ -2,6 +2,8 @@ create extension pg_fdw_mv_rewrite;
 
 create server local_server FOREIGN DATA WRAPPER pg_fdw_mv_rewrite OPTIONS (host '127.0.0.1', port '5433', dbname 'denty');
 
+alter server local_server options (add use_remote_estimate 'true');
+
 CREATE USER MAPPING FOR denty server local_server OPTIONS (user 'denty', password 'password');
 
 create table test (key text, value text);
@@ -30,22 +32,6 @@ insert into test_detail (select 'key1', 'more information');
 insert into test_detail (select 'key2', 'less information');
 
 select * from (select key, COUNT (value) from test_remote group by key) kv, (select key, count (detail) from test_detail_remote group by key) d where kv.key = d.key;
-
-CREATE FOREIGN TABLE events_all_remote (timestamp timestamp with time zone, hc1 text, hc2 text, addr smallint, ctrl smallint, category text, subcategory text, advices jsonb, warnings text, detail float) server local_server OPTIONS (schema_name 'public', table_name 'events_all');
-
-explain verbose select ts_to_bucket (timestamp, 'minute', 15), avg (detail) 
-from events_all_remote
-where
-    category = 'BATTERY_LEVEL' and subcategory = 'N/A'
-    and ts_to_bucket (timestamp, 'minute', 15) >= '2017-11-01 00:00:00+00' 
-    and ts_to_bucket (timestamp, 'minute', 15) < '2017-11-25 00:00:00+00'
-    and (hc1, hc2) = (select hc1, hc2 from room where name = 'Cold room')
-group by hc1, hc2, ts_to_bucket (timestamp, 'minute', 15)
-order by ts_to_bucket (timestamp, 'minute', 15);
-
-alter server local_server options (add extensions 'ts');
-
-alter server local_server options (add use_remote_estimate 'true');
 
 CREATE FOREIGN TABLE room_remote (name character varying(64), hc1 text, hc2 text) server local_server OPTIONS (schema_name 'public', table_name 'room');
 

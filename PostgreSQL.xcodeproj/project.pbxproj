@@ -12,20 +12,20 @@
 		BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE91FD1E590003A7AC9 /* deparse.c */; };
 		BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */; };
 		BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEF31FD1E590003A7AC9 /* shippable.c */; };
-		BF8BEF191FD1EFD4003A7AC9 /* libpq.5.10.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */; };
 		BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEED1FD1E590003A7AC9 /* option.c */; };
-		BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in CopyFiles */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */; };
+		BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		BF8BEFAD1FD2C2DF003A7AC9 /* CopyFiles */ = {
+		BF8BEFAD1FD2C2DF003A7AC9 /* Copy Files */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 12;
-			dstPath = "/Users/denty/junk/postgresql-10.1/lib";
+			dstPath = "$(PG_HOME)/lib";
 			dstSubfolderSpec = 0;
 			files = (
-				BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in CopyFiles */,
+				BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in Copy Files */,
 			);
+			name = "Copy Files";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -33,6 +33,7 @@
 /* Begin PBXFileReference section */
 		BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.3.sql"; sourceTree = "<group>"; };
 		BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2--0.3.sql"; sourceTree = "<group>"; };
+		BF08E98D206649E3006F2FE9 /* test.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test.sh; sourceTree = "<group>"; };
 		BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2.sql"; sourceTree = "<group>"; };
 		BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1--0.2.2.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
@@ -52,9 +53,11 @@
 		BF8BEEF41FD1E590003A7AC9 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
 		BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = postgres_fdw.sql; path = sql/postgres_fdw.sql; sourceTree = "<group>"; };
 		BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = pg_fdw_mv_rewrite.0.3.so; sourceTree = BUILT_PRODUCTS_DIR; };
-		BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = ../../lib/libpq.5.10.dylib; sourceTree = "<group>"; };
-		BF8BEF9C1FD1F559003A7AC9 /* include */ = {isa = PBXFileReference; lastKnownFileType = folder; name = include; path = ../../src/include; sourceTree = "<group>"; };
-		BF8BEF9E1FD1F596003A7AC9 /* libpq */ = {isa = PBXFileReference; lastKnownFileType = folder; name = libpq; path = ../../src/interfaces/libpq; sourceTree = "<group>"; };
+		BF967BFA20666F5E001F9A45 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpq.5.10.dylib"; sourceTree = "<group>"; };
+		BF967BFC20667049001F9A45 /* libpgtypes.3.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpgtypes.3.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpgtypes.3.10.dylib"; sourceTree = "<group>"; };
+		BF967BFE2066708D001F9A45 /* libecpg.6.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libecpg.6.10.dylib; path = "../../../junk/postgresql-10.1/lib/libecpg.6.10.dylib"; sourceTree = "<group>"; };
+		BF967C0020667190001F9A45 /* libpgcommon.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpgcommon.a; path = "../../../junk/postgresql-10.1/lib/libpgcommon.a"; sourceTree = "<group>"; };
+		BF967C02206671A8001F9A45 /* libpgport.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpgport.a; path = "../../../junk/postgresql-10.1/lib/libpgport.a"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,7 +65,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF8BEF191FD1EFD4003A7AC9 /* libpq.5.10.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +85,7 @@
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
 				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,
+				BF08E98D206649E3006F2FE9 /* test.sh */,
 				BF8BEEF41FD1E590003A7AC9 /* sql */,
 				BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */,
 				BF8BEEFC1FD1EBD0003A7AC9 /* Products */,
@@ -114,7 +117,11 @@
 		BF8BEF171FD1EFD4003A7AC9 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				BF8BEF181FD1EFD4003A7AC9 /* libpq.5.10.dylib */,
+				BF967C02206671A8001F9A45 /* libpgport.a */,
+				BF967C0020667190001F9A45 /* libpgcommon.a */,
+				BF967BFE2066708D001F9A45 /* libecpg.6.10.dylib */,
+				BF967BFC20667049001F9A45 /* libpgtypes.3.10.dylib */,
+				BF967BFA20666F5E001F9A45 /* libpq.5.10.dylib */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -122,8 +129,6 @@
 		BF8BEF1F1FD1F23E003A7AC9 /* Headers */ = {
 			isa = PBXGroup;
 			children = (
-				BF8BEF9C1FD1F559003A7AC9 /* include */,
-				BF8BEF9E1FD1F596003A7AC9 /* libpq */,
 				BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */,
 				BF8BEEEA1FD1E590003A7AC9 /* deparse.h */,
 				BF5A26901FD95A0600E3AD72 /* equalswalker.h */,
@@ -148,7 +153,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "pg_fdw_mv_rewrite" */;
 			buildPhases = (
-				BF8BEFAD1FD2C2DF003A7AC9 /* CopyFiles */,
+				BF8BEFAD1FD2C2DF003A7AC9 /* Copy Files */,
 				BF8BEF0B1FD1EF5D003A7AC9 /* Frameworks */,
 				BF8BEF0A1FD1EF5D003A7AC9 /* Sources */,
 				BF8BEF0C1FD1EF5D003A7AC9 /* Headers */,
@@ -298,7 +303,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
-				BUNDLE_LOADER = "/Users/denty/junk/postgresql-10.1/src/backend/postgres";
+				BUNDLE_LOADER = "$(PG_HOME)/bin/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
@@ -310,20 +315,18 @@
 				EXECUTABLE_PREFIX = "";
 				HEADER_SEARCH_PATHS = "";
 				"HEADER_SEARCH_PATHS[arch=*]" = "";
-				INSTALL_PATH = "/Users/denty/junk/postgresql-10.1/lib/";
-				LIBRARY_SEARCH_PATHS = (
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"",
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/port\"",
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/common\"",
-				);
+				INSTALL_PATH = "$(PG_HOME)/lib/";
+				LIBRARY_SEARCH_PATHS = "$(PG_HOME)/lib";
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
-				OBJROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
+				OBJROOT = "";
+				OTHER_LDFLAGS = "-lpq";
+				PG_HOME = "/Users/denty/junk/postgresql-10.1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
-				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
-				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/../../../junk/postgresql-10.1/src/include\" \"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"";
+				SYMROOT = "";
+				USER_HEADER_SEARCH_PATHS = "$(PG_HOME)/include $(PG_HOME)/include/server $(PG_HOME)/include/postgresql/server";
 			};
 			name = Debug;
 		};
@@ -331,7 +334,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = YES;
-				BUNDLE_LOADER = "/Users/denty/junk/postgresql-10.1/src/backend/postgres";
+				BUNDLE_LOADER = "$(PG_HOME)/bin/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
@@ -342,20 +345,18 @@
 				EXECUTABLE_EXTENSION = so;
 				EXECUTABLE_PREFIX = "";
 				HEADER_SEARCH_PATHS = "";
-				INSTALL_PATH = "/Users/denty/junk/postgresql-10.1/lib/";
-				LIBRARY_SEARCH_PATHS = (
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"",
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/port\"",
-					"\"$(SRCROOT)/../../../junk/postgresql-10.1/src/common\"",
-				);
+				INSTALL_PATH = "$(PG_HOME)/lib/";
+				LIBRARY_SEARCH_PATHS = "$(PG_HOME)/lib";
 				LINK_WITH_STANDARD_LIBRARIES = YES;
 				MACH_O_TYPE = mh_bundle;
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
-				OBJROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
+				OBJROOT = "";
+				OTHER_LDFLAGS = "-lpq";
+				PG_HOME = "/Users/denty/junk/postgresql-10.1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
-				SYMROOT = "/Users/denty/junk/postgresql-10.1/contrib/postgres_fdw/";
-				USER_HEADER_SEARCH_PATHS = "\"$(SRCROOT)/../../../junk/postgresql-10.1/src/include\" \"$(SRCROOT)/../../../junk/postgresql-10.1/src/interfaces/libpq\"";
+				SYMROOT = "";
+				USER_HEADER_SEARCH_PATHS = "$(PG_HOME)/include $(PG_HOME)/include/server $(PG_HOME)/include/postgresql/server";
 			};
 			name = Release;
 		};
