@@ -1,0 +1,19 @@
+explain (VERBOSE, COSTS OFF) select * from (select key, COUNT (value) from test group by key) x;
+                           QUERY PLAN                            
+-----------------------------------------------------------------
+ Finalize GroupAggregate
+   Output: test.key, count(test.value)
+   Group Key: test.key
+   ->  Sort
+         Output: test.key, (PARTIAL count(test.value))
+         Sort Key: test.key
+         ->  Gather
+               Output: test.key, (PARTIAL count(test.value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: test.key, PARTIAL count(test.value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: test.key, test.value
+(14 rows)
+

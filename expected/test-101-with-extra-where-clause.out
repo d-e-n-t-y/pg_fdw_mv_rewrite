@@ -1,0 +1,15 @@
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb where key = 'key2' group by key;
+                                                  QUERY PLAN                                                  
+--------------------------------------------------------------------------------------------------------------
+ Foreign Scan
+   Output: key, (count(value))
+   Relations: Aggregate on (public.test_lb)
+   Remote SQL: SELECT key, count FROM public.test_mv1 WHERE ((key = 'key2'::text)) AND ((key = 'key2'::text))
+(4 rows)
+
+select key, COUNT (value) from test_lb where key = 'key2' group by key;
+ key  |  count  
+------+---------
+ key2 | 1000000
+(1 row)
+
