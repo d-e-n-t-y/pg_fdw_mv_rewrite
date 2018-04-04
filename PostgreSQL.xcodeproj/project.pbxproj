@@ -41,23 +41,21 @@
 		BF8BEEE81FD1E590003A7AC9 /* connection.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connection.c; sourceTree = "<group>"; };
 		BF8BEEE91FD1E590003A7AC9 /* deparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = deparse.c; sourceTree = "<group>"; };
 		BF8BEEEA1FD1E590003A7AC9 /* deparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = deparse.h; sourceTree = "<group>"; };
-		BF8BEEEB1FD1E590003A7AC9 /* expected */ = {isa = PBXFileReference; lastKnownFileType = folder; path = expected; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		BF8BEEED1FD1E590003A7AC9 /* option.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = option.c; sourceTree = "<group>"; };
 		BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1.sql"; sourceTree = "<group>"; };
 		BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = postgres_fdw.c; sourceTree = "<group>"; };
 		BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pg_fdw_mv_rewrite.control; sourceTree = "<group>"; };
 		BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = postgres_fdw.h; sourceTree = "<group>"; };
-		BF8BEEF21FD1E590003A7AC9 /* setup.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = setup.sql; sourceTree = "<group>"; };
 		BF8BEEF31FD1E590003A7AC9 /* shippable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = shippable.c; sourceTree = "<group>"; };
-		BF8BEEF41FD1E590003A7AC9 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
-		BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = postgres_fdw.sql; path = sql/postgres_fdw.sql; sourceTree = "<group>"; };
 		BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = pg_fdw_mv_rewrite.0.3.so; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF967BFA20666F5E001F9A45 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpq.5.10.dylib"; sourceTree = "<group>"; };
 		BF967BFC20667049001F9A45 /* libpgtypes.3.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpgtypes.3.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpgtypes.3.10.dylib"; sourceTree = "<group>"; };
 		BF967BFE2066708D001F9A45 /* libecpg.6.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libecpg.6.10.dylib; path = "../../../junk/postgresql-10.1/lib/libecpg.6.10.dylib"; sourceTree = "<group>"; };
 		BF967C0020667190001F9A45 /* libpgcommon.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpgcommon.a; path = "../../../junk/postgresql-10.1/lib/libpgcommon.a"; sourceTree = "<group>"; };
 		BF967C02206671A8001F9A45 /* libpgport.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpgport.a; path = "../../../junk/postgresql-10.1/lib/libpgport.a"; sourceTree = "<group>"; };
+		BFAF94FD20750260006EA765 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
+		BFAF94FE20750AB1006EA765 /* expected */ = {isa = PBXFileReference; lastKnownFileType = folder; path = expected; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,20 +72,13 @@
 		BF8BEEDD1FD1E500003A7AC9 = {
 			isa = PBXGroup;
 			children = (
-				BF8BEEEB1FD1E590003A7AC9 /* expected */,
 				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
-				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
-				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
-				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
-				BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */,
-				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
-				BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
-				BF8BEEF21FD1E590003A7AC9 /* setup.sql */,
+				BFAF94FD20750260006EA765 /* sql */,
+				BFAF94FE20750AB1006EA765 /* expected */,
 				BF08E98D206649E3006F2FE9 /* test.sh */,
-				BF8BEEF41FD1E590003A7AC9 /* sql */,
-				BF8BEEF51FD1E590003A7AC9 /* postgres_fdw.sql */,
+				BFAF94FF20751B7C006EA765 /* Control files */,
 				BF8BEEFC1FD1EBD0003A7AC9 /* Products */,
 				BF8BEF171FD1EFD4003A7AC9 /* Frameworks */,
 			);
@@ -134,6 +125,19 @@
 				BF5A26901FD95A0600E3AD72 /* equalswalker.h */,
 			);
 			name = Headers;
+			sourceTree = "<group>";
+		};
+		BFAF94FF20751B7C006EA765 /* Control files */ = {
+			isa = PBXGroup;
+			children = (
+				BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */,
+				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
+				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
+				BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */,
+				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
+				BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */,
+			);
+			name = "Control files";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
