@@ -1,0 +1,16 @@
+explain (VERBOSE, COSTS OFF) select key, 'key=' || key, COUNT (value) from test_lb group by key;
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
+ Foreign Scan
+   Output: key, (('key='::text || key)), (count(value))
+   Relations: Aggregate on (public.test_lb)
+   Remote SQL: SELECT key, ('key='::text || key), count FROM public.test_mv1
+(4 rows)
+
+select key, 'key=' || key, COUNT (value) from test_lb group by key;
+ key  | ?column? |  count  
+------+----------+---------
+ key1 | key=key1 |      10
+ key2 | key=key2 | 1000000
+(2 rows)
+

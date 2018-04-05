@@ -1,0 +1,19 @@
+-- FIXME: re-grouping based on a strict superset of MV group by terms is not currently supported
+explain (VERBOSE, COSTS OFF) select key, hidden, COUNT (value) from test_lb group by key, hidden;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ HashAggregate
+   Output: key, hidden, count(value)
+   Group Key: test_lb.key, test_lb.hidden
+   ->  Foreign Scan on public.test_lb
+         Output: key, hidden, value
+         Remote SQL: SELECT key, hidden, value FROM public.test
+(6 rows)
+
+select key, hidden, COUNT (value) from test_lb group by key, hidden;
+ key  | hidden  |  count  
+------+---------+---------
+ key1 | hidden1 |      10
+ key2 | hidden2 | 1000000
+(2 rows)
+
