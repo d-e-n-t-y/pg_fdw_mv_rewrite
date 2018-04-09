@@ -4274,7 +4274,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                                             NIL,	/* no pathkeys */
                                             NULL,	/* no required_outer */
                                             NULL,
-                                            fdw_private);	/* no fdw_private */
+                                            fdw_private);
         
         /* Add generated path into grouped_rel by add_path(). */
         add_path(grouped_rel, (Path *) grouppath);
