@@ -4099,8 +4099,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                               StringInfo mv_name, StringInfo mv_schema, StringInfo mv_definition,
                               StringInfo *alternative_query)
 {
-    // First, copy some structures from the grouped_rel. We'll begin the actual
-    // transformation later.
     List /* Expr* */ *transformed_clist = NIL;
     List /* TargetEntry * */ *transformed_tlist = list_copy (grouped_tlist);
     
@@ -4110,9 +4108,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     Query *parsed_mv_query = parse_select_query (grouped_rel, (const char *) mv_definition->data);
     
-    // 1. Check the GROUP BY clause: it must match exactly
-    //elog(INFO, "%s: checking GROUP BY clauses...", __func__);
-    
+    // 1. Check the GROUP BY clause: it must match exactly.
     if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
         return false;
     
@@ -4125,51 +4121,28 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     List *additional_where_clauses = NIL;
     
-    // 2. Check the FROM and WHERE clauses: they must match exactly
-    //elog(INFO, "%s: checking FROM clauses...", __func__);
+    // 2. Check the FROM and WHERE clauses: they must match exactly.
     if (!check_from_join_clauses_for_matview (root, parsed_mv_query, grouped_rel, &additional_where_clauses,
                                               &transform_todo_list))
         return false;
     
-    // 4. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
+    // 3. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
     //    evaluated as part of the WHERE clause procesing.)
     process_having_clauses (root, parsed_mv_query, grouped_rel, &additional_where_clauses, &transform_todo_list);
     
-    // FIXME: 3a. Allow more WHERE clauses only where they source from MV tlist cols
-    
+    // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
     if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, grouped_rel, additional_where_clauses,
                                                        &transformed_clist, &transform_todo_list))
         return false;
     
-    // FIXME: 5. Consider computing any missing aggregates from other components
-    
-    // 6. Check the SELECT clauses: they must be a subset
-    //elog(INFO, "%s: checking SELECT clauses...", __func__);
-    
+    // 5. Check the SELECT clauses: they must be a subset of the MV's tList
     if (!check_select_clauses_source_from_matview_tlist (root, parsed_mv_query, grouped_rel, grouped_tlist, &transform_todo_list))
         return false;
     
-    // FIXME: 6a. Allow SELECT of an expression based on the fundamental
-    // MV's select tList. This may necessitate re-computing the expression list
-    // to contain direct ColumnRefs instead of Exprs where those are matched.
-    // In turn, this reuires recursive processing of the query tree to search
-    // for matches. After that, the whole matter becomes a regular check for
-    // push-down-ability.
-    
-    // FIXME: 7. Create a new grouped_rel and transform it
-    // FIXME: 7.1: Copy the grouped_rel
-    // FIXME: 7.2: Transform the grouped_rel.relid to target the MV
-    // FIXME: 7.2: Fix-up the RTE to match the MV
-    // FIXME: 7.3: Transform exprs that match exprs in the MV into Vars
+    // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
     transformed_tlist = transform_todos (transformed_tlist, &transform_todo_list);
-    //elog(INFO, "%s: transformed target list: %s", __func__, nodeToString (transformed_tlist));
     
-    // FIXME: 7.3: Fix-up the other remaining Var pointers
-    // FIXME: 7.4: Remove the residual GROUP BY clause
-    // FIXME: 7.5: Transform any HAVING clauses into WHERE clauses.
-    
-    // Build the alternative query.
-    
+    // 7. Build the alternative query.
     *alternative_query = makeStringInfo();
     {
         /* Fill portions of context common to upper, join and base relation */
@@ -4182,7 +4155,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
         context.colnames = matview_tlist_colnames (parsed_mv_query);
         
         appendStringInfoString (*alternative_query, "SELECT ");
-        // FIXME: this seems not to work; make a more simplistic deparser to pull directly from the parsed MV query.
         
         deparseExplicitTargetList (transformed_tlist, NULL, &context);
         
@@ -4190,15 +4162,12 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
         
         List *quals = transform_todos (transformed_clist, &transform_todo_list);
         
-        // FIXME: this seems not to append the JOIN info...
-        
-        //elog(INFO, "%s: transformed quals list: %s", __func__, nodeToString (quals));
-        
         if (quals != NIL)
         {
             appendStringInfo (*alternative_query, " WHERE ");
             appendConditions (quals, &context);
         }
+
         // FIXME: do we need to append the ORDER BY clause too?
     }
 
@@ -4223,26 +4192,18 @@ void add_rewritten_mv_paths (PlannerInfo *root,
 
     List	*retrieved_attrs;
     
-    // Deparse:
-    //   1. the input relation (i.e., the ungrouped source table)
-    //   2. the grouped relation (i.e., the input relation with all the aggregates applied)
     {
         StringInfoData rel_sql;
         
         initStringInfo(&rel_sql);
         
+        // FIXME: we must deparse otherwise retrieved_attrs won't be initialised... in future
+        // deparsing just to get the retrieved_attrs list seems quite wasteful; mayeb we can
+        // compute it differently.
         deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
-        
-        //elog(INFO, "%s: grouped_rel: SQL: %s", __func__, rel_sql.data);
-        
-        if (input_rel != NULL)
-        {
-            initStringInfo (&rel_sql);
-            
-            deparse_statement_for_mv_search (&rel_sql, NULL, root, input_rel);
-        
-            //elog(INFO, "%s: input_rel: SQL: %s", __func__, rel_sql.data);
-        }
+
+        if (fpinfo->log_match_progress)
+            elog(INFO, "%s: original (un-rewritten) query: %s", __func__, rel_sql.data);
     }
     
     List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
