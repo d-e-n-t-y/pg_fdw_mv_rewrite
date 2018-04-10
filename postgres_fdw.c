@@ -2777,6 +2777,8 @@ apply_server_options(PgFdwRelationInfo *fpinfo)
             fpinfo->trace_shippable_check = defGetBoolean(def);
         else if (strcmp(def->defname, "trace_group_clause_source_check") == 0)
             fpinfo->trace_group_clause_source_check = defGetBoolean(def);
+        else if (strcmp(def->defname, "trace_having_clause_source_check") == 0)
+            fpinfo->trace_having_clause_source_check = defGetBoolean(def);
         else if (strcmp(def->defname, "trace_select_clause_source_check") == 0)
             fpinfo->trace_select_clause_source_check = defGetBoolean(def);
         else if (strcmp(def->defname, "log_match_progress") == 0)
@@ -2843,6 +2845,7 @@ merge_fdw_options(PgFdwRelationInfo *fpinfo,
     fpinfo->trace_parse_select_query = fpinfo_o->trace_parse_select_query;
     fpinfo->trace_shippable_check = fpinfo_o->trace_shippable_check;
     fpinfo->trace_group_clause_source_check = fpinfo_o->trace_group_clause_source_check;
+    fpinfo->trace_having_clause_source_check = fpinfo_o->trace_having_clause_source_check;
     fpinfo->trace_select_clause_source_check = fpinfo_o->trace_select_clause_source_check;
     fpinfo->log_match_progress = fpinfo_o->log_match_progress;
 
@@ -3981,6 +3984,26 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     return true;
 }
 
+static void
+process_having_clauses (PlannerInfo *root,
+                        Query *parsed_mv_query,
+                        RelOptInfo *grouped_rel,
+                        List **additional_where_clauses,
+                        struct transform_todo *todo_list)
+{
+    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+    
+    List /* Expr * */ *havingQual = fpinfo->remote_conds;
+
+    if (fpinfo->trace_having_clause_source_check)
+        elog(INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
+    
+    // Having qualifiers may simply be appended to our working set of additional WHERE clauses:
+    // they will be checked for validity against the MV tList later.
+    
+    *additional_where_clauses = list_concat (*additional_where_clauses, havingQual);
+}
+
 static bool
 check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                Query *parsed_mv_query,
@@ -4108,14 +4131,15 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                                               &transform_todo_list))
         return false;
     
+    // 4. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
+    //    evaluated as part of the WHERE clause procesing.)
+    process_having_clauses (root, parsed_mv_query, grouped_rel, &additional_where_clauses, &transform_todo_list);
+    
     // FIXME: 3a. Allow more WHERE clauses only where they source from MV tlist cols
     
     if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, grouped_rel, additional_where_clauses,
                                                        &transformed_clist, &transform_todo_list))
         return false;
-    
-    // 4. Check for HAVING clause: push them in to the WHERE list
-    //elog(INFO, "%s: checking HAVING clauses...", __func__);
     
     // FIXME: 5. Consider computing any missing aggregates from other components
     

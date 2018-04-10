@@ -1,0 +1,15 @@
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key having count (value) > 100;
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ Foreign Scan
+   Output: key, (count(value))
+   Relations: Aggregate on (public.test_lb)
+   Remote SQL: SELECT key, count FROM public.test_mv1 WHERE ((count > 100))
+(4 rows)
+
+select key, COUNT (value) from test_lb group by key having count (value) > 100;
+ key  |  count  
+------+---------
+ key2 | 1000000
+(1 row)
+
