@@ -4108,7 +4108,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                                               &transform_todo_list))
         return false;
     
-    // 3a. Allow more WHERE clauses only where they source from MV tlist cols
+    // FIXME: 3a. Allow more WHERE clauses only where they source from MV tlist cols
     
     if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, grouped_rel, additional_where_clauses,
                                                        &transformed_clist, &transform_todo_list))
