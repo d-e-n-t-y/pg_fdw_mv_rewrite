@@ -34,6 +34,8 @@
 		BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.3.sql"; sourceTree = "<group>"; };
 		BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2--0.3.sql"; sourceTree = "<group>"; };
 		BF08E98D206649E3006F2FE9 /* test.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = test.sh; sourceTree = "<group>"; };
+		BF247F19207C8B0D0074D5F9 /* pg_fdw_mv_rewrite--0.3--0.4.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.3--0.4.sql"; sourceTree = "<group>"; };
+		BF247F1A207C8B520074D5F9 /* pg_fdw_mv_rewrite--0.4.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.4.sql"; sourceTree = "<group>"; };
 		BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2.sql"; sourceTree = "<group>"; };
 		BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1--0.2.2.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
@@ -134,8 +136,10 @@
 				BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */,
 				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
 				BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */,
+				BF247F1A207C8B520074D5F9 /* pg_fdw_mv_rewrite--0.4.sql */,
 				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
 				BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */,
+				BF247F19207C8B0D0074D5F9 /* pg_fdw_mv_rewrite--0.3--0.4.sql */,
 			);
 			name = "Control files";
 			sourceTree = "<group>";
