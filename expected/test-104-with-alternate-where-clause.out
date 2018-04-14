@@ -1,12 +1,13 @@
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb where hidden = 'hidden3' group by key;
-                                                                QUERY PLAN                                                                
-------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                 QUERY PLAN                                                                                                 
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Foreign Scan
    Output: key, (count(value))
    Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, count(value) FROM public.test WHERE ((hidden = 'hidden3'::text)) AND ((hidden = 'hidden3'::text)) GROUP BY key
+   Remote SQL: SELECT key, count(value) FROM public.test WHERE ((hidden = 'hidden3'::text)) AND ((hidden = 'hidden3'::text)) AND ((hidden = 'hidden3'::text)) AND ((hidden = 'hidden3'::text)) GROUP BY key
 (4 rows)
 
+-- FIXME: although the balooning of WHERE cluases seems harmless, we should find out why it is happening.
 select key, COUNT (value) from test_lb where hidden = 'hidden3' group by key;
  key | count 
 -----+-------
