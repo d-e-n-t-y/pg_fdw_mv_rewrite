@@ -1,0 +1,32 @@
+explain (VERBOSE, COSTS OFF) select key, case when count(value) < 10 then 'several'
+        when count(value) < 100 then 'tens'
+        when count(value) < 1000 then 'hundreds'
+        when count(value) < 10000 then 'thousands'
+        when count(value) < 100000 then 'tens of thousands'
+        when count(value) < 1000000 then 'hundreds of thousands'
+        when count(value) < 10000000 then 'millions'
+        else 'many'
+    end as quantity from test_lb group by key;
+                                                                                                                                                                                                         QUERY PLAN                                                                                                                                                                                                          
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Foreign Scan
+   Output: key, (CASE WHEN (count(value) < 10) THEN 'several'::text WHEN (count(value) < 100) THEN 'tens'::text WHEN (count(value) < 1000) THEN 'hundreds'::text WHEN (count(value) < 10000) THEN 'thousands'::text WHEN (count(value) < 100000) THEN 'tens of thousands'::text WHEN (count(value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
+   Relations: Aggregate on (public.test_lb)
+   Remote SQL: SELECT key, quantity FROM public.test_expr_mv1
+(4 rows)
+
+select key, case when count(value) < 10 then 'several'
+        when count(value) < 100 then 'tens'
+        when count(value) < 1000 then 'hundreds'
+        when count(value) < 10000 then 'thousands'
+        when count(value) < 100000 then 'tens of thousands'
+        when count(value) < 1000000 then 'hundreds of thousands'
+        when count(value) < 10000000 then 'millions'
+        else 'many'
+    end as quantity from test_lb group by key;
+ key  | quantity 
+------+----------
+ key1 | tens
+ key2 | millions
+(2 rows)
+

@@ -2659,7 +2659,7 @@ deparseCaseExpr(CaseExpr *node, deparse_expr_cxt *context)
 {
     StringInfo	buf = context->buf;
     
-    appendStringInfo(buf, "CASE ");
+    appendStringInfo(buf, "CASE");
 
     ListCell   *when;
     foreach (when, node->args)
@@ -2686,7 +2686,7 @@ deparseCaseWhenExpr(CaseWhen *node, deparse_expr_cxt *context)
 {
     StringInfo	buf = context->buf;
     
-    appendStringInfo(buf, "WHEN ");
+    appendStringInfo(buf, " WHEN ");
     
     deparseExpr((Expr *) node->expr, context);
     
