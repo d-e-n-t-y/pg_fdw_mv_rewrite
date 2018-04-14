@@ -19,6 +19,7 @@
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "catalog/pg_class.h"
+#include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
@@ -45,6 +46,7 @@
 #include "utils/rel.h"
 #include "utils/sampling.h"
 #include "utils/selfuncs.h"
+#include "utils/regproc.h"
 #include "tcop/tcopprot.h"
 
 PG_MODULE_MAGIC;
@@ -3363,13 +3365,12 @@ find_related_matviews_for_relation (PlannerInfo *root,
                                     RelOptInfo *input_rel, // if grouping
                                     RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                                     List /* StringInfo */ **mvs_schema,
-                                    List /* StringInfo */ **mvs_name,
-                                    List /* StringInfo */ **mvs_definition)
+                                    List /* StringInfo */ **mvs_name)
 {
     UserMapping *mapping;
     PGconn	   *conn;
     
-    *mvs_schema = NIL, *mvs_name = NIL, *mvs_definition = NIL;
+    *mvs_schema = NIL, *mvs_name = NIL;
     
     Bitmapset *relids = NULL;
     if (input_rel != NULL)
@@ -3390,7 +3391,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
     initStringInfo (&find_mvs_query);
     
     appendStringInfoString (&find_mvs_query,
-                            "SELECT v.schemaname, v.matviewname, v.definition"
+                            "SELECT v.schemaname, v.matviewname"
                             " FROM "
                             "   public.pgx_rewritable_matviews j, pg_matviews v"
                             " WHERE "
@@ -3456,12 +3457,9 @@ find_related_matviews_for_relation (PlannerInfo *root,
             appendStringInfoString (schema, PQgetvalue(res, i, 0));
             StringInfo name = makeStringInfo();
             appendStringInfoString (name, PQgetvalue(res, i, 1));
-            StringInfo definition = makeStringInfo();
-            appendStringInfoString (definition, PQgetvalue(res, i, 2));
             
             *mvs_schema = lappend (*mvs_schema, schema);
             *mvs_name = lappend (*mvs_name, name);
-            *mvs_definition = lappend (*mvs_definition, definition);
         }
         PQclear(res);
         ReleaseConnection(conn);
@@ -3477,37 +3475,61 @@ find_related_matviews_for_relation (PlannerInfo *root,
 }
 
 static Query *
-parse_select_query (RelOptInfo *grouped_rel, const char *mv_sql)
+get_mv_query (RelOptInfo *grouped_rel, const char *mv_name)
 {
     PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
 
-    RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
-    
-    if (fpinfo->trace_parse_select_query)
-        elog(INFO, "%s: parse tree: %s", __func__, nodeToString (mv_parsetree));
-    
-    List *qtList = pg_analyze_and_rewrite (mv_parsetree, mv_sql, NULL, 0, NULL);
-    
-    Query *query = list_nth_node (Query, qtList, 0);
-    
-    ListCell *e;
-    foreach (e, query->targetList)
-    {
-        TargetEntry *tle = lfirst_node (TargetEntry, e);
-        
-        if (fpinfo->trace_parse_select_query)
-            elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
-        
-        Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
-        
-        tle->expr = new_expr;
+    RangeVar    *matviewRV;
+    Oid         matviewOid;
+    Relation    matviewRel;
+    RewriteRule *rule;
+    List       *actions;
+    Query       *query;
 
-        if (fpinfo->trace_parse_select_query)
-            elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
-    }
+    LOCKMODE    lockmode = NoLock; // FIXME: is this the correct lockmode?
+
+    matviewRV = makeRangeVarFromNameList (stringToQualifiedNameList (mv_name));
+
+    matviewOid = RangeVarGetRelid (matviewRV, lockmode, false);
+
+    matviewRel = heap_open(matviewOid, NoLock);
     
+    /* Make sure it is a materialized view. */
+    if (matviewRel->rd_rel->relkind != RELKIND_MATVIEW)
+        elog(ERROR, "\"%s\" is not a materialized view", RelationGetRelationName(matviewRel));
+
+    /* We don't allow an oid column for a materialized view. */
+    Assert(!matviewRel->rd_rel->relhasoids);
+    
+    /*
+     * Check that everything is correct for a refresh. Problems at this point
+     * are internal errors, so elog is sufficient.
+     */
+    if (matviewRel->rd_rel->relhasrules == false ||
+        matviewRel->rd_rules->numLocks < 1)
+        elog(ERROR, "materialized view \"%s\" is missing rewrite information", RelationGetRelationName(matviewRel));
+    
+    if (matviewRel->rd_rules->numLocks > 1)
+        elog(ERROR, "materialized view \"%s\" has too many rules", RelationGetRelationName(matviewRel));
+    
+    rule = matviewRel->rd_rules->rules[0];
+    if (rule->event != CMD_SELECT || !(rule->isInstead))
+        elog(ERROR, "the rule for materialized view \"%s\" is not a SELECT INSTEAD OF rule", RelationGetRelationName(matviewRel));
+    
+    actions = rule->actions;
+    if (list_length(actions) != 1)
+        elog(ERROR, "the rule for materialized view \"%s\" is not a single action", RelationGetRelationName(matviewRel));
+    
+    /*
+     * The stored query was rewritten at the time of the MV definition, but
+     * has not been scribbled on by the planner.
+     */
+    query = linitial_node(Query, actions);
+    
+    heap_close (matviewRel, NoLock);
+
     if (fpinfo->trace_parse_select_query)
-        elog(INFO, "%s: query: %s", __func__, nodeToString (query));
+        elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
 
     return query;
 }
@@ -4096,7 +4118,7 @@ static bool
 evaluate_matview_for_rewrite (PlannerInfo *root,
                               RelOptInfo *grouped_rel,
                               List *grouped_tlist,
-                              StringInfo mv_name, StringInfo mv_schema, StringInfo mv_definition,
+                              StringInfo mv_name, StringInfo mv_schema,
                               StringInfo *alternative_query)
 {
     List /* Expr* */ *transformed_clist = NIL;
@@ -4106,7 +4128,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
-    Query *parsed_mv_query = parse_select_query (grouped_rel, (const char *) mv_definition->data);
+    Query *parsed_mv_query = get_mv_query (grouped_rel, (const char *) mv_name->data);
     
     // 1. Check the GROUP BY clause: it must match exactly.
     if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
@@ -4185,10 +4207,10 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     //elog(INFO, "%s: searching for MVs...", __func__);
     
     // See if there are any candidate MVs...
-    List *mvs_schema, *mvs_name, *mvs_definition;
+    List *mvs_schema, *mvs_name;
     
     find_related_matviews_for_relation (root, input_rel, inner_rel, outer_rel,
-                                        &mvs_schema, &mvs_name, &mvs_definition);
+                                        &mvs_schema, &mvs_name);
 
     List	*retrieved_attrs;
     
@@ -4209,17 +4231,17 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
     
     // Evaluate each MV in turn...
-    ListCell   *sc, *nc, *dc;
-    forthree (sc, mvs_schema, nc, mvs_name, dc, mvs_definition)
+    ListCell   *sc, *nc;
+    forboth (sc, mvs_schema, nc, mvs_name)
     {
-        StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc), mv_definition = lfirst(dc);
+        StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc);
         
         if (fpinfo->log_match_progress)
             elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
         StringInfo alternative_query;
         
-        if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, mv_definition, &alternative_query))
+        if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
             continue;
         
         //elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
