@@ -1,0 +1,39 @@
+-- FIXME: wrt ORDER BY: hmmm... this seems to be fine... but not really sure why it is working.
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key order by key;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test_lb.key
+   ->  Foreign Scan
+         Output: key, (count(value))
+         Relations: Aggregate on (public.test_lb)
+         Remote SQL: SELECT key, count FROM public.test_mv1
+(7 rows)
+
+select key, COUNT (value) from test_lb group by key order by key;
+ key  |  count  
+------+---------
+ key1 |      10
+ key2 | 1000000
+(2 rows)
+
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key order by key desc;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test_lb.key DESC
+   ->  Foreign Scan
+         Output: key, (count(value))
+         Relations: Aggregate on (public.test_lb)
+         Remote SQL: SELECT key, count FROM public.test_mv1
+(7 rows)
+
+select key, COUNT (value) from test_lb group by key order by key desc;
+ key  |  count  
+------+---------
+ key2 | 1000000
+ key1 |      10
+(2 rows)
+
