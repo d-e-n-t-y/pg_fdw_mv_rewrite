@@ -1,0 +1,15 @@
+-- alter server loopback options (add log_match_progress 'true');
+explain verbose select key, case when count(value) < 10 then 'several' when count(value) < 100 then 'tens' when count(value) < 1000 then 'hundreds' when count(value) < 10000 then 'thousands' when count(value) < 100000 then 'tens of thousands' when count(value) < 1000000 then 'hundreds of thousands' when count(value) < 10000000 then 'millions' else 'many' end as quantity FROM test_lb GROUP BY key union all select key, count(value)::text FROM test_lb GROUP BY key;
+                                                                                                                                                                                                                                            QUERY PLAN                                                                                                                                                                                                                                             
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Append  (cost=0.00..67.60 rows=2080 width=64)
+   ->  Foreign Scan  (cost=0.00..18.80 rows=880 width=64)
+         Output: test_lb.key, (CASE WHEN (count(test_lb.value) < 10) THEN 'several'::text WHEN (count(test_lb.value) < 100) THEN 'tens'::text WHEN (count(test_lb.value) < 1000) THEN 'hundreds'::text WHEN (count(test_lb.value) < 10000) THEN 'thousands'::text WHEN (count(test_lb.value) < 100000) THEN 'tens of thousands'::text WHEN (count(test_lb.value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(test_lb.value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
+         Relations: Aggregate on (public.test_lb)
+         Remote SQL: SELECT key, quantity FROM public.test_expr_mv1
+   ->  Foreign Scan  (cost=0.00..28.00 rows=1200 width=64)
+         Output: test_lb_1.key, ((count(test_lb_1.value))::text)
+         Relations: Aggregate on (public.test_lb)
+         Remote SQL: SELECT key, count::text FROM public.test_mv1
+(9 rows)
+

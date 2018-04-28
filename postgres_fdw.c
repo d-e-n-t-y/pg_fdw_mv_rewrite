@@ -2901,8 +2901,6 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     Path	   *epq_path;		/* Path to create plan to be executed when
                                  * EvalPlanQual gets triggered. */
 
-    //elog(INFO, "%s (root=%p, joinrel=%p, outerrel=%p, innerrel=%p, jointype=%d, extra=%p)", __func__, root, joinrel, outerrel, innerrel, jointype, extra);
-
     /*
      * Skip if this join combination has been considered already.
      */
@@ -2948,6 +2946,9 @@ postgresGetForeignJoinPaths(PlannerInfo *root,
     
     if (!foreign_join_ok(root, joinrel, jointype, outerrel, innerrel, extra))
     {
+        if (fpinfo->log_match_progress)
+            elog(INFO, "%s: foreign join not OK for query: ", __func__, nodeToString (joinrel));
+
         /* Free path required for EPQ if we copied one; we don't need it now */
         if (epq_path)
             pfree(epq_path);
@@ -3260,8 +3261,6 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
 {
     PgFdwRelationInfo *fpinfo;
     
-    //elog(INFO, "%s (root=%p, stage=%d, input_rel=%p, output_rel=%p)", __func__, root, stage, input_rel, output_rel);
-    
     /*
      * If input rel is not safe to pushdown, then simply return as we cannot
      * perform any post-join operations on the foreign server.
@@ -3272,7 +3271,12 @@ postgresGetForeignUpperPaths(PlannerInfo *root, UpperRelationKind stage,
     
     /* Ignore stages we don't support; and skip any duplicate calls. */
     if (stage != UPPERREL_GROUP_AGG || output_rel->fdw_private)
+    {
+        if (((PgFdwRelationInfo *) input_rel->fdw_private)->log_match_progress)
+            elog(INFO, "%s: upper path stage (%d) not supported for query: %s", __func__, stage, nodeToString (input_rel));
+
         return;
+    }
     
     fpinfo = (PgFdwRelationInfo *) palloc0(sizeof(PgFdwRelationInfo));
     fpinfo->pushdown_safe = false;
@@ -4039,9 +4043,12 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
     if (fpinfo->trace_where_clause_source_check)
         elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
     
+    // Copy the list so we don't stomp on it when we append
+    List *quals = list_copy (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds);
+    quals = list_concat (quals, additional_clauses);
+
     ListCell   *lc;
-    foreach (lc, list_concat (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds,
-                              additional_clauses))
+    foreach (lc, quals)
     {
         Expr *expr = lfirst (lc);
         
@@ -4124,7 +4131,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     List /* Expr* */ *transformed_clist = NIL;
     List /* TargetEntry * */ *transformed_tlist = list_copy (grouped_tlist);
     
-    struct transform_todo transform_todo_list = { NULL, NIL };
+    struct transform_todo transform_todo_list = { NIL, NIL };
     
     //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
