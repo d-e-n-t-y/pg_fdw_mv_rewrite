@@ -3309,19 +3309,19 @@ deparseSortGroupClause(Index ref, List *tlist, deparse_expr_cxt *context)
 static bool
 is_subquery_var(Var *node, RelOptInfo *foreignrel, int *relno, int *colno)
 {
+	/*
+	 * If the given relation isn't a join relation, it doesn't have any lower
+	 * subqueries, so the Var isn't a subquery output column.
+	 */
+	if (!IS_JOIN_REL(foreignrel))
+	return false;
+
 	PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) foreignrel->fdw_private;
 	RelOptInfo *outerrel = fpinfo->outerrel;
 	RelOptInfo *innerrel = fpinfo->innerrel;
 
 	/* Should only be called in these cases. */
 	Assert(IS_SIMPLE_REL(foreignrel) || IS_JOIN_REL(foreignrel));
-
-	/*
-	 * If the given relation isn't a join relation, it doesn't have any lower
-	 * subqueries, so the Var isn't a subquery output column.
-	 */
-	if (!IS_JOIN_REL(foreignrel))
-		return false;
 
 	/*
 	 * If the Var doesn't belong to any lower subqueries, it isn't a subquery
