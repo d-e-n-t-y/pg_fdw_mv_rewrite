@@ -1,7 +1,7 @@
 # contrib/pg_fdw_mv_rewrite/Makefile
 
 MODULE_big = pg_fdw_mv_rewrite.0.4
-OBJS = postgres_fdw.o option.o deparse.o connection.o shippable.o equalwalker.o $(WIN32RES)
+OBJS = postgres_fdw.o option.o deparse.o connection.o shippable.o equalwalker.o extension.o $(WIN32RES)
 PGFILEDESC = "pg_fdw_mv_rewrite - MV-rewriting foreign data wrapper for PostgreSQL"
 TESTS = $(wildcard sql/*.sql)
 
@@ -10,9 +10,9 @@ SHLIB_LINK = $(libpq)
 
 EXTENSION = pg_fdw_mv_rewrite
 DATA = pg_fdw_mv_rewrite--0.1.sql \
-    pg_fdw_mv_rewrite--0.2.2.sql pg_fdw_mv_rewrite--0.1--0.2.2.sql \
-    pg_fdw_mv_rewrite--0.3.sql pg_fdw_mv_rewrite--0.2.2--0.3.sql \
-    pg_fdw_mv_rewrite--0.4.sql pg_fdw_mv_rewrite--0.3--0.4.sql
+	pg_fdw_mv_rewrite--0.2.2.sql pg_fdw_mv_rewrite--0.1--0.2.2.sql \
+	pg_fdw_mv_rewrite--0.3.sql pg_fdw_mv_rewrite--0.2.2--0.3.sql \
+	pg_fdw_mv_rewrite--0.4.sql pg_fdw_mv_rewrite--0.3--0.4.sql
 
 REGRESS = $(patsubst sql/%.sql,%,$(TESTS))
 

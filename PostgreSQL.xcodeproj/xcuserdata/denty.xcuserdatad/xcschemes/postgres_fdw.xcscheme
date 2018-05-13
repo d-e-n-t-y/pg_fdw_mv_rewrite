@@ -47,7 +47,7 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Run Script"
-               scriptText = "/Users/denty/junk/postgresql-10.1/bin/pg_ctl -D /Users/denty/junk/postgresql-10.1/dbdata-gr-fs20-10.1 -l /tmp/log stop&#10;/Users/denty/junk/postgresql-10.1/bin/pg_ctl -D /Users/denty/junk/postgresql-10.1/dbdata-gr-fs20-10.1 -l /tmp/log start">
+               scriptText = "env PG_HOME=/Users/denty/junk/postgresql-10.3 PGDATA=/tmp/58329 /Users/denty/junk/postgresql-10.3/bin/pg_ctl stop&#10;#env PG_HOME=/Users/denty/junk/postgresql-10.3 PGDATA=/tmp/58329 /Users/denty/junk/postgresql-10.3/bin/pg_ctl start">
             </ActionContent>
          </ExecutionAction>
       </PreActions>
@@ -56,13 +56,13 @@
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
                title = "Run Script"
-               scriptText = "/Users/denty/junk/postgresql-10.1/bin/pg_ctl -D /Users/denty/junk/postgresql-10.1/dbdata-gr-fs20-10.1 -l /tmp/log stop">
+               scriptText = "">
             </ActionContent>
          </ExecutionAction>
       </PostActions>
       <PathRunnable
          runnableDebuggingMode = "0"
-         FilePath = "/Users/denty/junk/postgresql-10.1/bin/psql">
+         FilePath = "/Users/denty/junk/postgresql-10.3/bin/postgres">
       </PathRunnable>
       <MacroExpansion>
          <BuildableReference
@@ -76,7 +76,7 @@
       <CommandLineArguments>
          <CommandLineArgument
             argument = "-p 5436"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-c &quot;explain verbose select ts_to_bucket (timestamp, &apos;minute&apos;, 15), avg (detail), category, subcategory from events_all_remote where category = &apos;BATTERY_LEVEL&apos; and subcategory = &apos;N/A&apos; and ts_to_bucket (timestamp, &apos;minute&apos;, 15) &gt;= &apos;2017-11-01 00:00:00+00&apos; and ts_to_bucket (timestamp, &apos;minute&apos;, 15) &lt; &apos;2017-11-25 00:00:00+00&apos; and hc1 = &apos;-999&apos; and  hc2 = &apos;6789144511AF&apos; group by hc1, hc2, category, subcategory, ts_to_bucket (timestamp, &apos;minute&apos;, 15) order by ts_to_bucket (timestamp, &apos;minute&apos;, 15);&quot;"
@@ -88,6 +88,14 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "-c &quot;select r.name, ts_to_bucket (e.timestamp, &apos;minute&apos;, 15), avg (e.detail), e.category, e.subcategory from room_remote r, events_all_remote e where e.category = &apos;BATTERY_LEVEL&apos; and e.subcategory = &apos;N/A&apos; and ts_to_bucket (e.timestamp, &apos;minute&apos;, 15) &gt;= &apos;2017-11-01 00:00:00+00&apos; and ts_to_bucket (e.timestamp, &apos;minute&apos;, 15) &lt; &apos;2017-11-25 00:00:00+00&apos; and e.hc1 = r.hc1 and  e.hc2 = r.hc2 and r.name = &apos;Bedroom 1&apos; group by r.name, e.hc1, e.hc2, e.category, e.subcategory, ts_to_bucket (e.timestamp, &apos;minute&apos;, 15) order by ts_to_bucket (e.timestamp, &apos;minute&apos;, 15);&quot;"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-p 58329 contrib_regression -c &quot;drop extension pg_fdw_mv_rewrite cascade; create extension pg_fdw_mv_rewrite; explain verbose select key, count (value) from test group by key;&quot;"
+            isEnabled = "NO">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "--single -D /tmp/58329 -d 5 contrib_regression"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

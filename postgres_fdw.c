@@ -15,6 +15,7 @@
 #include "postgres_fdw.h"
 #include "deparse.h"
 #include "equalswalker.h"
+#include "extension.h"
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -26,6 +27,7 @@
 #include "foreign/fdwapi.h"
 #include "funcapi.h"
 #include "miscadmin.h"
+#include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
@@ -35,7 +37,9 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/planmain.h"
+#include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
+#include "optimizer/subselect.h"
 #include "optimizer/var.h"
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
@@ -47,7 +51,9 @@
 #include "utils/sampling.h"
 #include "utils/selfuncs.h"
 #include "utils/regproc.h"
+#include "utils/snapmgr.h"
 #include "tcop/tcopprot.h"
+#include "server/executor/spi.h"
 
 PG_MODULE_MAGIC;
 
@@ -174,6 +180,16 @@ typedef struct
  * SQL functions
  */
 PG_FUNCTION_INFO_V1(pg_fdw_mv_rewrite_handler);
+
+static bool g_log_match_progress = true;
+static bool g_trace_match_progress = false;
+static bool g_trace_parse_select_query = false;
+static bool g_trace_group_clause_source_check = false;
+static bool g_trace_having_clause_source_check = false;
+static bool g_trace_where_clause_source_check = false;
+static bool g_trace_select_clause_source_check = false;
+static bool g_trace_join_clause_check = false;
+static bool g_debug_join_clause_check = false;
 
 /*
  * FDW callback routines
@@ -1130,6 +1146,153 @@ postgresGetForeignPlan(PlannerInfo *root,
                             fdw_scan_tlist,
                             fdw_recheck_quals,
                             outer_plan);
+}
+
+struct mv_rewrite_dest_receiver
+{
+	DestReceiver dest;
+	TupleTableSlot *slot;
+};
+
+static bool
+mv_rewrite_dest_receiveSlot (TupleTableSlot *slot,
+			     DestReceiver *self)
+{
+	// elog (INFO, "%s DestReceiver (%p)", __func__, self);
+    
+	struct mv_rewrite_dest_receiver *dest =
+    		(struct mv_rewrite_dest_receiver *) self;
+
+	// FIXME: do we need to copy the slot?
+	dest->slot = slot;
+
+	return true;
+}
+
+static void
+mv_rewrite_dest_startup (DestReceiver *self,
+			 int operation,
+			 TupleDesc typeinfo)
+{
+	// elog (INFO, "%s DestReceiver (%p)", __func__, self);
+}
+
+static void
+mv_rewrite_dest_shutdown (DestReceiver *self)
+{
+	// elog (INFO, "%s DestReceiver (%p)", __func__, self);
+}
+
+static void
+mv_rewrite_dest_destroy (DestReceiver *self)
+{
+	// elog (INFO, "%s DestReceiver (%p)", __func__, self);
+
+	// FIXME: should we pfree() ourselves?
+}
+
+typedef struct {
+	CustomScanState sstate;
+	Value /* String */ *query;
+	PlannedStmt *pstmt;
+	QueryDesc *qdesc;
+	Value /* String */ *competing_cost;
+} mv_rewrite_custom_scan_state;
+
+static void
+mv_rewrite_begin_scan (CustomScanState *node,
+		       EState *estate,
+		       int eflags)
+{
+	mv_rewrite_custom_scan_state *sstate = (mv_rewrite_custom_scan_state *) node;
+
+	// elog (INFO, "%s node (%p)", __func__, node);
+
+	PlannedStmt *pstmt = sstate->pstmt;
+
+	Snapshot    snap;
+
+	if (ActiveSnapshotSet())
+		snap = GetActiveSnapshot();
+	else
+		snap = InvalidSnapshot;
+    
+	struct mv_rewrite_dest_receiver *dest = palloc (sizeof (struct mv_rewrite_dest_receiver));
+	dest->dest.receiveSlot = mv_rewrite_dest_receiveSlot;
+	dest->dest.rStartup = mv_rewrite_dest_startup;
+	dest->dest.rShutdown = mv_rewrite_dest_shutdown;
+	dest->dest.rDestroy = mv_rewrite_dest_destroy;
+
+	QueryDesc *qdesc = CreateQueryDesc (pstmt,
+					    NULL,
+					    snap,
+					    InvalidSnapshot /* only support query */,
+					    (DestReceiver *) dest,
+					    NULL, NULL, 0);
+
+	sstate->qdesc = qdesc;
+
+	ExecutorStart (qdesc, eflags);
+}
+
+static TupleTableSlot *
+mv_rewrite_exec_scan (CustomScanState *node)
+{
+	mv_rewrite_custom_scan_state *sstate = (mv_rewrite_custom_scan_state *) node;
+
+	// elog (INFO, "%s node (%p)", __func__, node);
+
+	QueryDesc *qdesc = sstate->qdesc;
+
+	ExecutorRun (qdesc, ForwardScanDirection, 1, false);
+
+	struct mv_rewrite_dest_receiver *dest = (struct mv_rewrite_dest_receiver *) qdesc->dest;
+    
+	return dest->slot;
+}
+
+static void
+mv_rewrite_end_scan (CustomScanState *node)
+{
+	mv_rewrite_custom_scan_state *sstate = (mv_rewrite_custom_scan_state *) node;
+
+	// elog (INFO, "%s node (%p)", __func__, node);
+
+	QueryDesc *qdesc = sstate->qdesc;
+
+	ExecutorFinish (qdesc);
+	ExecutorEnd (qdesc);
+
+	FreeQueryDesc (qdesc);
+
+	sstate->qdesc = NULL;
+}
+
+static void
+mv_rewrite_rescan_scan (CustomScanState *node)
+{
+	mv_rewrite_custom_scan_state *sstate = (mv_rewrite_custom_scan_state *) node;
+
+	// elog (INFO, "%s node (%p)", __func__, node);
+
+	QueryDesc *qdesc = sstate->qdesc;
+
+	ExecutorRewind (qdesc);
+}
+
+static void mv_rewrite_explain_scan (CustomScanState *node,
+                                     List *ancestors,
+                                     ExplainState *es)
+{
+	mv_rewrite_custom_scan_state *sstate = (mv_rewrite_custom_scan_state *) node;
+    
+	// Add rewritten query SQL.
+	if (es->verbose)
+		ExplainPropertyText("Rewritten SQL", strVal (sstate->query), es);
+
+	// Add competing plan costs.
+	if (es->costs)
+		ExplainPropertyText("Original costs", strVal (sstate->competing_cost), es);
 }
 
 /*
@@ -3249,6 +3412,45 @@ foreign_grouping_ok(PlannerInfo *root, RelOptInfo *grouped_rel)
 }
 
 /*
+ * pg_mv_rewrite_get_upper_paths
+ *        Add paths for post-join operations like aggregation, grouping etc. if
+ *        corresponding operations are safe to push down.
+ *
+ * Right now, we only support aggregate, grouping and having clause pushdown.
+ */
+void
+pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
+			      UpperRelationKind stage,
+			      RelOptInfo *input_rel,
+			      RelOptInfo *output_rel)
+{
+	// Delegate first to any other extensions if they are already hooked.
+	if (next_create_upper_paths_hook)
+		(*next_create_upper_paths_hook) (root, stage, input_rel, output_rel);
+
+	// Ignore stages we don't support; and skip any duplicate calls.
+	if (stage != UPPERREL_GROUP_AGG)
+	{
+		if (g_trace_match_progress)
+		{
+			elog(INFO, "%s: upper path stage (%d) not supported for query: %s", __func__, stage, nodeToString (input_rel));
+			elog(INFO, "%s: upper path stage (%d) not supported for root: %s", __func__, stage, nodeToString (root));
+		}
+        	return;
+	}
+
+	// If we can rewrite, add those alternate paths...
+	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
+
+	// elog(INFO, "%s: hook for stage=%d", __func__, stage);
+	// elog(INFO, "%s: hook for root: %s", __func__, nodeToString (root));
+	// elog(INFO, "%s: hook for input_rel: %s", __func__, nodeToString (input_rel));
+	// elog(INFO, "%s: hook for output_rel: %s", __func__, nodeToString (output_rel));
+
+	add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, NULL, grouping_target);
+}
+
+/*
  * postgresGetForeignUpperPaths
  *		Add paths for post-join operations like aggregation, grouping etc. if
  *		corresponding operations are safe to push down.
@@ -3371,9 +3573,6 @@ find_related_matviews_for_relation (PlannerInfo *root,
                                     List /* StringInfo */ **mvs_schema,
                                     List /* StringInfo */ **mvs_name)
 {
-    UserMapping *mapping;
-    PGconn	   *conn;
-    
     *mvs_schema = NIL, *mvs_name = NIL;
     
     Bitmapset *relids = NULL;
@@ -3386,11 +3585,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
     }
     
     //elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
-    
-    mapping = GetUserMapping(GetUserId(), GetForeignTable((Oid) bms_next_member (relids, -1))->serverid);
-    
-    conn = GetConnection(mapping, false);
-    
+
     StringInfoData find_mvs_query;
     initStringInfo (&find_mvs_query);
     
@@ -3401,14 +3596,12 @@ find_related_matviews_for_relation (PlannerInfo *root,
                             " WHERE "
                             " j.matviewschemaname = v.schemaname"
                             " AND j.matviewname = v.matviewname"
-                            " AND j.tables @> ");
+                            " AND j.tables @> $1");
     
-    appendStringInfoString (&find_mvs_query, "array[");
-    int i = 0;
+    List /* char* */ *tables_strlist = NIL;
     for (int x = bms_next_member (relids, -1); x >= 0; x = bms_next_member (relids, x))
     {
-        StringInfoData foreign_table_name;
-        initStringInfo (&foreign_table_name);
+        StringInfo table_name = makeStringInfo();
         
         /*
          * Core code already has some lock on each rel being planned, so we
@@ -3416,73 +3609,66 @@ find_related_matviews_for_relation (PlannerInfo *root,
          */
         Relation	rel = heap_open((Oid) x, NoLock);
     
-        deparseRelation (&foreign_table_name, rel);
-        
         heap_close(rel, NoLock);
         
-        char *str = PQescapeLiteral (conn, foreign_table_name.data, (size_t) foreign_table_name.len);
+        const char *nspname = get_namespace_name (RelationGetNamespace(rel));
+        const char *relname = RelationGetRelationName(rel);
         
-        if (i++ > 0)
-            appendStringInfoString(&find_mvs_query, ", ");
+        appendStringInfo (table_name, "%s.%s",
+                          quote_identifier(nspname), quote_identifier(relname));
 
-        appendStringInfoString(&find_mvs_query, str);
-        
-        free (str);
+        tables_strlist = lappend (tables_strlist, table_name->data);
     }
-    appendStringInfoString (&find_mvs_query, "]::text[]");
     
-    //elog(INFO, "%s: relids query: %s", __func__, find_mvs_query.data);
-
-    //elog(INFO, "%s: target (local) table: %s", __func__, foreign_table_name.data);
-
-    PGresult   *volatile res = NULL;
+    ArrayType /* text */ *tables_arr = strlist_to_textarray (tables_strlist);
     
-    PG_TRY();
+    Oid argtypes[] = { TEXTARRAYOID };
+    Datum args[] = { PointerGetDatum (tables_arr) };
+
+    // We must be careful to manage the SPI memory context.
+    
+    MemoryContext mainCtx = CurrentMemoryContext;
+    
+    if (SPI_connect() != SPI_OK_CONNECT)
     {
-        
-        res = pgfdw_exec_query_params(conn, find_mvs_query.data,
-                                      0, NULL/*paramTypes*/,
-                                      NULL /*paramValues*/, NULL /*paramLengths*/,
-                                      NULL /*paramFormats*/,
-                                      0 /*resultFormat=text*/);
-        
-        // FIXME: is this the best way to deap with the error?
-        if (PQresultStatus(res) != PGRES_TUPLES_OK)
-            pgfdw_report_error(ERROR, res, conn, false, find_mvs_query.data);
-        
-        int num_mvs = PQntuples(res);
-        
-        for (int i = 0; i < num_mvs; i++)
-        {
-            //elog(INFO, "add_foreign_grouping_paths: mv[%d]={%s,%s,%s}", i,
-            //     PQgetvalue(res, i, 0), PQgetvalue(res, i, 1), PQgetvalue(res, i, 2));
-            
-            StringInfo schema = makeStringInfo();
-            appendStringInfoString (schema, PQgetvalue(res, i, 0));
-            StringInfo name = makeStringInfo();
-            appendStringInfoString (name, PQgetvalue(res, i, 1));
-            
-            *mvs_schema = lappend (*mvs_schema, schema);
-            *mvs_name = lappend (*mvs_name, name);
-        }
-        PQclear(res);
-        ReleaseConnection(conn);
+        elog(WARNING, "%s: SPI_connect() failed", __func__);
+        return; // (an empty set of matviews)
     }
-    PG_CATCH();
+    
+    SPIPlanPtr plan = SPI_prepare (find_mvs_query.data, 1, argtypes);
+    
+    if (plan == NULL) {
+        elog(WARNING, "%s: SPI_connect() failed", __func__);
+        return; // (an empty set of matviews)
+    }
+    
+    Portal port = SPI_cursor_open (NULL, plan, args, NULL, true);
+    
+    for (SPI_cursor_fetch (port, true, 1);
+         SPI_processed >= 1;
+         SPI_cursor_fetch (port, true, 1))
     {
-        if (res)
-            PQclear(res);
-        ReleaseConnection(conn);
-        PG_RE_THROW();
+        MemoryContext spiCtx = MemoryContextSwitchTo (mainCtx);
+        
+        StringInfo schema = makeStringInfo();
+        appendStringInfoString (schema, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
+        StringInfo name = makeStringInfo();
+        appendStringInfoString (name, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 2));
+
+        *mvs_schema = lappend (*mvs_schema, schema);
+        *mvs_name = lappend (*mvs_name, name);
+        
+        MemoryContextSwitchTo (spiCtx);
     }
-    PG_END_TRY();
+
+    SPI_cursor_close (port);
+
+    SPI_finish();
 }
 
 static Query *
 get_mv_query (RelOptInfo *grouped_rel, const char *mv_name)
 {
-    PgFdwRelationInfo *fpinfo = grouped_rel->fdw_private;
-
     RangeVar    *matviewRV;
     Oid         matviewOid;
     Relation    matviewRel;
@@ -3532,14 +3718,14 @@ get_mv_query (RelOptInfo *grouped_rel, const char *mv_name)
     
     heap_close (matviewRel, NoLock);
 
-    if (fpinfo->trace_parse_select_query)
+    if (g_trace_parse_select_query)
         elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
 
     return query;
 }
 
 struct transform_todo {
-    List /* Var * */ *replacement_var;
+    List /* Index */ *replacement_var;
     List /* Expr * */ *replaced_expr;
 };
 
@@ -3826,12 +4012,7 @@ check_group_clauses_for_matview (PlannerInfo *root,
                                  List *transformed_tlist,
                                  struct transform_todo *todo_list)
 {
-    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
-
     //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
-    
-    //elog(INFO, "%s: in_colnames: %s", __func__, nodeToString(in_colnames));
-    //elog(INFO, "%s: mv_from_colnames: %s", __func__, nodeToString(mv_from_colnames));
     
     // Check each GROUP BY clause (Expr) in turn...
     ListCell   *lc;
@@ -3847,9 +4028,9 @@ check_group_clauses_for_matview (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_group_clause_source_check))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, g_trace_group_clause_source_check))
         {
-            if (fpinfo->log_match_progress)
+            if (g_log_match_progress)
                 elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             
             return false;
@@ -3866,9 +4047,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
                                      List **additional_where_clauses,
                                      struct transform_todo *todo_list)
 {
-    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
-    
-    if (fpinfo->trace_join_clause_check)
+    if (g_trace_join_clause_check)
         elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
 
     // 1. We don't need to check the rels involved — they must be joined
@@ -3879,7 +4058,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 
     // 3. Go through each JOIN clause in the MV.
 
-    if (fpinfo->debug_join_clause_check)
+    if (g_debug_join_clause_check)
         elog(INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 
     List *quals = NIL; // additional qualifiers over and above the join clauses
@@ -3925,7 +4104,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         }
     }
     
-    if (fpinfo->debug_join_clause_check)
+    if (g_debug_join_clause_check)
         elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
     
     // 3.1. We must find all its expressions present in our grouped_rel query
@@ -3933,18 +4112,11 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 
     List /* RestrictInfo* */ *grouped_rel_clauses;
     
-    // For upper relations, the WHERE clause is built from the remote
-    // conditions of the underlying scan relation.
-    {
-        PgFdwRelationInfo *ofpinfo;
-        
-        ofpinfo = (PgFdwRelationInfo *) fpinfo->outerrel->fdw_private;
-        grouped_rel_clauses = list_copy (ofpinfo->remote_conds);
-    }
+    grouped_rel_clauses = list_copy (grouped_rel->baserestrictinfo);
     
     List /* RestrictInfo* */ *found_grouped_rel_clauses = NIL;
 
-    if (fpinfo->debug_join_clause_check)
+    if (g_debug_join_clause_check)
         elog(INFO, "%s: grouped_rel clauses: %s", __func__, nodeToString (grouped_rel_clauses));
     
     struct expr_targets_equals_ctx col_names = {
@@ -3956,7 +4128,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     {
         Expr *je = lfirst (lc2);
 
-        if (fpinfo->debug_join_clause_check)
+        if (g_debug_join_clause_check)
             elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (je));
 
         bool found = false;
@@ -3966,16 +4138,16 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         {
             RestrictInfo *ri = lfirst (lc3);
             
-            if (fpinfo->trace_join_clause_check)
+            if (g_trace_join_clause_check)
                 elog(INFO, "%s: against expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
-            if (fpinfo->trace_join_clause_check)
+            if (g_trace_join_clause_check)
                 elog(INFO, "%s: against expression: %s", __func__, nodeToString (ri));
 
             if (expr_targets_equals_walker ((Node *) ri->clause, (Node *) je, &col_names))
             {
-                if (fpinfo->debug_join_clause_check)
+                if (g_debug_join_clause_check)
                     elog(INFO, "%s: matched expression: %s", __func__, deparseNode ((Node *) ri, root, grouped_rel));
-                if (fpinfo->debug_join_clause_check)
+                if (g_debug_join_clause_check)
                     elog(INFO, "%s: matched expression: %s", __func__, nodeToString (ri));
 
                 found_grouped_rel_clauses = lappend (found_grouped_rel_clauses, ri);
@@ -3987,7 +4159,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         
         if (!found)
         {
-            if (fpinfo->log_match_progress)
+            if (g_log_match_progress)
                 elog(INFO, "%s: expression not found in grouped rel: %s", __func__, nodeToString (je));
             
             return false;
@@ -4002,9 +4174,9 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     
     *additional_where_clauses = grouped_rel_clauses;
 
-    if (fpinfo->debug_join_clause_check)
+    if (g_debug_join_clause_check)
         elog(INFO, "%s: balance of clauses: %s", __func__, deparseNode ((Node *) *additional_where_clauses, root, grouped_rel));
-    if (fpinfo->debug_join_clause_check)
+    if (g_debug_join_clause_check)
         elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
     
     return true;
@@ -4017,11 +4189,22 @@ process_having_clauses (PlannerInfo *root,
                         List **additional_where_clauses,
                         struct transform_todo *todo_list)
 {
-    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
-    
-    List /* Expr * */ *havingQual = fpinfo->remote_conds;
+    List /* Expr * */ *havingQual = NIL;
 
-    if (fpinfo->trace_having_clause_source_check)
+    // FIXME: can we work around need to wrap the existing list in RIs?
+    ListCell *lc;
+    foreach(lc, (List *) root->parse->havingQual)
+    {
+        Expr       *expr = (Expr *) lfirst(lc);
+        
+        /*
+         * Currently, the core code doesn't wrap havingQuals in
+         * RestrictInfos, so we must make our own.
+         */
+        havingQual = lappend (havingQual, make_restrictinfo (expr, true, false, false, root->qual_security_level, grouped_rel->relids, NULL, NULL));
+    }
+
+    if (g_trace_having_clause_source_check)
         elog(INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
     
     // Having qualifiers may simply be appended to our working set of additional WHERE clauses:
@@ -4038,13 +4221,13 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                List **transformed_clist_p,
                                                struct transform_todo *todo_list)
 {
-    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
+    List /* RestrictInfo* */ *riquals = grouped_rel->baserestrictinfo;
 
-    if (fpinfo->trace_where_clause_source_check)
-        elog(INFO, "%s: clauses: %s", __func__, nodeToString (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds));
+    if (g_trace_where_clause_source_check)
+        elog(INFO, "%s: clauses: %s", __func__, nodeToString (riquals));
     
     // Copy the list so we don't stomp on it when we append
-    List *quals = list_copy (((PgFdwRelationInfo *)fpinfo->outerrel->fdw_private)->remote_conds);
+    List *quals = list_copy (riquals);
     quals = list_concat (quals, additional_clauses);
 
     ListCell   *lc;
@@ -4058,9 +4241,9 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
             expr = ((RestrictInfo *) expr)->clause;
         }
         
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_where_clause_source_check))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, g_trace_where_clause_source_check))
         {
-            if (fpinfo->log_match_progress)
+            if (g_log_match_progress)
                 elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             
             return false;
@@ -4079,8 +4262,6 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                 List /* TargetEntry* */ *selected_tlist,
                                                 struct transform_todo *todo_list)
 {
-    PgFdwRelationInfo *fpinfo = (PgFdwRelationInfo *) grouped_rel->fdw_private;
-
     ListCell   *lc;
     foreach (lc, selected_tlist)
     {
@@ -4088,9 +4269,9 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
         
         //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
         
-        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, fpinfo->trace_select_clause_source_check))
+        if (!check_expr_targets_in_matview_tlist (root, parsed_mv_query, expr, todo_list, g_trace_select_clause_source_check))
         {
-            if (fpinfo->log_match_progress)
+            if (g_log_match_progress)
                 elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
             
             return false;
@@ -4129,13 +4310,13 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                               StringInfo *alternative_query)
 {
     List /* Expr* */ *transformed_clist = NIL;
-    List /* TargetEntry * */ *transformed_tlist = list_copy (grouped_tlist);
+    List /* TargetEntry * */ *transformed_tlist = grouped_tlist;
     
     struct transform_todo transform_todo_list = { NIL, NIL };
     
     //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
     
-    Query *parsed_mv_query = get_mv_query (grouped_rel, (const char *) mv_name->data);
+    Query *parsed_mv_query = copyObject (get_mv_query (grouped_rel, (const char *) mv_name->data));
     
     // 1. Check the GROUP BY clause: it must match exactly.
     if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
@@ -4203,14 +4384,116 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     return true;
 }
 
+static Query *
+parse_select_query (const char *mv_sql)
+{
+	RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
+    
+	/*
+	 * Because the parser and planner tend to scribble on their input, we
+	 * make a preliminary copy of the source querytree.  This prevents
+	 * problems in the case that the COPY is in a portal or plpgsql
+	 * function and is executed repeatedly.  (See also the same hack in
+	 * DECLARE CURSOR and PREPARE.)  XXX FIXME someday.
+	 */
+	List *qtList = pg_analyze_and_rewrite (copyObject (mv_parsetree), mv_sql, NULL, 0, NULL);
+
+	Query *query = list_nth_node (Query, qtList, 0);
+
+	ListCell *e;
+	foreach (e, query->targetList)
+	{
+		TargetEntry *tle = lfirst_node (TargetEntry, e);
+		if (g_trace_parse_select_query)
+			elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
+
+		Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
+
+		tle->expr = new_expr;
+
+		if (g_trace_parse_select_query)
+			elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
+	}
+
+	if (g_trace_parse_select_query)
+		elog(INFO, "%s: query: %s", __func__, nodeToString (query));
+
+	return query;
+}
+
+static CustomExecMethods mv_rewrite_exec_methods = {
+	.CustomName = "MVRewriteScan",
+
+	/* Required executor methods */
+	.BeginCustomScan = mv_rewrite_begin_scan,
+	.ExecCustomScan = mv_rewrite_exec_scan,
+	.EndCustomScan = mv_rewrite_end_scan,
+	.ReScanCustomScan = mv_rewrite_rescan_scan,
+
+	/* Optional: print additional information in EXPLAIN */
+	.ExplainCustomScan = mv_rewrite_explain_scan
+};
+
+static Node *
+create_mv_rewrite_scan_state (CustomScan *cscan)
+{
+	mv_rewrite_custom_scan_state *css =
+		(mv_rewrite_custom_scan_state *) newNode (sizeof (mv_rewrite_custom_scan_state), T_CustomScanState);
+
+	css->sstate.methods = &mv_rewrite_exec_methods;
+
+	PlannedStmt *pstmt = list_nth_node (PlannedStmt, cscan->custom_private, 0);
+
+	css->pstmt = pstmt;
+	css->query = list_nth_node (Value, cscan->custom_private, 1);
+	css->competing_cost = list_nth_node (Value, cscan->custom_private, 2);
+
+	return (Node *) css;
+}
+
+static CustomScanMethods mv_rewrite_scan_methods = {
+	.CustomName = "MVRewriteScan",
+	.CreateCustomScanState = create_mv_rewrite_scan_state
+};
+
+static Plan *plan_mv_rewrite_path (PlannerInfo *root,
+				   RelOptInfo *rel,
+				   CustomPath *best_path,
+				   List *tlist,
+				   List *clauses,
+				   List *custom_plans)
+{
+	PlannedStmt *pstmt = list_nth_node (PlannedStmt, best_path->custom_private, 0);
+	List /* TargetEntry * */ *grouped_tlist = list_nth_node (List, best_path->custom_private, 1);
+	Relids grouped_relids = list_nth (best_path->custom_private, 2);
+	Value *query = list_nth_node (Value, best_path->custom_private, 3);
+	Value *competing_cost = list_nth_node (Value, best_path->custom_private, 4);
+
+	CustomScan *cscan = makeNode (CustomScan);
+
+	cscan->flags = 0;
+	cscan->custom_private = list_make3 (pstmt, query, competing_cost);
+	cscan->custom_exprs = NIL; // FIXME: is this correct?
+	cscan->custom_scan_tlist = grouped_tlist;
+	cscan->custom_plans = NIL; // FIXME: should this be pstmt->subplans?
+	cscan->custom_relids = grouped_relids;
+
+	cscan->methods = &mv_rewrite_scan_methods;
+
+	return (Plan *) cscan;
+}
+
+static CustomPathMethods mv_rewrite_path_methods = {
+	.CustomName = "MVRewritePath",
+	.PlanCustomPath = plan_mv_rewrite_path
+};
+
 void add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *input_rel, // if grouping
                              RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                              RelOptInfo *grouped_rel,
                              PgFdwRelationInfo *fpinfo, PathTarget *grouping_target)
 {
-    ForeignPath *grouppath;
-
     //elog(INFO, "%s: searching for MVs...", __func__);
     
     // See if there are any candidate MVs...
@@ -4218,24 +4501,29 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     
     find_related_matviews_for_relation (root, input_rel, inner_rel, outer_rel,
                                         &mvs_schema, &mvs_name);
-
-    List	*retrieved_attrs;
     
+    if (false)
     {
         StringInfoData rel_sql;
         
         initStringInfo(&rel_sql);
         
-        // FIXME: we must deparse otherwise retrieved_attrs won't be initialised... in future
-        // deparsing just to get the retrieved_attrs list seems quite wasteful; mayeb we can
-        // compute it differently.
-        deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
+        // deparse_statement_for_mv_search (&rel_sql, &retrieved_attrs, root, grouped_rel);
 
-        if (fpinfo->log_match_progress)
+        if (g_log_match_progress)
             elog(INFO, "%s: original (un-rewritten) query: %s", __func__, rel_sql.data);
     }
     
-    List /* TargetEntry * */ *grouped_tlist = build_tlist_to_deparse (grouped_rel);
+    // Take the target list, and transform it to a List of TargetEntry.
+    // FIXME: maybe we can avoid this seemingly pointless transformation?
+    List /* TargetEntry * */ *grouped_tlist = NIL;
+    ListCell *lc;
+    foreach (lc, copy_pathtarget(root->upper_targets[UPPERREL_GROUP_AGG])->exprs)
+    {
+        Expr *e = lfirst (lc);
+        grouped_tlist = add_to_flat_tlist (grouped_tlist, list_make1 (e));
+    }
+    // FIXME: no longer required?:    build_tlist_to_deparse (grouped_rel);
     
     // Evaluate each MV in turn...
     ListCell   *sc, *nc;
@@ -4243,7 +4531,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     {
         StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc);
         
-        if (fpinfo->log_match_progress)
+        if (g_log_match_progress)
             elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
         StringInfo alternative_query;
@@ -4251,47 +4539,90 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
             continue;
         
-        //elog(INFO, "%s: alternative query: %s", __func__, alternative_query->data);
-        
-        // 7. If all is well, make a cost estimate
-        //elog(INFO, "%s: making cost estimate...", __func__);
-        
-        double		rows;
-        int			width;
-        Cost		startup_cost;
-        Cost		total_cost;
-        
-        estimate_query_cost (root, grouped_rel,
-                             alternative_query->data, &rows, &width, &startup_cost, &total_cost);
-        
         // FIXME: we consider that there are no locally-checked quals
         // to save building all that cruft here. But in reality, that
         // might be wrong.
         
         // 8. Finally, create and add the path
-        //elog(INFO, "%s: creating and adding path...", __func__);
+        if (g_log_match_progress)
+            elog(INFO, "%s: creating and adding path for alternate query: %s", __func__, alternative_query->data);
         
-        List *fdw_private = list_make3 (makeString (alternative_query->data),
-                                        retrieved_attrs,
-                                        makeInteger (fpinfo->fetch_size));
-        fdw_private = lappend(fdw_private, makeString(fpinfo->relation_name->data));
-        
-        // We still add the path to the raw grouped_rel — the foreign query is
-        // the one that is modified to scan the MV, and the local planner need
-        // know nothing of it except for the reduced plan cost.
-        grouppath = create_foreignscan_path(root,
-                                            grouped_rel,
-                                            grouping_target,
-                                            rows,
-                                            startup_cost,
-                                            total_cost,
-                                            NIL,	/* no pathkeys */
-                                            NULL,	/* no required_outer */
-                                            NULL,
-                                            fdw_private);
+        Path       *path;
+        {
+            /* plan_params should not be in use in current query level */
+            if (root->plan_params != NIL)
+            {
+                elog(ERROR, "%s: plan_params != NIL", __func__);
+                return;
+            }
+
+            // FIXME: we should be able to do this without going via SQL
+            Query *subquery = parse_select_query (alternative_query->data);
+            
+            /* Generate Paths for the subquery. */
+            PlannedStmt *pstmt = pg_plan_query (subquery,
+                                                (root->glob->parallelModeOK ? CURSOR_OPT_PARALLEL_OK : 0 )
+                                                | (root->tuple_fraction <= 1e-10 ? CURSOR_OPT_FAST_PLAN : 0),
+                                                root->glob->boundParams);
+
+            Plan *subplan = pstmt->planTree;
+            
+            /* Bury our subquery inside a CustomPath. We need to do this because
+             * the SubQueryScanPath code expects the query to be 1:1 related to the
+             * root's PlannerInfo --- now, of course, the origingal query didn't have
+             * any such subquery in it at all, let alone with a 1:1 relationship.
+             */
+            CustomPath *cp = makeNode (CustomPath);
+            cp->path.pathtype = T_CustomScan;
+            cp->flags = 0;
+            cp->methods = &mv_rewrite_path_methods;
+
+            // Take the cost information from the replacement query...
+            cp->path.startup_cost = subplan->startup_cost;
+            cp->path.total_cost = subplan->total_cost;
+            cp->path.rows = subplan->plan_rows;
+            if (IsA (subplan, Gather))
+                cp->path.parallel_workers = ((Gather *) subplan)->num_workers;
+            else if (IsA (subplan, GatherMerge))
+                cp->path.parallel_workers = ((GatherMerge *) subplan)->num_workers;
+
+            // The target that the Path will delivr is our grouped_rel/grouping_target
+            cp->path.pathtarget = grouping_target;
+            cp->path.parent = grouped_rel;
+
+            cp->path.param_info = NULL; // FIXME: is this correct?
+            cp->path.parallel_aware = subplan->parallel_aware; // FIXME: is this relevant?
+            cp->path.parallel_safe = subplan->parallel_safe; // FIXME: is this relevant?
+            
+            // Work out the cost of the competing (unrewritten) plan...
+            StringInfo competing_cost = makeStringInfo();
+            {
+                ListCell *lc;
+                foreach (lc, grouped_rel->pathlist)
+                {
+                    Path *p = lfirst_node (Path, lc);
+                    
+                    if (competing_cost->len > 0)
+                        appendStringInfo (competing_cost, "; ");
+                    
+                    appendStringInfo (competing_cost, "cost=%.2f..%.2f rows=%.0f width=%d",
+                                      p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
+                }
+            }
+
+            cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
+                                             makeString (alternative_query->data), makeString (competing_cost->data));
+            
+            path = (Path *) cp;
+        }
         
         /* Add generated path into grouped_rel by add_path(). */
-        add_path(grouped_rel, (Path *) grouppath);
+        add_path (grouped_rel, (Path *) path);
+
+        if (g_log_match_progress)
+            elog(INFO, "%s: path added.", __func__);
+        
+        return;
     }
 }
 

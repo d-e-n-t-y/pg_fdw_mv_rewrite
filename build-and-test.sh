@@ -12,7 +12,7 @@ $PG_HOME/bin/initdb --pgdata=/tmp/$PGPORT;\
 mv /tmp/$PGPORT/postgresql.conf /tmp/$PGPORT/postgresql.conf.orig;\
 sed -e "s/#port = [0-9]*/port = $PGPORT/" < /tmp/$PGPORT/postgresql.conf.orig > /tmp/$PGPORT/postgresql.conf;\
 $PG_HOME/bin/pg_ctl --pgdata=/tmp/$PGPORT start;\
-make clean && make && make install && make installcheck;\
+make clean && make CFLAGS='-g' && make install && make installcheck;\
 $PG_HOME/bin/pg_ctl --pgdata=/tmp/$PGPORT stop;\
 rm -r /tmp/$PGPORT'
 

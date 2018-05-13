@@ -123,6 +123,11 @@ typedef struct PgFdwRelationInfo
 /* in postgres_fdw.c */
 extern int	set_transmission_modes(void);
 extern void reset_transmission_modes(int nestlevel);
+extern void
+pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
+			      UpperRelationKind stage,
+			      RelOptInfo *input_rel,
+			      RelOptInfo *output_rel);
 
 /* in connection.c */
 extern PGconn *GetConnection(UserMapping *user, bool will_prep_stmt);
