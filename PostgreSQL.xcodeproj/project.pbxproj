@@ -10,11 +10,9 @@
 		BF35BACC20949EFC00C29DCE /* extension.h in Headers */ = {isa = PBXBuildFile; fileRef = BF35BACA20949EFC00C29DCE /* extension.h */; };
 		BF35BACD20949EFC00C29DCE /* extension.c in Sources */ = {isa = PBXBuildFile; fileRef = BF35BACB20949EFC00C29DCE /* extension.c */; };
 		BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5A268E1FD9531000E3AD72 /* equalwalker.c */; };
-		BF8BEF121FD1EF6D003A7AC9 /* connection.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE81FD1E590003A7AC9 /* connection.c */; };
 		BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEE91FD1E590003A7AC9 /* deparse.c */; };
 		BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */; };
 		BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEF31FD1E590003A7AC9 /* shippable.c */; };
-		BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEED1FD1E590003A7AC9 /* option.c */; };
 		BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +35,8 @@
 		BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.2.2--0.3.sql"; sourceTree = "<group>"; };
 		BF08E98D206649E3006F2FE9 /* build-and-test.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "build-and-test.sh"; sourceTree = "<group>"; };
 		BF0F801F20A89B990058CD6D /* build-and-install.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "build-and-install.sh"; sourceTree = "<group>"; };
+		BF0F802020A8B7D20058CD6D /* pg_fdw_mv_rewrite--0.5.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.5.sql"; sourceTree = "<group>"; };
+		BF0F802120A8B7DD0058CD6D /* pg_fdw_mv_rewrite--0.4--0.5.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.4--0.5.sql"; sourceTree = "<group>"; };
 		BF247F19207C8B0D0074D5F9 /* pg_fdw_mv_rewrite--0.3--0.4.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.3--0.4.sql"; sourceTree = "<group>"; };
 		BF247F1A207C8B520074D5F9 /* pg_fdw_mv_rewrite--0.4.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.4.sql"; sourceTree = "<group>"; };
 		BF35BACA20949EFC00C29DCE /* extension.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = extension.h; sourceTree = "<group>"; };
@@ -45,11 +45,9 @@
 		BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1--0.2.2.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
 		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
-		BF8BEEE81FD1E590003A7AC9 /* connection.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = connection.c; sourceTree = "<group>"; };
 		BF8BEEE91FD1E590003A7AC9 /* deparse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = deparse.c; sourceTree = "<group>"; };
 		BF8BEEEA1FD1E590003A7AC9 /* deparse.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = deparse.h; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
-		BF8BEEED1FD1E590003A7AC9 /* option.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = option.c; sourceTree = "<group>"; };
 		BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1.sql"; sourceTree = "<group>"; };
 		BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = postgres_fdw.c; sourceTree = "<group>"; };
 		BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pg_fdw_mv_rewrite.control; sourceTree = "<group>"; };
@@ -96,9 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				BF5A268E1FD9531000E3AD72 /* equalwalker.c */,
-				BF8BEEE81FD1E590003A7AC9 /* connection.c */,
 				BF8BEEE91FD1E590003A7AC9 /* deparse.c */,
-				BF8BEEED1FD1E590003A7AC9 /* option.c */,
 				BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */,
 				BF8BEEF31FD1E590003A7AC9 /* shippable.c */,
 				BF35BACB20949EFC00C29DCE /* extension.c */,
@@ -145,9 +141,11 @@
 				BF3B4E412059BFF700A2A14C /* pg_fdw_mv_rewrite--0.2.2.sql */,
 				BF08E98B206307D8006F2FE9 /* pg_fdw_mv_rewrite--0.3.sql */,
 				BF247F1A207C8B520074D5F9 /* pg_fdw_mv_rewrite--0.4.sql */,
+				BF0F802020A8B7D20058CD6D /* pg_fdw_mv_rewrite--0.5.sql */,
 				BF3B4E422059C08000A2A14C /* pg_fdw_mv_rewrite--0.1--0.2.2.sql */,
 				BF08E98C20630819006F2FE9 /* pg_fdw_mv_rewrite--0.2.2--0.3.sql */,
 				BF247F19207C8B0D0074D5F9 /* pg_fdw_mv_rewrite--0.3--0.4.sql */,
+				BF0F802120A8B7DD0058CD6D /* pg_fdw_mv_rewrite--0.4--0.5.sql */,
 			);
 			name = "Control files";
 			sourceTree = "<group>";
@@ -225,9 +223,7 @@
 				BF8BEF131FD1EF73003A7AC9 /* deparse.c in Sources */,
 				BF35BACD20949EFC00C29DCE /* extension.c in Sources */,
 				BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */,
-				BF8BEFA01FD1F881003A7AC9 /* option.c in Sources */,
 				BF8BEF161FD1EF73003A7AC9 /* shippable.c in Sources */,
-				BF8BEF121FD1EF6D003A7AC9 /* connection.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

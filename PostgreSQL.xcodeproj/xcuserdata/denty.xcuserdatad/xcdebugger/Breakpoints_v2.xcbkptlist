@@ -6,215 +6,48 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "No"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "547915432.520434"
+            timestampString = "548365866.154086"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "4433"
-            endingLineNumber = "4433"
-            landmarkName = "unknown"
-            landmarkType = "0">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.SymbolicBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            symbolName = "find_base_rel"
-            moduleName = "">
-            <Locations>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_base_rel"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372038.606317"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "249"
-                  endingLineNumber = "249"
-                  offsetFromSymbolStart = "8">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "build_joinrel_tlist"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372038.611264"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "249"
-                  endingLineNumber = "249"
-                  offsetFromSymbolStart = "116">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_childrel_parents"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372038.615625"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "249"
-                  endingLineNumber = "249"
-                  offsetFromSymbolStart = "62">
-               </Location>
-            </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-            timestampString = "547506802.662529"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "256"
-            endingLineNumber = "256"
-            landmarkName = "find_base_rel"
+            startingLineNumber = "124"
+            endingLineNumber = "124"
+            landmarkName = "mv_rewrite_begin_scan"
             landmarkType = "9">
-            <Locations>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_base_rel"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372074.218123"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "36">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "build_joinrel_tlist"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372074.2217979"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "309">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_childrel_parents"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372074.226981"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "140">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "No"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-            timestampString = "547506802.663431"
+            filePath = "postgres_fdw.c"
+            timestampString = "548365866.154591"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "255"
-            endingLineNumber = "255"
-            landmarkName = "find_base_rel"
+            startingLineNumber = "183"
+            endingLineNumber = "183"
+            landmarkName = "mv_rewrite_exec_scan"
             landmarkType = "9">
-            <Locations>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_base_rel"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372097.418705"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "36">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "build_joinrel_tlist"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372097.423179"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "309">
-               </Location>
-               <Location
-                  shouldBeEnabled = "No"
-                  ignoreCount = "0"
-                  continueAfterRunningActions = "No"
-                  symbolName = "find_childrel_parents"
-                  moduleName = "postgres"
-                  usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-                  timestampString = "547372097.427192"
-                  startingColumnNumber = "9223372036854775807"
-                  endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "256"
-                  endingLineNumber = "256"
-                  offsetFromSymbolStart = "140">
-               </Location>
-            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "No"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-            timestampString = "547506802.663835"
+            filePath = "postgres_fdw.c"
+            timestampString = "548365866.154682"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "257"
-            endingLineNumber = "257"
-            landmarkName = "find_base_rel"
+            startingLineNumber = "1271"
+            endingLineNumber = "1271"
+            landmarkName = "plan_mv_rewrite_path"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -223,92 +56,26 @@
          <BreakpointContent
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
-            condition = "(int) strcmp (fmt, &quot;no relation entry for relid %d&quot;) == 0"
             continueAfterRunningActions = "No"
-            symbolName = "elog_finish"
+            symbolName = "ExecInitCustomScan"
             moduleName = "">
             <Locations>
                <Location
                   shouldBeEnabled = "Yes"
                   ignoreCount = "0"
                   continueAfterRunningActions = "No"
-                  symbolName = "elog_finish"
+                  symbolName = "ExecInitCustomScan"
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/utils/error/elog.c"
-                  timestampString = "547915432.8855979"
+                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/executor/nodeCustom.c"
+                  timestampString = "548365866.509881"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1350"
-                  endingLineNumber = "1350"
-                  offsetFromSymbolStart = "128">
+                  startingLineNumber = "33"
+                  endingLineNumber = "33"
+                  offsetFromSymbolStart = "23">
                </Location>
             </Locations>
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/optimizer/util/relnode.c"
-            timestampString = "547506802.664239"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "258"
-            endingLineNumber = "258"
-            landmarkName = "find_base_rel"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "postgres_fdw.c"
-            timestampString = "547915432.522073"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "3379"
-            endingLineNumber = "3379"
-            landmarkName = "foreign_grouping_ok"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/utils/error/elog.c"
-            timestampString = "547915432.522824"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "485"
-            endingLineNumber = "485"
-            landmarkName = "errfinish"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            condition = "(int) strcmp (fmt, &quot;could not dump unrecognized node type: %d&quot;) == 0"
-            continueAfterRunningActions = "No"
-            filePath = "../../junk/postgresql-10.3/src/backend/utils/error/elog.c"
-            timestampString = "547915432.523681"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1350"
-            endingLineNumber = "1350"
-            landmarkName = "elog_finish"
-            landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

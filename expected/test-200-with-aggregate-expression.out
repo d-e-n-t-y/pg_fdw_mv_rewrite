@@ -1,45 +1,42 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) * 19 from test_lb group by key;
-                         QUERY PLAN                          
--------------------------------------------------------------
- Foreign Scan
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) * 19 from test group by key;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, ((count(value) * 19))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, (count * 19) FROM public.test_mv1
-(4 rows)
+   Rewritten SQL: SELECT key, (count * 19) FROM public.test_mv1
+(3 rows)
 
-select key, COUNT (value) * 19 from test_lb group by key;
+select key, COUNT (value) * 19 from test group by key;
  key  | ?column? 
 ------+----------
  key1 |      190
  key2 | 19000000
 (2 rows)
 
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) - 13 from test_lb group by key;
-                         QUERY PLAN                          
--------------------------------------------------------------
- Foreign Scan
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) - 13 from test group by key;
+                           QUERY PLAN                           
+----------------------------------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, ((count(value) - 13))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, (count - 13) FROM public.test_mv1
-(4 rows)
+   Rewritten SQL: SELECT key, (count - 13) FROM public.test_mv1
+(3 rows)
 
-select key, COUNT (value) - 13 from test_lb group by key;
+select key, COUNT (value) - 13 from test group by key;
  key  | ?column? 
 ------+----------
  key1 |       -3
  key2 |   999987
 (2 rows)
 
-explain (VERBOSE, COSTS OFF) select key, 'Numbering ' || COUNT (value) || '.' from test_lb group by key;
-                                            QUERY PLAN                                             
----------------------------------------------------------------------------------------------------
- Foreign Scan
+explain (VERBOSE, COSTS OFF) select key, 'Numbering ' || COUNT (value) || '.' from test group by key;
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, ((('Numbering '::text || (count(value))::text) || '.'::text))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, (('Numbering '::text || count::text) || '.'::text) FROM public.test_mv1
-(4 rows)
+   Rewritten SQL: SELECT key, (('Numbering '::text || count::text) || '.'::text) FROM public.test_mv1
+(3 rows)
 
-select key, 'Numbering ' || COUNT (value) || '.' from test_lb group by key;
+select key, 'Numbering ' || COUNT (value) || '.' from test group by key;
  key  |      ?column?      
 ------+--------------------
  key1 | Numbering 10.

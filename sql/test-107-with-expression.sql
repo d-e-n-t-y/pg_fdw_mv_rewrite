@@ -6,7 +6,7 @@ explain (VERBOSE, COSTS OFF) select key, case when count(value) < 10 then 'sever
         when count(value) < 1000000 then 'hundreds of thousands'
         when count(value) < 10000000 then 'millions'
         else 'many'
-    end as quantity from test_lb group by key;
+    end as quantity from test group by key;
 
 select key, case when count(value) < 10 then 'several'
         when count(value) < 100 then 'tens'
@@ -16,4 +16,4 @@ select key, case when count(value) < 10 then 'several'
         when count(value) < 1000000 then 'hundreds of thousands'
         when count(value) < 10000000 then 'millions'
         else 'many'
-    end as quantity from test_lb group by key;
+    end as quantity from test group by key;

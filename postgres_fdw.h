@@ -146,13 +146,6 @@ extern PGresult *pgfdw_exec_query_params(PGconn *conn, const char *query,
 extern void pgfdw_report_error(int elevel, PGresult *res, PGconn *conn,
 				   bool clear, const char *sql);
 
-/* in option.c */
-extern int ExtractConnectionOptions(List *defelems,
-						 const char **keywords,
-						 const char **values);
-extern List *ExtractExtensionList(const char *extensionsString,
-					 bool warnOnMissing);
-
 /* in deparse.c */
 extern void classifyConditions(PlannerInfo *root,
 				   RelOptInfo *baserel,

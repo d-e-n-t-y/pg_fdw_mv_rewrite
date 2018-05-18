@@ -1,3 +1,3 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key having count (value) > 100;
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key having count (value) > 100;
 
-select key, COUNT (value) from test_lb group by key having count (value) > 100;
+select key, COUNT (value) from test group by key having count (value) > 100;

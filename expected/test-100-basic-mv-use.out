@@ -1,13 +1,12 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key;
-                      QUERY PLAN                      
-------------------------------------------------------
- Foreign Scan
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, count FROM public.test_mv1
-(4 rows)
+   Rewritten SQL: SELECT key, count FROM public.test_mv1
+(3 rows)
 
-select key, COUNT (value) from test_lb group by key;
+select key, COUNT (value) from test group by key;
  key  |  count  
 ------+---------
  key1 |      10

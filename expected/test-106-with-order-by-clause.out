@@ -1,37 +1,35 @@
 -- FIXME: wrt ORDER BY: hmmm... this seems to be fine... but not really sure why it is working.
 --        Ah. It seems to be that FDW doesn't push down ORDER BY for a GROUPed query.
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key order by key;
-                         QUERY PLAN                         
-------------------------------------------------------------
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Sort
    Output: key, (count(value))
-   Sort Key: test_lb.key
-   ->  Foreign Scan
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
          Output: key, (count(value))
-         Relations: Aggregate on (public.test_lb)
-         Remote SQL: SELECT key, count FROM public.test_mv1
-(7 rows)
+         Rewritten SQL: SELECT key, count FROM public.test_mv1
+(6 rows)
 
-select key, COUNT (value) from test_lb group by key order by key;
+select key, COUNT (value) from test group by key order by key;
  key  |  count  
 ------+---------
  key1 |      10
  key2 | 1000000
 (2 rows)
 
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key order by key desc;
-                         QUERY PLAN                         
-------------------------------------------------------------
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key desc;
+                          QUERY PLAN                           
+---------------------------------------------------------------
  Sort
    Output: key, (count(value))
-   Sort Key: test_lb.key DESC
-   ->  Foreign Scan
+   Sort Key: test.key DESC
+   ->  Custom Scan (MVRewriteScan)
          Output: key, (count(value))
-         Relations: Aggregate on (public.test_lb)
-         Remote SQL: SELECT key, count FROM public.test_mv1
-(7 rows)
+         Rewritten SQL: SELECT key, count FROM public.test_mv1
+(6 rows)
 
-select key, COUNT (value) from test_lb group by key order by key desc;
+select key, COUNT (value) from test group by key order by key desc;
  key  |  count  
 ------+---------
  key2 | 1000000

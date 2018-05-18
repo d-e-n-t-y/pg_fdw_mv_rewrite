@@ -1,13 +1,12 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test_lb group by key having count (value) > 100;
-                                 QUERY PLAN                                 
-----------------------------------------------------------------------------
- Foreign Scan
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key having count (value) > 100;
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, count FROM public.test_mv1 WHERE ((count > 100))
-(4 rows)
+   Rewritten SQL: SELECT key, count FROM public.test_mv1 WHERE ((count > 100))
+(3 rows)
 
-select key, COUNT (value) from test_lb group by key having count (value) > 100;
+select key, COUNT (value) from test group by key having count (value) > 100;
  key  |  count  
 ------+---------
  key2 | 1000000

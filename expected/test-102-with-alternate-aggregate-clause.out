@@ -1,13 +1,23 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test_lb group by key;
-                             QUERY PLAN                             
---------------------------------------------------------------------
- Foreign Scan
-   Output: key, (count(key))
-   Relations: Aggregate on (public.test_lb)
-   Remote SQL: SELECT key, count(key) FROM public.test GROUP BY key
-(4 rows)
+explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(key)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(key))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(key))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(key)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key
+(14 rows)
 
-select key, COUNT (key) from test_lb group by key;
+select key, COUNT (key) from test group by key;
  key  |  count  
 ------+---------
  key1 |      10
