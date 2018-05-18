@@ -277,7 +277,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *input_rel, // if grouping
                              RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                              RelOptInfo *grouped_rel,
-                             PgFdwRelationInfo *fpinfo, PathTarget *grouping_target);
+                             PathTarget *grouping_target);
 
 /*
  * pg_mv_rewrite_get_upper_paths
@@ -315,7 +315,7 @@ pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
 	// elog(INFO, "%s: hook for input_rel: %s", __func__, nodeToString (input_rel));
 	// elog(INFO, "%s: hook for output_rel: %s", __func__, nodeToString (output_rel));
 
-	add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, NULL, grouping_target);
+	add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, grouping_target);
 }
 
 Bitmapset *
@@ -1280,7 +1280,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *input_rel, // if grouping
                              RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                              RelOptInfo *grouped_rel,
-                             PgFdwRelationInfo *fpinfo, PathTarget *grouping_target)
+                             PathTarget *grouping_target)
 {
     //elog(INFO, "%s: searching for MVs...", __func__);
     

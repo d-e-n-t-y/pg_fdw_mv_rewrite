@@ -129,23 +129,6 @@ pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
 			      RelOptInfo *input_rel,
 			      RelOptInfo *output_rel);
 
-/* in connection.c */
-extern PGconn *GetConnection(UserMapping *user, bool will_prep_stmt);
-extern void ReleaseConnection(PGconn *conn);
-extern unsigned int GetCursorNumber(PGconn *conn);
-extern unsigned int GetPrepStmtNumber(PGconn *conn);
-extern PGresult *pgfdw_get_result(PGconn *conn, const char *query);
-extern PGresult *pgfdw_exec_query(PGconn *conn, const char *query);
-extern PGresult *pgfdw_exec_query_params(PGconn *conn, const char *query,
-					 int nParams,
-					 const Oid *paramTypes,
-					 const char * const *paramValues,
-					 const int *paramLengths,
-					 const int *paramFormats,
-					 int resultFormat);
-extern void pgfdw_report_error(int elevel, PGresult *res, PGconn *conn,
-				   bool clear, const char *sql);
-
 /* in deparse.c */
 extern void classifyConditions(PlannerInfo *root,
 				   RelOptInfo *baserel,
