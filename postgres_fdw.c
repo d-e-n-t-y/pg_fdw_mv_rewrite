@@ -82,7 +82,6 @@ mv_rewrite_dest_receiveSlot (TupleTableSlot *slot,
 	struct mv_rewrite_dest_receiver *dest =
     		(struct mv_rewrite_dest_receiver *) self;
 
-	// FIXME: do we need to copy the slot?
 	dest->sstate->received = slot;
 
 	return true;
@@ -533,7 +532,12 @@ transform_todos_mutator (Node *node, struct transform_todo *todo_list)
         {
             
             Var *v = makeNode (Var);
+			
+			// Set the type so that, when we deparse the Var, the deparser knows that
+			// the column name should be looked up against the list of names that relate
+			// to the MV, and not to those that relate to the underlying rel.
             v->varno = v->varnoold = REWRITTEN_VAR;
+			
             v->varattno = v->varoattno = (int) i;
             v->varcollid = InvalidOid;
             v->varlevelsup = 0;
