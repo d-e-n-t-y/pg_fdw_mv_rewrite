@@ -953,7 +953,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         if (!found)
         {
             if (g_log_match_progress)
-                elog(INFO, "%s: expression not found in grouped rel: %s", __func__, nodeToString (je));
+                elog(INFO, "%s: expression not found in clauses in the query: %s", __func__, nodeToString (je));
             
             return false;
         }
@@ -1176,7 +1176,7 @@ parse_select_query (const char *mv_sql)
 	 * make a preliminary copy of the source querytree.  This prevents
 	 * problems in the case that the COPY is in a portal or plpgsql
 	 * function and is executed repeatedly.  (See also the same hack in
-	 * DECLARE CURSOR and PREPARE.)  XXX FIXME someday.
+	 * DECLARE CURSOR and PREPARE.)
 	 */
 	List *qtList = pg_analyze_and_rewrite (copyObject (mv_parsetree), mv_sql, NULL, 0, NULL);
 
@@ -1270,10 +1270,10 @@ static Plan *plan_mv_rewrite_path (PlannerInfo *root,
 
 	cscan->flags = 0;
 	cscan->custom_private = list_make3 (pstmt, query, competing_cost);
-	cscan->custom_exprs = NIL; // FIXME: is this correct?
+	cscan->custom_exprs = NIL;
 	cscan->custom_scan_tlist = grouped_tlist;
 	cscan->scan.plan.targetlist = grouped_tlist;
-	cscan->custom_plans = pstmt->subplans; // FIXME: should this be pstmt->subplans?
+	cscan->custom_plans = pstmt->subplans;
 	cscan->custom_relids = grouped_relids;
 
 	cscan->methods = &mv_rewrite_scan_methods;
@@ -1309,8 +1309,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         Expr *e = lfirst (lc);
         grouped_tlist = add_to_flat_tlist (grouped_tlist, list_make1 (e));
     }
-    // FIXME: no longer required?:    build_tlist_to_deparse (grouped_rel);
-    
+	
     // Evaluate each MV in turn...
     ListCell   *sc, *nc;
     forboth (sc, mvs_schema, nc, mvs_name)
@@ -1324,10 +1323,6 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         
 		if (!evaluate_matview_for_rewrite (root, input_rel, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
             continue;
-        
-        // FIXME: we consider that there are no locally-checked quals
-        // to save building all that cruft here. But in reality, that
-        // might be wrong.
         
         // 8. Finally, create and add the path
         if (g_log_match_progress)
@@ -1376,9 +1371,9 @@ void add_rewritten_mv_paths (PlannerInfo *root,
             cp->path.pathtarget = grouping_target;
             cp->path.parent = grouped_rel;
 
-            cp->path.param_info = NULL; // FIXME: is this correct?
-            cp->path.parallel_aware = subplan->parallel_aware; // FIXME: is this relevant?
-            cp->path.parallel_safe = subplan->parallel_safe; // FIXME: is this relevant?
+            cp->path.param_info = NULL;
+            cp->path.parallel_aware = subplan->parallel_aware;
+            cp->path.parallel_safe = subplan->parallel_safe;
             
             // Work out the cost of the competing (unrewritten) plan...
             StringInfo competing_cost = makeStringInfo();
