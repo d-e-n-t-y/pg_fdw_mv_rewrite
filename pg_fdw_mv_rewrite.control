@@ -1,5 +1,5 @@
-# pg_fdw_mv_rewrite extension
-comment = 'MV-rewriting extension'
+# mv_rewrite extension
+comment = 'MV rewrite extension'
 default_version = '0.5'
 module_pathname = '$libdir/pg_fdw_mv_rewrite'
 relocatable = true

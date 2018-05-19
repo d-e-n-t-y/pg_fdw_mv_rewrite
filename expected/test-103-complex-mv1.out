@@ -1,11 +1,10 @@
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden2' group by key;
-                       QUERY PLAN                        
----------------------------------------------------------
+                                         QUERY PLAN                                         
+--------------------------------------------------------------------------------------------
  Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Relations: Aggregate on (public.test)
-   Remote SQL: SELECT key, count FROM public.test_mv2 WHERE ((hidden = 'hidden2'::text))
-(4 rows)
+   Rewritten SQL: SELECT key, count FROM public.test_mv2 WHERE ((hidden = 'hidden2'::text))
+(3 rows)
 
 select key, COUNT (value) from test where hidden = 'hidden2' group by key;
  key  |  count  

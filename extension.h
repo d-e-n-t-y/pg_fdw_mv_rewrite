@@ -1,6 +1,6 @@
 //
 //  exension.h
-//  pg_fdw_mv_rewrite
+//  mv_rewrite
 //
 //  Created by John Dent on 28/04/2018.
 //  Copyright © 2018 John Dent. All rights reserved.
@@ -10,6 +10,16 @@
 #define extension_h
 
 #include "optimizer/planner.h"
+
+extern bool g_log_match_progress;
+extern bool g_trace_match_progress;
+extern bool g_trace_parse_select_query;
+extern bool g_trace_group_clause_source_check;
+extern bool g_trace_having_clause_source_check;
+extern bool g_trace_where_clause_source_check;
+extern bool g_trace_select_clause_source_check;
+extern bool g_trace_join_clause_check;
+extern bool g_debug_join_clause_check;
 
 extern void
 _PG_init (void);

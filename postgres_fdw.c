@@ -57,16 +57,6 @@
 
 PG_MODULE_MAGIC;
 
-static bool g_log_match_progress = false;
-static bool g_trace_match_progress = false;
-static bool g_trace_parse_select_query = false;
-static bool g_trace_group_clause_source_check = false;
-static bool g_trace_having_clause_source_check = false;
-static bool g_trace_where_clause_source_check = false;
-static bool g_trace_select_clause_source_check = false;
-static bool g_trace_join_clause_check = false;
-static bool g_debug_join_clause_check = false;
-
 
 typedef struct {
 	CustomScanState sstate;
@@ -835,6 +825,7 @@ check_group_clauses_for_matview (PlannerInfo *root,
 static bool
 check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
+									 RelOptInfo *input_rel,
                                      RelOptInfo *grouped_rel,
                                      List **additional_where_clauses,
                                      struct transform_todo *todo_list)
@@ -899,17 +890,23 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     if (g_debug_join_clause_check)
         elog(INFO, "%s: aggregated MV join clauses: %s", __func__, nodeToString (quals));
     
-    // 3.1. We must find all its expressions present in our grouped_rel query
+    // 3.1. We must find all the MV's expressions to be present in the query
     //      otherwise the MV is potentially too restrictive.
-
-    List /* RestrictInfo* */ *grouped_rel_clauses;
+	
+    List /* RestrictInfo* */ *query_clauses;
+	
+	// FIXME: for now it's obvious that grouped_rel is an upper rel, but we should generalise that the grouped_rel is actually the rel we want to fulfil, and so it might be a simple join, or even just a baserel with expensive expressions, in furure
+	if (IS_UPPER_REL(grouped_rel))
+	{
+		query_clauses = list_copy (input_rel->baserestrictinfo);
+	}
+	else
+		return false;
     
-    grouped_rel_clauses = list_copy (grouped_rel->baserestrictinfo);
-    
-    List /* RestrictInfo* */ *found_grouped_rel_clauses = NIL;
+    List /* RestrictInfo* */ *found_clauses = NIL;
 
     if (g_debug_join_clause_check)
-        elog(INFO, "%s: grouped_rel clauses: %s", __func__, nodeToString (grouped_rel_clauses));
+        elog(INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (query_clauses));
     
     struct expr_targets_equals_ctx col_names = {
         root, parsed_mv_query->rtable
@@ -926,7 +923,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
         bool found = false;
         
         ListCell *lc3;
-        foreach (lc3, grouped_rel_clauses)
+        foreach (lc3, query_clauses)
         {
             RestrictInfo *ri = lfirst (lc3);
             
@@ -942,8 +939,8 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
                 if (g_debug_join_clause_check)
                     elog(INFO, "%s: matched expression: %s", __func__, nodeToString (ri));
 
-                found_grouped_rel_clauses = lappend (found_grouped_rel_clauses, ri);
-                grouped_rel_clauses = list_delete (grouped_rel_clauses, ri);
+                found_clauses = lappend (found_clauses, ri);
+                query_clauses = list_delete (query_clauses, ri);
                 found = true;
                 break;
             }
@@ -964,7 +961,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     //    WHERE clause list. Return them so the WHERE clause processing can handle
     //    them appropriately.
     
-    *additional_where_clauses = grouped_rel_clauses;
+    *additional_where_clauses = query_clauses;
 
     if (g_debug_join_clause_check)
         elog(INFO, "%s: balance of clauses: %s", __func__, deparseNode ((Node *) *additional_where_clauses, root, grouped_rel));
@@ -1008,6 +1005,7 @@ process_having_clauses (PlannerInfo *root,
 static bool
 check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                Query *parsed_mv_query,
+											   RelOptInfo *input_rel,
                                                RelOptInfo *grouped_rel,
                                                List *additional_clauses,
                                                List **transformed_clist_p,
@@ -1021,6 +1019,13 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
     // Copy the list so we don't stomp on it when we append
     List *quals = list_copy (riquals);
     quals = list_concat (quals, additional_clauses);
+	
+	// FIXME: for now it's obvious that grouped_rel is an upper rel, but we should generalise that the grouped_rel is actually the rel we want to fulfil, and so it might be a simple join, or even just a baserel with expensive expressions, in furure
+	if (IS_UPPER_REL(grouped_rel))
+	{
+		// FIXME: not quite sure whether simple concatenation will work — do not the column names map differently?
+		quals = list_concat (quals, input_rel->baserestrictinfo);
+	}
 
     ListCell   *lc;
     foreach (lc, quals)
@@ -1076,6 +1081,7 @@ check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
 
 static bool
 evaluate_matview_for_rewrite (PlannerInfo *root,
+							  RelOptInfo *input_rel,
                               RelOptInfo *grouped_rel,
                               List *grouped_tlist,
                               StringInfo mv_name, StringInfo mv_schema,
@@ -1104,7 +1110,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     List *additional_where_clauses = NIL;
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
-    if (!check_from_join_clauses_for_matview (root, parsed_mv_query, grouped_rel, &additional_where_clauses,
+    if (!check_from_join_clauses_for_matview (root, parsed_mv_query, input_rel, grouped_rel, &additional_where_clauses,
                                               &transform_todo_list))
         return false;
     
@@ -1113,7 +1119,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     process_having_clauses (root, parsed_mv_query, grouped_rel, &additional_where_clauses, &transform_todo_list);
     
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
-    if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, grouped_rel, additional_where_clauses,
+    if (!check_where_clauses_source_from_matview_tlist(root, parsed_mv_query, input_rel, grouped_rel, additional_where_clauses,
                                                        &transformed_clist, &transform_todo_list))
         return false;
     
@@ -1312,7 +1318,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
 
         StringInfo alternative_query;
         
-        if (!evaluate_matview_for_rewrite (root, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
+		if (!evaluate_matview_for_rewrite (root, input_rel, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
             continue;
         
         // FIXME: we consider that there are no locally-checked quals

@@ -1,6 +1,6 @@
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where key = 'key2' group by key;
-                       QUERY PLAN                        
----------------------------------------------------------
+                                                   QUERY PLAN                                                    
+-----------------------------------------------------------------------------------------------------------------
  Custom Scan (MVRewriteScan)
    Output: key, (count(value))
    Rewritten SQL: SELECT key, count FROM public.test_mv1 WHERE ((key = 'key2'::text)) AND ((key = 'key2'::text))
@@ -9,6 +9,6 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where key = 'ke
 select key, COUNT (value) from test where key = 'key2' group by key;
  key  |  count  
 ------+---------
- key1 |      10
-(1 rows)
+ key2 | 1000000
+(1 row)
 

@@ -1,17 +1,22 @@
 -- FIXME: re-grouping based on a strict superset of MV group by terms is not currently supported
 explain (VERBOSE, COSTS OFF) select key, hidden, COUNT (value) from test group by key, hidden order by key;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- Sort
-   Output: key, hidden, (count(value))
-   Sort Key: test.key
-   ->  HashAggregate
-         Output: key, hidden, count(value)
-         Group Key: test.key, test.hidden
-         ->  Foreign Scan on public.test
-               Output: key, hidden, value
-               Remote SQL: SELECT key, hidden, value FROM public.test
-(9 rows)
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, hidden, count(value)
+   Group Key: test.key, test.hidden
+   ->  Gather Merge
+         Output: key, hidden, (PARTIAL count(value))
+         Workers Planned: 2
+         ->  Partial GroupAggregate
+               Output: key, hidden, PARTIAL count(value)
+               Group Key: test.key, test.hidden
+               ->  Sort
+                     Output: key, hidden, value
+                     Sort Key: test.key, test.hidden
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, hidden, value
+(14 rows)
 
 select key, hidden, COUNT (value) from test group by key, hidden order by key;
  key  | hidden  |  count  
