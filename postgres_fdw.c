@@ -826,6 +826,21 @@ check_group_clauses_for_matview (PlannerInfo *root,
     return true;
 }
 
+static List /* RestrictInfo * */ *
+get_restrict_list_for_join_rel (PlannerInfo *root,
+								RelOptInfo *join_rel)
+{
+	// FIXME: there must be a better way to obtain the restrictlist for a JOIN_REL.
+	
+	/* Our method is based on the fact that the code which computes the restrictlist
+	   in make_join_rel(root, rel1, rel2) pases the list directly on, and all the
+	   resulting Paths for the rel use the restrictlist verbatim.
+	 
+	   This means we can take any path, and then pull out the restrictlist. */
+	
+	return list_nth_node (JoinPath, join_rel->pathlist, 0)->joinrestrictinfo;
+}
+
 static bool
 check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
@@ -834,8 +849,10 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
                                      List **additional_where_clauses,
                                      struct transform_todo *todo_list)
 {
+	if (g_trace_join_clause_check)
+		elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
     if (g_trace_join_clause_check)
-        elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
+        elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
 
     // 1. We don't need to check the rels involved — they must be joined
     //    by the MV otherwise they wouldn't have been selected for evaluation.
@@ -902,7 +919,15 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 	// FIXME: for now it's obvious that grouped_rel is an upper rel, but we should generalise that the grouped_rel is actually the rel we want to fulfil, and so it might be a simple join, or even just a baserel with expensive expressions, in furure
 	if (IS_UPPER_REL(grouped_rel))
 	{
-		query_clauses = list_copy (input_rel->baserestrictinfo);
+		if (IS_SIMPLE_REL (input_rel))
+			query_clauses = list_copy (input_rel->baserestrictinfo);
+		
+		else if (IS_JOIN_REL (input_rel))
+		{
+			query_clauses = list_copy (input_rel->joininfo);
+
+			query_clauses = list_concat_unique_ptr (query_clauses, get_restrict_list_for_join_rel (root, input_rel));
+		}
 	}
 	else
 		return false;
