@@ -210,6 +210,10 @@ static void mv_rewrite_explain_scan (CustomScanState *node,
 	// Add competing plan costs.
 	if (es->costs)
 		ExplainPropertyText("Original costs", strVal (sstate->competing_cost), es);
+	
+	// Add the subquery scan PS child to allow it to be EXPLAINed.
+	// FIXME: we don't do this right now because it results in rather confused output
+	// sstate->sstate.custom_ps = list_make1 (sstate->qdesc->planstate);
 }
 
 /*
@@ -841,6 +845,82 @@ get_restrict_list_for_join_rel (PlannerInfo *root,
 	return list_nth_node (JoinPath, join_rel->pathlist, 0)->joinrestrictinfo;
 }
 
+static JoinType
+get_jointype_for_join_rel (PlannerInfo *root,
+						   RelOptInfo *join_rel)
+{
+	// FIXME: same comment as for get_restrict_list_for_join_rel()
+	
+	JoinPath *jp = list_nth_node (JoinPath, join_rel->pathlist, 0);
+
+	return jp->jointype;
+}
+
+static bool
+check_from_clauses_for_matview_with_join (PlannerInfo *root,
+										  Query *parsed_mv_query,
+										  RelOptInfo *input_rel)
+{
+	Assert (IS_JOIN_REL (input_rel));
+	
+	// Get the set of baserelid OIDs implied by the input_rel
+	
+	Relids join_relids = input_rel->relids;
+	
+	Bitmapset *input_rel_oids = NULL;
+
+	for (int i = bms_first_member (join_relids);
+		 i >= 0;
+		 i = bms_next_member (join_relids, i))
+	{
+		RangeTblEntry *rte = planner_rt_fetch (i, root);
+		
+		// FIXME: support a query that has a given rel OID mentioned more than once
+		if (bms_is_member ((int) rte->relid, input_rel_oids))
+			if (g_log_match_progress)
+			{
+				elog(INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
+
+				return false;
+			}
+
+		input_rel_oids = bms_add_member (input_rel_oids, (int) rte->relid);
+	}
+	
+	// Get the set of baserel OIDs implied by the query
+	// FIXME: do this recursively, for each level of the query
+
+	Bitmapset *query_rel_oids = NULL;
+	
+	List /* RangeTblRef * */ *query_rtes = parsed_mv_query->jointree->fromlist;
+	ListCell *lc;
+	foreach (lc, query_rtes)
+	{
+		RangeTblRef *rtr = lfirst (lc);
+		RangeTblEntry *rte = rt_fetch (rtr->rtindex, parsed_mv_query->rtable);
+
+		// FIXME: support an MV that has a given rel OID mentioned more than once
+		
+		if (bms_is_member ((int) rte->relid, query_rel_oids))
+			if (g_log_match_progress)
+			{
+				elog(INFO, "%s: query with multiple mentions of same OID not supported.", __func__);
+				
+				return false;
+			}
+
+		query_rel_oids = bms_add_member (query_rel_oids, (int) rte->relid);
+	}
+	
+	bool equal = bms_equal (query_rel_oids, input_rel_oids);
+	
+	if (g_log_match_progress)
+		if (!equal)
+			elog(INFO, "%s: set of rels involved in query and in MV are not identical.", __func__);
+	
+	return equal;
+}
+
 static bool
 check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
@@ -857,9 +937,6 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     // 1. We don't need to check the rels involved — they must be joined
     //    by the MV otherwise they wouldn't have been selected for evaluation.
         
-    // 2. However, we do need to check the type of JOIN (INNER, OUTER, etc.)
-    // FIXME!
-
     // 3. Go through each JOIN clause in the MV.
 
     if (g_debug_join_clause_check)
@@ -924,6 +1001,15 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 		
 		else if (IS_JOIN_REL (input_rel))
 		{
+			// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV.
+			if (!check_from_clauses_for_matview_with_join (root, parsed_mv_query, input_rel))
+				return false;
+			
+			// FIXME: check the query requests at least one in the set of all possible inter-rel JoinTypes
+			
+			// FIXME: Check the type of JOIN (INNER, OUTER, etc.) matches
+			get_jointype_for_join_rel (root, input_rel);
+			
 			query_clauses = list_copy (input_rel->joininfo);
 
 			query_clauses = list_concat_unique_ptr (query_clauses, get_restrict_list_for_join_rel (root, input_rel));

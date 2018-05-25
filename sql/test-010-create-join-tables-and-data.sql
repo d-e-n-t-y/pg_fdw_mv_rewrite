@@ -6,6 +6,9 @@ insert into test_name (select 2, 20, 'key2', 'class2');
 
 insert into test_name (select 3, 30, 'key3', 'class2');
 
+-- key4 does not have any parners in test_values: used for outer join testing
+insert into test_name (select 4, 40, 'key4', 'class2');
+
 create table test_value (id1 numeric, id2 numeric, additional text, value text);
 
 insert into test_value (select 1, 10, ceil (random()*10), generate_series (1, 100));
