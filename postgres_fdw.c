@@ -16,6 +16,7 @@
 #include "deparse.h"
 #include "equalswalker.h"
 #include "extension.h"
+#include "join_is_legal.h"
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -292,21 +293,22 @@ pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
 	// Ignore stages we don't support; and skip any duplicate calls.
 	if (stage != UPPERREL_GROUP_AGG)
 	{
-		if (g_trace_match_progress)
-		{
-			elog(INFO, "%s: upper path stage (%d) not supported for query: %s", __func__, stage, nodeToString (input_rel));
-			elog(INFO, "%s: upper path stage (%d) not supported for root: %s", __func__, stage, nodeToString (root));
-		}
-        	return;
+		if (g_log_match_progress)
+			elog(INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
+		
+		return;
+	}
+	
+	if (g_trace_match_progress)
+	{
+		elog(INFO, "%s: stage: %d", __func__, stage);
+		elog(INFO, "%s: root: %s", __func__, nodeToString (root));
+		elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+		elog(INFO, "%s: output_rel: %s", __func__, nodeToString (output_rel));
 	}
 
 	// If we can rewrite, add those alternate paths...
 	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
-
-	// elog(INFO, "%s: hook for stage=%d", __func__, stage);
-	// elog(INFO, "%s: hook for root: %s", __func__, nodeToString (root));
-	// elog(INFO, "%s: hook for input_rel: %s", __func__, nodeToString (input_rel));
-	// elog(INFO, "%s: hook for output_rel: %s", __func__, nodeToString (output_rel));
 
 	add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, grouping_target);
 }
@@ -317,18 +319,60 @@ recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmaps
 Bitmapset *
 recurse_relation_relids (PlannerInfo *root, Bitmapset *initial_relids, Bitmapset *out_relids)
 {
+	for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
+	{
+		RangeTblEntry *rte = planner_rt_fetch(x, root);
+		//elog(INFO, "%s: recurse relid %d (rtekind %d)", __func__, x, rte->rtekind);
+		out_relids = recurse_relation_relids_from_rte (root, rte, out_relids);
+	}
+	
+	return out_relids;
+}
+
+Bitmapset *
+recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
+{
+	if (rte->rtekind == RTE_RELATION)
+	{
+		//elog(INFO, "%s: add relation: %d", __func__, rte->relid);
+		out_relids = bms_add_member (out_relids, (int) rte->relid);
+	}
+	else if (rte->rtekind == RTE_SUBQUERY)
+	{
+		if (rte->subquery != NULL)
+			if (rte->subquery->rtable != NULL)
+			{
+				ListCell *lc;
+				foreach (lc, rte->subquery->rtable)
+				{
+					RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
+					
+					// FIXME: should not use BMS to store the large integers that are Oids!
+					out_relids = recurse_relation_relids_from_rte (root, srte, out_relids);
+				}
+			}
+	}
+	return out_relids;
+}
+
+Bitmapset *
+recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *relids);
+
+Bitmapset *
+recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, Bitmapset *out_relids)
+{
     for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
     {
         RangeTblEntry *rte = planner_rt_fetch(x, root);
         //elog(INFO, "%s: recurse relid %d (rtekind %d)", __func__, x, rte->rtekind);
-        out_relids = recurse_relation_relids_from_rte (root, rte, out_relids);
+        out_relids = recurse_relation_oids_from_rte (root, rte, out_relids);
     }
     
     return out_relids;
 }
 
 Bitmapset *
-recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
+recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
 {
     if (rte->rtekind == RTE_RELATION)
     {
@@ -344,6 +388,8 @@ recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmaps
                 foreach (lc, rte->subquery->rtable)
                 {
                     RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
+					
+					// FIXME: should not use BMS to store the large integers that are Oids!
                     out_relids = recurse_relation_relids_from_rte (root, srte, out_relids);
                 }
             }
@@ -360,13 +406,13 @@ find_related_matviews_for_relation (PlannerInfo *root,
 {
     *mvs_schema = NIL, *mvs_name = NIL;
     
-    Bitmapset *relids = NULL;
+    Bitmapset *rel_oids = NULL;
     if (input_rel != NULL)
-        relids = recurse_relation_relids (root, input_rel->relids, NULL);
+        rel_oids = recurse_relation_oids (root, input_rel->relids, NULL);
     else if (inner_rel != NULL && outer_rel != NULL)
     {
-        relids = recurse_relation_relids (root, inner_rel->relids, NULL);
-        relids = recurse_relation_relids (root, outer_rel->relids, relids);
+        rel_oids = recurse_relation_oids (root, inner_rel->relids, NULL);
+        rel_oids = recurse_relation_oids (root, outer_rel->relids, rel_oids);
     }
     
     //elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
@@ -384,7 +430,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
                             " AND j.tables @> $1");
     
     List /* char* */ *tables_strlist = NIL;
-    for (int x = bms_next_member (relids, -1); x >= 0; x = bms_next_member (relids, x))
+    for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
     {
         StringInfo table_name = makeStringInfo();
         
@@ -830,6 +876,259 @@ check_group_clauses_for_matview (PlannerInfo *root,
     return true;
 }
 
+static bool
+join_node_valid_for_plan_recurse (PlannerInfo *root,
+								  Node *node,
+			  					  Query *parsed_mv_query,
+								  Relids join_relids,
+								  List **mv_oids_involved,
+								  Relids *query_relids_involved);
+
+static bool
+join_node_valid_for_plan (PlannerInfo *root,
+						  Query *parsed_mv_query,
+					      RelOptInfo *join_rel)
+{
+	if (g_debug_join_clause_check)
+		elog(INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
+
+	if (g_trace_join_clause_check)
+		elog(INFO, "%s: join_rel: %s", __func__, nodeToString (join_rel));
+
+	// Attempt to find a legal join in the plan for each of the joins in the MV's jointree.
+	
+	List /* Oid */ *mv_oids_involved = NIL;
+	Relids query_relids_involved = NULL;
+	
+	Relids join_relids = join_rel->relids;
+	
+	if (g_trace_join_clause_check)
+		elog(INFO, "%s: join_relids: %s", __func__, bmsToString (join_relids));
+
+	bool ok = join_node_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved);
+	
+	if (!ok)
+		return false;
+	
+	// The join should now have accounted for every rel in the join_rel: if not, we don't have a match
+	if (!bms_equal (join_relids, query_relids_involved))
+	{
+		if (g_log_match_progress)
+			elog(INFO, "%s: join_rel does not involve all rels in the MV", __func__);
+
+		return false;
+	}
+	
+	return true;
+}
+
+/**
+ * Recursively descend into the MV's jointree, and do two things:
+ *
+ * 1. For each join, ensure there is a matching rel in the planned query.
+ * 2. Aggregate the quals so we can check them in a later step.
+ *
+ */
+static bool
+join_node_valid_for_plan_recurse (PlannerInfo *root,
+								  Node *node,
+								  Query *parsed_mv_query,
+								  Relids join_relids,
+								  List /* Oid */ **mv_oids_involved,
+								  Relids *query_relids_involved)
+{
+	if (g_trace_join_clause_check)
+		elog(INFO, "%s: processing node: %s", __func__, nodeToString (node));
+	
+	if (IsA (node, RangeTblRef))
+	{
+		RangeTblRef *rtr = (RangeTblRef *) node;
+		
+		// Find the OID it references.
+		RangeTblEntry *rte = rt_fetch (rtr->rtindex, parsed_mv_query->rtable);
+		Oid mv_oid = rte->relid;
+		
+		if (list_member_oid (*mv_oids_involved, mv_oid))
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
+
+			return false;
+		}
+		
+		// Locate the same OID the query plan.
+		for (int i = bms_next_member (join_relids, -1);
+			 i >= 0;
+			 i = bms_next_member (join_relids, i))
+		{
+			RangeTblEntry *rte = planner_rt_fetch (i, root);
+			Oid join_oid = rte->relid;
+
+			// If found, keep a record so we know what joins to what later.
+			if (mv_oid == join_oid)
+			{
+				*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
+				*query_relids_involved = bms_add_member (*query_relids_involved, i);
+
+				if (g_trace_join_clause_check)
+					elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+
+				return true;
+			}
+		}
+
+		// Otherwise, since we can't find a match, that means the MV doesn't match.
+
+		if (g_log_match_progress)
+			elog(INFO, "%s: no match found in plan for MV rtindex: %d; MV Oid: %d", __func__, rtr->rtindex, (int) mv_oid);
+		
+		return false;
+	}
+	else if (IsA (node, JoinExpr))
+	{
+		JoinExpr *je = castNode (JoinExpr, node);
+		
+		Node *larg = je->larg;
+		Node *rarg = je->rarg;
+		
+		Relids larg_query_relids = NULL;
+		
+		// Check the left side of the join is legal according to the plan.
+		if (!join_node_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids))
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: left side of join is not valid for plan: %s", __func__, nodeToString (larg));
+
+			return false;
+		}
+
+		Relids rarg_query_relids = NULL;
+		
+		if (!join_node_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids))
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: right side of join is not valid for plan: %s", __func__, nodeToString (rarg));
+			
+			return false;
+		}
+
+		// Find the RelOptInfos in the plan that represents larg and rarg
+		RelOptInfo *lrel, *rrel;
+		if (bms_num_members (larg_query_relids) > 1)
+			lrel = find_join_rel (root, larg_query_relids);
+		else
+			lrel = find_base_rel (root, bms_next_member (larg_query_relids, -1));
+		if (bms_num_members (rarg_query_relids) > 1)
+			rrel = find_join_rel (root, rarg_query_relids);
+		else
+			rrel = find_base_rel (root, bms_next_member (rarg_query_relids, -1));
+		
+		
+		if (g_trace_join_clause_check)
+			elog(INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
+
+		Relids outrelids = bms_union (larg_query_relids, rarg_query_relids);
+		
+		// FIXME: Check the two lists don't overlap!
+		
+		// Give the two legal sides of the join, check it is itself legal according to the plan.
+
+		bool reversed;
+		SpecialJoinInfo *sjinfo;
+		
+		if (!join_is_legal (root, lrel, rrel, outrelids, &sjinfo, &reversed))
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: MV contains a join not matched in query: %s", __func__, nodeToString (node));
+			
+			return false;
+		}
+		
+		// Then check the join type.
+
+		JoinType legal_jt = JOIN_INNER;
+		if (sjinfo != NULL)
+			legal_jt = sjinfo->jointype;
+		
+		// ... being mindful that we might have things the wrong way around.
+		if (reversed)
+		{
+			if (legal_jt == JOIN_LEFT)
+				legal_jt = JOIN_RIGHT;
+			else if (legal_jt == JOIN_RIGHT)
+				legal_jt = JOIN_LEFT;
+			else if (legal_jt == JOIN_UNIQUE_INNER)
+				legal_jt = JOIN_UNIQUE_OUTER;
+			else if (legal_jt == JOIN_UNIQUE_OUTER)
+				legal_jt = JOIN_UNIQUE_INNER;
+		}
+	
+		if (legal_jt != je->jointype)
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: MV contains a join of type not matched in query.", __func__);
+				
+			return false;
+		}
+		
+		*query_relids_involved = outrelids;
+		
+		if (g_trace_join_clause_check)
+			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+
+		return true;
+	}
+	else if (IsA (node, FromExpr))
+	{
+		FromExpr *fe = (FromExpr *) node;
+		
+		// Process joins, one by one...
+
+		// Handle the special case of a list of one.
+		if (list_length (fe->fromlist) == 1)
+			return join_node_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved);
+		
+		// Fake JoinExpr node and create an innter join between successive parties
+		JoinExpr *je = makeNode (JoinExpr);
+		je->jointype = JOIN_INNER; // always an inner join
+
+		bool first = true;
+		ListCell *lc;
+		foreach (lc, fe->fromlist)
+		{
+			Node *child = lfirst (lc);
+			
+			List *mv_oids_involved = NIL;
+			Relids outrelids = NULL;
+
+			if (!first)
+				je->larg = je->rarg; // prior rarg becomes left
+
+			je->rarg = child; // current child becomes right
+
+			if (!first)
+			{
+				if (!join_node_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids))
+					// Since we can't find a match, the MV doesn't match
+					return false;
+				
+				*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+			}
+			
+			first = false;
+		}
+		
+		if (g_trace_join_clause_check)
+			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+
+		return true;
+	}
+
+	elog (ERROR, "unrecognized node type: %d", (int) nodeTag (node));
+	
+	return false;
+}
+
 static List /* RestrictInfo * */ *
 get_restrict_list_for_join_rel (PlannerInfo *root,
 								RelOptInfo *join_rel)
@@ -869,7 +1168,7 @@ check_from_clauses_for_matview_with_join (PlannerInfo *root,
 	
 	Bitmapset *input_rel_oids = NULL;
 
-	for (int i = bms_first_member (join_relids);
+	for (int i = bms_next_member (join_relids, -1);
 		 i >= 0;
 		 i = bms_next_member (join_relids, i))
 	{
@@ -1001,14 +1300,10 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
 		
 		else if (IS_JOIN_REL (input_rel))
 		{
-			// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV.
-			if (!check_from_clauses_for_matview_with_join (root, parsed_mv_query, input_rel))
+			// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV, and
+			// that the every join in the MV is legal and correct according to the plan.
+			if (!join_node_valid_for_plan (root, parsed_mv_query, input_rel))
 				return false;
-			
-			// FIXME: check the query requests at least one in the set of all possible inter-rel JoinTypes
-			
-			// FIXME: Check the type of JOIN (INNER, OUTER, etc.) matches
-			get_jointype_for_join_rel (root, input_rel);
 			
 			query_clauses = list_copy (input_rel->joininfo);
 
