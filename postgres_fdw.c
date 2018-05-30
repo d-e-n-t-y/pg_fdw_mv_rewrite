@@ -1143,7 +1143,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			}
 
 			if (not_found_clauses != NULL)
-				*additional_where_clauses = lappend (*additional_where_clauses, not_found_clauses);
+				*additional_where_clauses = list_concat (*additional_where_clauses, not_found_clauses);
 		}
 		
 		if (g_trace_join_clause_check)
@@ -1213,7 +1213,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			}
 
 			if (not_found_clauses != NULL)
-				*additional_where_clauses = lappend (*additional_where_clauses, not_found_clauses);
+				*additional_where_clauses = list_concat (*additional_where_clauses, not_found_clauses);
 		}
 		
 		if (g_trace_join_clause_check)
