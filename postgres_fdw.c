@@ -883,15 +883,25 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 								  Relids join_relids,
 								  List **mv_oids_involved,
 								  Relids *query_relids_involved,
+								  RelOptInfo **query_found_rel,
 								  List /* RestrictInfo * */ **query_clauses,
 								  List /* RestrictInfo * */ **collated_mv_quals);
 
-static void
+/**
+ * Check for the presence of every join clause from the MV in the query plan.
+ * If a clause is missing, then it means the MV cannot substitute for the query.
+ * All 'found' clauses are removed from the query_clauses list.
+ *
+ * It is equally possible the query plan contained more clauses than the MV. Those
+ * additional clauses are left in query_clauses.
+ */
+static bool
 check_join_clauses (struct expr_targets_equals_ctx *comparison_context,
 					List /* RestrictInfo * or Expr * */ *mv_join_quals,
-					List /* RestrictInfo * or Expr * */ *query_clauses,
-					List /* RestrictInfo * or Expr * */ **not_found_clauses)
+					List /* RestrictInfo * or Expr * */ **query_clauses)
 {
+	List /* RestrictInfo * or Expr * */ *query_clauses_copy = list_copy (*query_clauses);
+	
 	ListCell *lc2;
 	foreach (lc2, mv_join_quals)
 	{
@@ -913,13 +923,14 @@ check_join_clauses (struct expr_targets_equals_ctx *comparison_context,
 		bool found = false;
 		
 		ListCell *lc3;
-		foreach (lc3, query_clauses)
+		foreach (lc3, query_clauses_copy)
 		{
-			Expr *expr = lfirst (lc3);
+			RestrictInfo *ri = lfirst (lc3);
+			Expr *expr = (Expr *) ri;
 			
 			/* Extract clause from RestrictInfo, if required */
-			if (IsA (expr, RestrictInfo))
-				expr = ((RestrictInfo *) expr)->clause;
+			if (IsA (ri, RestrictInfo))
+				expr = ri->clause;
 			
 			if (g_trace_join_clause_check)
 				elog(INFO, "%s: against expression: %s", __func__, nodeToString (expr));
@@ -929,6 +940,8 @@ check_join_clauses (struct expr_targets_equals_ctx *comparison_context,
 				if (g_debug_join_clause_check)
 					elog(INFO, "%s: matched expression: %s", __func__, nodeToString (expr));
 				
+				*query_clauses = list_delete_ptr (*query_clauses, ri);
+				
 				found = true;
 				break;
 			}
@@ -936,12 +949,14 @@ check_join_clauses (struct expr_targets_equals_ctx *comparison_context,
 		
 		if (!found)
 		{
-			*not_found_clauses = lappend (*not_found_clauses, mv_jq);
-			
 			if (g_log_match_progress)
 				elog(INFO, "%s: expression not found in clauses in the query: %s", __func__, nodeToString (mv_jq));
+			
+			return false;
 		}
 	}
+	
+	return true;
 }
 
 static bool
@@ -973,7 +988,7 @@ join_node_valid_for_plan (PlannerInfo *root,
 
 	collated_mv_quals = list_make1 (parsed_mv_query->jointree->quals);
 	
-	bool ok = join_node_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, &collated_query_quals, &collated_mv_quals);
+	bool ok = join_node_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals);
 	
 	if (!ok)
 		return false;
@@ -982,7 +997,12 @@ join_node_valid_for_plan (PlannerInfo *root,
 		root, parsed_mv_query->rtable
 	};
 	
-	check_join_clauses (&comparison_context, collated_mv_quals, collated_query_quals, additional_where_clauses);
+	// Check each MV join clauses is present in the query plan.
+	if (!check_join_clauses (&comparison_context, collated_mv_quals, &collated_query_quals))
+		return false;
+	
+	// Any query plan clauses not found will have to be folded as quals against the rewritten query.
+	*additional_where_clauses = collated_query_quals;
 	
 	// The join should now have accounted for every rel in the join_rel: if not, we don't have a match
 	if (!bms_equal (join_relids, query_relids_involved))
@@ -1011,6 +1031,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 								  Relids join_relids,
 								  List /* Oid */ **mv_oids_involved,
 								  Relids *query_relids_involved,
+								  RelOptInfo **query_found_rel,
 								  List /* RestrictInfo * */ **collated_query_quals,
 								  List /* RestrictInfo * */ **collated_mv_quals)
 {
@@ -1021,8 +1042,18 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 	{
 		RangeTblRef *rtr = (RangeTblRef *) node;
 		
-		// Find the OID it references.
 		RangeTblEntry *rte = rt_fetch (rtr->rtindex, parsed_mv_query->rtable);
+
+		// Check the type of the RTE.
+		if (rte->rtekind != RTE_RELATION)
+		{
+			if (g_log_match_progress)
+				elog(INFO, "%s: RTE ref other than plain relation not supported.", __func__);
+			
+			return false;
+		}
+		
+		// Find the OID it references.
 		Oid mv_oid = rte->relid;
 		
 		if (list_member_oid (*mv_oids_involved, mv_oid))
@@ -1050,11 +1081,18 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 				if (g_trace_join_clause_check)
 					elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
 
+				RelOptInfo *rel = find_base_rel (root, i);
+				if (rel->baserestrictinfo != NULL)
+					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, rel->baserestrictinfo);
+
+				if (query_found_rel != NULL)
+					*query_found_rel = rel;
+				
 				return true;
 			}
 		}
 
-		// Otherwise, since we can't find a match, that means the MV doesn't match.
+		// Otherwise, since we can't find a match, that means the MV doesn't match the query.
 
 		if (g_log_match_progress)
 			elog(INFO, "%s: no match found in plan for MV rtindex: %d; MV Oid: %d", __func__, rtr->rtindex, (int) mv_oid);
@@ -1070,8 +1108,11 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 		
 		Relids larg_query_relids = NULL;
 		
+		// Find the RelOptInfos in the plan that represents larg and rarg
+		RelOptInfo *lrel, *rrel;
+
 		// Check the left side of the join is legal according to the plan.
-		if (!join_node_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, collated_query_quals, collated_mv_quals))
+		if (!join_node_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals))
 		{
 			if (g_log_match_progress)
 				elog(INFO, "%s: left side of join is not valid for plan: %s", __func__, nodeToString (larg));
@@ -1081,25 +1122,13 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 
 		Relids rarg_query_relids = NULL;
 		
-		if (!join_node_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, collated_query_quals, collated_mv_quals))
+		if (!join_node_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals))
 		{
 			if (g_log_match_progress)
 				elog(INFO, "%s: right side of join is not valid for plan: %s", __func__, nodeToString (rarg));
 			
 			return false;
 		}
-
-		// Find the RelOptInfos in the plan that represents larg and rarg
-		RelOptInfo *lrel, *rrel;
-		if (bms_num_members (larg_query_relids) > 1)
-			lrel = find_join_rel (root, larg_query_relids);
-		else
-			lrel = find_base_rel (root, bms_next_member (larg_query_relids, -1));
-		if (bms_num_members (rarg_query_relids) > 1)
-			rrel = find_join_rel (root, rarg_query_relids);
-		else
-			rrel = find_base_rel (root, bms_next_member (rarg_query_relids, -1));
-		
 		
 		if (g_trace_join_clause_check)
 			elog(INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
@@ -1163,6 +1192,9 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
 		*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+		
+		if (query_found_rel != NULL)
+			*query_found_rel = outerrel;
 
 		return true;
 	}
@@ -1179,7 +1211,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			if (fe->quals != NULL)
 				*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 
-			return join_node_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, collated_query_quals, collated_mv_quals);
+			return join_node_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
 		}
 		
 		// Handle the special case of a list of two.
@@ -1191,7 +1223,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			je->rarg = list_nth_node (Node, fe->fromlist, 1);
 			je->quals = fe->quals;
 
-			return join_node_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, collated_query_quals, collated_mv_quals);
+			return join_node_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
 		}
 
 		Relids outrelids = NULL;
@@ -1216,7 +1248,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 				
 				if (!first)
 				{
-					if (!join_node_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, collated_query_quals, collated_mv_quals))
+					if (!join_node_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals))
 						// Since we can't find a match, the MV doesn't match
 						return false;
 					
@@ -1240,6 +1272,9 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
 		*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+		
+		if (query_found_rel != NULL)
+			*query_found_rel = outerrel;
 
 		return true;
 	}
