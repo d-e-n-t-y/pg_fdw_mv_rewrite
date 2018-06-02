@@ -1,14 +1,13 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden2' group by key;
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden3' group by key;
                                          QUERY PLAN                                         
 --------------------------------------------------------------------------------------------
  Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Rewritten SQL: SELECT key, count FROM public.test_mv2 WHERE ((hidden = 'hidden2'::text))
+   Rewritten SQL: SELECT key, count FROM public.test_mv2 WHERE ((hidden = 'hidden3'::text))
 (3 rows)
 
-select key, COUNT (value) from test where hidden = 'hidden2' group by key;
- key  |  count  
-------+---------
- key2 | 1000000
-(1 row)
+select key, COUNT (value) from test where hidden = 'hidden3' group by key;
+ key | count 
+-----+-------
+(0 rows)
 

@@ -10,7 +10,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.603133"
+            timestampString = "549587763.104311"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "125"
@@ -26,7 +26,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.6045049"
+            timestampString = "549587763.105751"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "184"
@@ -42,11 +42,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.605335"
+            timestampString = "549587763.106457"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1521"
-            endingLineNumber = "1521"
+            startingLineNumber = "1520"
+            endingLineNumber = "1520"
             landmarkName = "evaluate_matview_for_rewrite"
             landmarkType = "9">
          </BreakpointContent>
@@ -85,7 +85,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.606172"
+            timestampString = "549587763.107319"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "313"
@@ -101,7 +101,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.606959"
+            timestampString = "549587763.107949"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "302"
@@ -117,7 +117,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.607733"
+            timestampString = "549587763.108521"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "366"
@@ -133,7 +133,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.608441"
+            timestampString = "549587763.109092"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "371"
@@ -149,44 +149,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.6091501"
+            timestampString = "549587763.1098"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1685"
-            endingLineNumber = "1685"
+            startingLineNumber = "1684"
+            endingLineNumber = "1684"
             landmarkName = "add_rewritten_mv_paths"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "postgres_fdw.c"
-            timestampString = "549585569.609883"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1478"
-            endingLineNumber = "1478"
-            landmarkName = "evaluate_matview_for_rewrite"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "postgres_fdw.c"
-            timestampString = "549585569.610599"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1392"
-            endingLineNumber = "1392"
-            landmarkName = "check_where_clauses_source_from_matview_tlist"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -197,13 +165,13 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.611221"
+            timestampString = "549587763.111637"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1410"
-            endingLineNumber = "1410"
-            landmarkName = "check_where_clauses_source_from_matview_tlist"
-            landmarkType = "9">
+            startingLineNumber = "1409"
+            endingLineNumber = "1409"
+            landmarkName = "unknown"
+            landmarkType = "0">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -213,11 +181,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.611846"
+            timestampString = "549587763.112088"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1322"
-            endingLineNumber = "1322"
+            startingLineNumber = "1321"
+            endingLineNumber = "1321"
             landmarkName = "check_from_join_clauses_for_matview"
             landmarkType = "9">
          </BreakpointContent>
@@ -229,7 +197,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.612464"
+            timestampString = "549587763.112561"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "991"
@@ -245,7 +213,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.613097"
+            timestampString = "549587763.113093"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1045"
@@ -261,12 +229,28 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "postgres_fdw.c"
-            timestampString = "549585569.613676"
+            timestampString = "549587763.1135"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1001"
             endingLineNumber = "1001"
             landmarkName = "join_node_valid_for_plan"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "postgres_fdw.c"
+            timestampString = "549587763.113855"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1704"
+            endingLineNumber = "1704"
+            landmarkName = "add_rewritten_mv_paths"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>

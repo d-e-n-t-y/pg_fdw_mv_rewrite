@@ -1372,27 +1372,18 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                Query *parsed_mv_query,
 											   RelOptInfo *input_rel,
                                                RelOptInfo *grouped_rel,
-                                               List /* RestrictInfo * or Expr * */ *additional_clauses,
+                                               List /* RestrictInfo * or Expr * */ *query_where_clauses,
                                                List **transformed_clist_p,
                                                struct transform_todo *todo_list)
 {
-    List /* RestrictInfo* */ *riquals = grouped_rel->baserestrictinfo;
-
-    if (g_trace_where_clause_source_check)
-        elog(INFO, "%s: clauses: %s", __func__, nodeToString (riquals));
-    
-    // Copy the list so we don't stomp on it when we append
-    List *quals = list_copy (riquals);
-    quals = list_concat (quals, additional_clauses);
+	// All WHERE clauses fo a JOIN_REL will have been elicited during processing of
+	// the FROM/JOIN clauses of the input_rel.
 	
-	// FIXME: for now it's obvious that grouped_rel is an upper rel, but we should generalise that the grouped_rel is actually the rel we want to fulfil, and so it might be a simple join, or even just a baserel with expensive expressions, in furure
-	if (IS_UPPER_REL(grouped_rel))
-	{
-		quals = list_concat (quals, input_rel->baserestrictinfo);
-	}
-
+    if (g_trace_where_clause_source_check)
+        elog(INFO, "%s: clauses: %s", __func__, nodeToString (query_where_clauses));
+	
     ListCell   *lc;
-    foreach (lc, quals)
+    foreach (lc, query_where_clauses)
     {
         Expr *expr = lfirst (lc);
         
@@ -1493,8 +1484,51 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
     transformed_tlist = transform_todos (transformed_tlist, &transform_todo_list);
-    
+	List *quals = transform_todos (transformed_clist, &transform_todo_list);
+	
     // 7. Build the alternative query.
+	Query *mv_scan_query = makeNode (Query);
+	mv_scan_query->commandType = 1;
+	RangeTblEntry *mvsqrte = makeNode (RangeTblEntry);
+	mvsqrte->relid = 0; //FIXME: TODO
+	mvsqrte->inh = true;
+	mvsqrte->inFromCl = false;
+	mvsqrte->requiredPerms = ACL_SELECT;
+	mvsqrte->selectedCols = 0; // FIXME: TODO
+	mvsqrte->relkind = RELKIND_MATVIEW;
+	mvsqrte->eref = makeNode (Alias);
+	mvsqrte->eref->aliasname = mv_name->data;
+	mvsqrte->eref->colnames = matview_tlist_colnames (parsed_mv_query);
+	mv_scan_query->rtable = list_make1 (mvsqrte);
+	mv_scan_query->jointree = makeNode (FromExpr);
+	RangeTblRef *mvsrtr = makeNode (RangeTblRef);
+	mvsrtr->rtindex = 1;
+	mv_scan_query->jointree->fromlist = list_make1 (mvsrtr);
+	
+	if (quals != NULL)
+	{
+		Expr *quals_expr;
+		
+		if (list_length (quals) > 1)
+		{
+			quals_expr = (Expr *) makeNode (BoolExpr);
+
+			BoolExpr *be = (BoolExpr *) quals_expr;
+
+			be->boolop = AND_EXPR;
+			be->location = -1;
+			be->args = quals;
+		}
+		else
+			quals_expr = (Expr *) list_nth (quals, 0);
+
+		mv_scan_query->jointree->quals = (Node *) quals_expr;
+	}
+	
+	mv_scan_query->targetList = transformed_tlist;
+	
+	//elog(INFO, "%s: faked query tree: %s", __func__, nodeToString (mv_scan_query));
+	
     *alternative_query = makeStringInfo();
     {
         /* Fill portions of context common to upper, join and base relation */
@@ -1511,8 +1545,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
         deparseExplicitTargetList (transformed_tlist, NULL, &context);
         
         appendStringInfo (*alternative_query, " FROM %s.%s", mv_schema->data, mv_name->data);
-        
-        List *quals = transform_todos (transformed_clist, &transform_todo_list);
         
         if (quals != NIL)
         {
@@ -1699,6 +1731,8 @@ void add_rewritten_mv_paths (PlannerInfo *root,
 
             // FIXME: we should be able to do this without going via SQL
             Query *subquery = parse_select_query (alternative_query->data);
+
+			//elog(INFO, "%s: parsed query tree: %s", __func__, nodeToString (subquery));
             
             /* Generate Paths for the subquery. */
             PlannedStmt *pstmt = pg_plan_query (subquery,
