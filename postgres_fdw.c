@@ -13,25 +13,17 @@
 #include "postgres.h"
 
 #include "postgres_fdw.h"
-#include "deparse.h"
 #include "equalswalker.h"
 #include "extension.h"
 #include "join_is_legal.h"
 
-#include "access/htup_details.h"
-#include "access/sysattr.h"
-#include "catalog/pg_class.h"
 #include "catalog/namespace.h"
-#include "commands/defrem.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
-#include "foreign/fdwapi.h"
-#include "funcapi.h"
 #include "miscadmin.h"
 #include "nodes/extensible.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
-#include "nodes/print.h"
 #include "nodes/nodes.h"
 #include "optimizer/cost.h"
 #include "optimizer/clauses.h"
@@ -49,7 +41,6 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/sampling.h"
 #include "utils/selfuncs.h"
 #include "utils/regproc.h"
 #include "utils/snapmgr.h"
@@ -1533,43 +1524,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
 	//elog(INFO, "%s: faked query tree: %s", __func__, nodeToString (mv_scan_query));
 	
     return true;
-}
-
-static Query *
-parse_select_query (const char *mv_sql)
-{
-	RawStmt *mv_parsetree = list_nth_node (RawStmt, pg_parse_query (mv_sql), 0);
-    
-	/*
-	 * Because the parser and planner tend to scribble on their input, we
-	 * make a preliminary copy of the source querytree.  This prevents
-	 * problems in the case that the COPY is in a portal or plpgsql
-	 * function and is executed repeatedly.  (See also the same hack in
-	 * DECLARE CURSOR and PREPARE.)
-	 */
-	List *qtList = pg_analyze_and_rewrite (copyObject (mv_parsetree), mv_sql, NULL, 0, NULL);
-
-	Query *query = list_nth_node (Query, qtList, 0);
-
-	ListCell *e;
-	foreach (e, query->targetList)
-	{
-		TargetEntry *tle = lfirst_node (TargetEntry, e);
-		if (g_trace_parse_select_query)
-			elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
-
-		Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
-
-		tle->expr = new_expr;
-
-		if (g_trace_parse_select_query)
-			elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
-	}
-
-	if (g_trace_parse_select_query)
-		elog(INFO, "%s: query: %s", __func__, nodeToString (query));
-
-	return query;
 }
 
 static CustomExecMethods mv_rewrite_exec_methods = {
