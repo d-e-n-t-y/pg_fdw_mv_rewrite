@@ -498,10 +498,9 @@ find_related_matviews_for_relation (PlannerInfo *root,
 }
 
 static Query *
-get_mv_query (RelOptInfo *grouped_rel, const char *mv_name)
+get_mv_query (RelOptInfo *grouped_rel, const char *mv_name, Oid *matviewOid)
 {
     RangeVar    *matviewRV;
-    Oid         matviewOid;
     Relation    matviewRel;
     RewriteRule *rule;
     List       *actions;
@@ -511,9 +510,9 @@ get_mv_query (RelOptInfo *grouped_rel, const char *mv_name)
 
     matviewRV = makeRangeVarFromNameList (stringToQualifiedNameList (mv_name));
 
-    matviewOid = RangeVarGetRelid (matviewRV, lockmode, false);
+    *matviewOid = RangeVarGetRelid (matviewRV, lockmode, false);
 
-    matviewRel = heap_open(matviewOid, NoLock);
+    matviewRel = heap_open(*matviewOid, NoLock);
     
     /* Make sure it is a materialized view. */
     if (matviewRel->rd_rel->relkind != RELKIND_MATVIEW)
@@ -564,7 +563,7 @@ static void
 transform_todo_list_add_match (struct transform_todo *todo_list, Index i, Expr *replaced_node, TargetEntry *replacement_te)
 {
     //elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
-    
+	
     todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
     todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
 }
@@ -583,16 +582,16 @@ transform_todos_mutator (Node *node, struct transform_todo *todo_list)
             
             Var *v = makeNode (Var);
 			
-			// Set the type so that, when we deparse the Var, the deparser knows that
-			// the column name should be looked up against the list of names that relate
-			// to the MV, and not to those that relate to the underlying rel.
-            v->varno = v->varnoold = REWRITTEN_VAR;
+			// The Var in the replacement node will always reference Level 1
+			// because we replace the query/Rel with a simple SELECT subquery
+			// that pulls data from the MV.
+            v->varno = v->varnoold = 1;
 			
             v->varattno = v->varoattno = (int) i;
-            v->varcollid = InvalidOid;
+            v->varcollid = exprCollation ((Node *) replaced_node);
             v->varlevelsup = 0;
-            v->vartype = 0; // FIXME? Not sure if this is relevant as far as deparsing goes...
-            v->vartypmod = 0;
+			v->vartype = exprType ((Node *) replaced_node);
+            v->vartypmod = -1;
             v->location = -1;
             
             //elog(INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
@@ -740,7 +739,7 @@ expr_targets_in_matview_tlist_walker (Node *node, struct expr_targets_in_matview
             {
                 if (ctx->trace)
                     elog(INFO, "%s: matched!", __func__);
-                
+				
                 transform_todo_list_add_match (ctx->todo_list, i, (Expr *) node, te);
                 
                 done = true;
@@ -1440,7 +1439,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                               RelOptInfo *grouped_rel,
                               List *grouped_tlist,
                               StringInfo mv_name, StringInfo mv_schema,
-                              StringInfo *alternative_query)
+                              Query **alternative_query)
 {
     List /* Expr* */ *transformed_clist = NIL;
     List /* TargetEntry * */ *transformed_tlist = grouped_tlist;
@@ -1448,8 +1447,11 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     struct transform_todo transform_todo_list = { NIL, NIL };
     
     //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
-    
-    Query *parsed_mv_query = copyObject (get_mv_query (grouped_rel, (const char *) mv_name->data));
+	
+	Oid matviewOid;
+	
+	// FIXME: bit crufty for get_mv_query to return via the result, and via out vars...
+    Query *parsed_mv_query = copyObject (get_mv_query (grouped_rel, (const char *) mv_name->data, &matviewOid));
     
     // 1. Check the GROUP BY clause: it must match exactly.
     if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
@@ -1490,9 +1492,9 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
 	Query *mv_scan_query = makeNode (Query);
 	mv_scan_query->commandType = 1;
 	RangeTblEntry *mvsqrte = makeNode (RangeTblEntry);
-	mvsqrte->relid = 0; //FIXME: TODO
+	mvsqrte->relid = matviewOid;
 	mvsqrte->inh = true;
-	mvsqrte->inFromCl = false;
+	mvsqrte->inFromCl = true;
 	mvsqrte->requiredPerms = ACL_SELECT;
 	mvsqrte->selectedCols = 0; // FIXME: TODO
 	mvsqrte->relkind = RELKIND_MATVIEW;
@@ -1527,34 +1529,9 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
 	
 	mv_scan_query->targetList = transformed_tlist;
 	
+	*alternative_query = mv_scan_query;
 	//elog(INFO, "%s: faked query tree: %s", __func__, nodeToString (mv_scan_query));
 	
-    *alternative_query = makeStringInfo();
-    {
-        /* Fill portions of context common to upper, join and base relation */
-        deparse_expr_cxt context;
-        context.buf = *alternative_query;
-        context.root = root;
-        context.foreignrel = grouped_rel;
-        context.scanrel = grouped_rel;
-        context.params_list = NULL;
-        context.colnames = matview_tlist_colnames (parsed_mv_query);
-        
-        appendStringInfoString (*alternative_query, "SELECT ");
-        
-        deparseExplicitTargetList (transformed_tlist, NULL, &context);
-        
-        appendStringInfo (*alternative_query, " FROM %s.%s", mv_schema->data, mv_name->data);
-        
-        if (quals != NIL)
-        {
-            appendStringInfo (*alternative_query, " WHERE ");
-            appendConditions (quals, &context);
-        }
-
-        // FIXME: do we need to append the ORDER BY clause too?
-    }
-
     return true;
 }
 
@@ -1711,14 +1688,14 @@ void add_rewritten_mv_paths (PlannerInfo *root,
         if (g_log_match_progress)
             elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
-        StringInfo alternative_query;
+        Query *alternative_query;
         
 		if (!evaluate_matview_for_rewrite (root, input_rel, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
             continue;
         
-        // 8. Finally, create and add the path
+        // 8. Finally, create and add the path.
         if (g_log_match_progress)
-            elog(INFO, "%s: creating and adding path for alternate query: %s", __func__, alternative_query->data);
+            elog(INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
         
         Path       *path;
         {
@@ -1729,13 +1706,8 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                 return;
             }
 
-            // FIXME: we should be able to do this without going via SQL
-            Query *subquery = parse_select_query (alternative_query->data);
-
-			//elog(INFO, "%s: parsed query tree: %s", __func__, nodeToString (subquery));
-            
             /* Generate Paths for the subquery. */
-            PlannedStmt *pstmt = pg_plan_query (subquery,
+            PlannedStmt *pstmt = pg_plan_query (alternative_query,
                                                 (root->glob->parallelModeOK ? CURSOR_OPT_PARALLEL_OK : 0 )
                                                 | (root->tuple_fraction <= 1e-10 ? CURSOR_OPT_FAST_PLAN : 0),
                                                 root->glob->boundParams);
@@ -1785,8 +1757,9 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                 }
             }
 
+			// FIXME: having the textual explanation of the alternate scan as the nodeToString() text isn't particularly helpful.
             cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
-                                             makeString (alternative_query->data), makeString (competing_cost->data));
+                                             makeString (nodeToString (alternative_query)), makeString (competing_cost->data));
             
             path = (Path *) cp;
         }
