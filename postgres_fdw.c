@@ -41,6 +41,7 @@
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/ruleutils.h"
 #include "utils/selfuncs.h"
 #include "utils/regproc.h"
 #include "utils/snapmgr.h"
@@ -198,7 +199,7 @@ static void mv_rewrite_explain_scan (CustomScanState *node,
     
 	// Add rewritten query SQL.
 	if (es->verbose)
-		ExplainPropertyText("Rewritten SQL", strVal (sstate->query), es);
+		ExplainPropertyText("Rewritten", strVal (sstate->query), es);
 
 	// Add competing plan costs.
 	if (es->costs)
@@ -1711,10 +1712,20 @@ void add_rewritten_mv_paths (PlannerInfo *root,
                                       p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
                 }
             }
+			
+			StringInfo alt_query_text = makeStringInfo();
+			{
+				appendStringInfo (alt_query_text, "scan of %s.%s", mv_schema->data, mv_name->data);
 
-			// FIXME: having the textual explanation of the alternate scan as the nodeToString() text isn't particularly helpful.
+				//List	   *rtable = alternative_query->rtable;
+				//List	   *rtable_names = select_rtable_names_for_explain (rtable, bms_make_singleton (1));
+				//ListOf (deparse_namespace) *deparse_cxt = deparse_context_for_plan_rtable (rtable, rtable_names);
+				
+				// FIXME: include at least the additional WHERE clauses in the alternative query text
+			}
+
             cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
-                                             makeString (nodeToString (alternative_query)), makeString (competing_cost->data));
+                                             makeString (alt_query_text->data), makeString (competing_cost->data));
             
             path = (Path *) cp;
         }
