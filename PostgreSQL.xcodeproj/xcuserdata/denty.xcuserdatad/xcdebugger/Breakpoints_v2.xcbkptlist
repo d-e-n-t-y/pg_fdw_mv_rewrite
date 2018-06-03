@@ -31,7 +31,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "184"
             endingLineNumber = "184"
-            landmarkName = "mv_rewrite_end_scan"
+            landmarkName = "mv_rewrite_rescan_scan"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -74,7 +74,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "313"
             endingLineNumber = "313"
-            landmarkName = "pg_mv_rewrite_get_upper_paths"
+            landmarkName = "recurse_relation_relids"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -106,8 +106,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "366"
             endingLineNumber = "366"
-            landmarkName = "recurse_relation_oids"
-            landmarkType = "9">
+            landmarkName = "unknown"
+            landmarkType = "0">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -122,7 +122,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "371"
             endingLineNumber = "371"
-            landmarkName = "recurse_relation_oids"
+            landmarkName = "recurse_relation_oids_from_rte"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>

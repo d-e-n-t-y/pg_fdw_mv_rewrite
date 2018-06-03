@@ -49,6 +49,7 @@
 
 PG_MODULE_MAGIC;
 
+#define ListOf(type) List /* type */
 
 typedef struct {
 	CustomScanState sstate;
@@ -392,8 +393,8 @@ static void
 find_related_matviews_for_relation (PlannerInfo *root,
                                     RelOptInfo *input_rel, // if grouping
                                     RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
-                                    List /* StringInfo */ **mvs_schema,
-                                    List /* StringInfo */ **mvs_name)
+                                    ListOf (StringInfo) **mvs_schema,
+                                    ListOf (StringInfo) **mvs_name)
 {
     *mvs_schema = NIL, *mvs_name = NIL;
     
@@ -420,7 +421,7 @@ find_related_matviews_for_relation (PlannerInfo *root,
                             " AND j.matviewname = v.matviewname"
                             " AND j.tables @> $1");
     
-    List /* char* */ *tables_strlist = NIL;
+    ListOf (char *) *tables_strlist = NIL;
     for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
     {
         StringInfo table_name = makeStringInfo();
@@ -546,8 +547,8 @@ get_mv_query (RelOptInfo *grouped_rel, const char *mv_name, Oid *matviewOid)
 }
 
 struct transform_todo {
-    List /* Index */ *replacement_var;
-    List /* Expr * */ *replaced_expr;
+    ListOf (Index) *replacement_var;
+    ListOf (Expr *) *replaced_expr;
 };
 
 static void
@@ -593,8 +594,8 @@ transform_todos_mutator (Node *node, struct transform_todo *todo_list)
     return expression_tree_mutator (node, transform_todos_mutator, todo_list);
 }
 
-List /* TargetEntry* */ *
-transform_todos (List /* TargetEntry* */ *tlist, struct transform_todo *todo_list)
+ListOf (TargetEntry *) *
+transform_todos (ListOf (TargetEntry *) *tlist, struct transform_todo *todo_list)
 {
     return (List *) expression_tree_mutator ((Node *) tlist, transform_todos_mutator, todo_list);
 }
@@ -658,7 +659,7 @@ expr_targets_equals_walker (Node *a, Node *b, struct expr_targets_equals_ctx *ct
 struct expr_targets_in_matview_tlist_ctx
 {
     PlannerInfo *root;
-    List /* TargetEntry* */ *tList;
+    ListOf (TargetEntry *) *tList;
     bool trace; // enable trace logging
     bool match_found;
     bool did_search_anything;
@@ -815,10 +816,10 @@ check_expr_targets_in_matview_tlist (PlannerInfo *root,
     return ctx.match_found;
 }
 
-static List /* Value* */ *
+static ListOf (Value *) *
 matview_tlist_colnames (Query *mv_query)
 {
-    List *colnames = NIL;
+    ListOf (Value *) *colnames = NIL;
     
     ListCell *mv_lc;
     foreach (mv_lc, mv_query->targetList)
@@ -874,8 +875,8 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 								  List **mv_oids_involved,
 								  Relids *query_relids_involved,
 								  RelOptInfo **query_found_rel,
-								  List /* RestrictInfo * */ **query_clauses,
-								  List /* RestrictInfo * */ **collated_mv_quals);
+								  ListOf (RestrictInfo *) **query_clauses,
+								  ListOf (RestrictInfo *) **collated_mv_quals);
 
 /**
  * Check for the presence of every join clause from the MV in the query plan.
@@ -887,10 +888,10 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
  */
 static bool
 check_join_clauses (struct expr_targets_equals_ctx *comparison_context,
-					List /* RestrictInfo * or Expr * */ *mv_join_quals,
-					List /* RestrictInfo * or Expr * */ **query_clauses)
+					ListOf (RestrictInfo * or Expr *) *mv_join_quals,
+					ListOf (RestrictInfo * or Expr *) **query_clauses)
 {
-	List /* RestrictInfo * or Expr * */ *query_clauses_copy = list_copy (*query_clauses);
+	ListOf (RestrictInfo * or Expr *) *query_clauses_copy = list_copy (*query_clauses);
 	
 	ListCell *lc2;
 	foreach (lc2, mv_join_quals)
@@ -953,7 +954,7 @@ static bool
 join_node_valid_for_plan (PlannerInfo *root,
 						  Query *parsed_mv_query,
 					      RelOptInfo *join_rel,
-						  List /* RestrictInfo * or Expr * */ **additional_where_clauses)
+						  ListOf (RestrictInfo * or Expr *) **additional_where_clauses)
 {
 	if (g_debug_join_clause_check)
 		elog(INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
@@ -963,7 +964,7 @@ join_node_valid_for_plan (PlannerInfo *root,
 
 	// Attempt to find a legal join in the plan for each of the joins in the MV's jointree.
 	
-	List /* Oid */ *mv_oids_involved = NIL;
+	ListOf (Oid) *mv_oids_involved = NIL;
 	Relids query_relids_involved = NULL;
 	
 	Relids join_relids = join_rel->relids;
@@ -973,8 +974,8 @@ join_node_valid_for_plan (PlannerInfo *root,
 	
 	// As we walk the join tree, build up a list of quals. We will check each qual
 	// for presence in the query later.
-	List /* RestrictInfo * */ *collated_query_quals = NIL;
-	List /* RestrictInfo * */ *collated_mv_quals = NIL;
+	ListOf (RestrictInfo *) *collated_query_quals = NIL;
+	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
 	collated_mv_quals = list_make1 (parsed_mv_query->jointree->quals);
 	
@@ -1019,11 +1020,11 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 								  Node *node,
 								  Query *parsed_mv_query,
 								  Relids join_relids,
-								  List /* Oid */ **mv_oids_involved,
+								  ListOf (Oid) **mv_oids_involved,
 								  Relids *query_relids_involved,
 								  RelOptInfo **query_found_rel,
-								  List /* RestrictInfo * */ **collated_query_quals,
-								  List /* RestrictInfo * */ **collated_mv_quals)
+								  ListOf (RestrictInfo *) **collated_query_quals,
+								  ListOf (RestrictInfo *) **collated_mv_quals)
 {
 	if (g_trace_join_clause_check)
 		elog(INFO, "%s: processing node: %s", __func__, nodeToString (node));
@@ -1286,7 +1287,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
                                      Query *parsed_mv_query,
 									 RelOptInfo *input_rel,
                                      RelOptInfo *grouped_rel,
-                                     List /* RestrictInfo * or Expr * */ **additional_where_clauses,
+                                     ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
                                      struct transform_todo *todo_list)
 {
 	if (g_trace_join_clause_check)
@@ -1297,7 +1298,7 @@ check_from_join_clauses_for_matview (PlannerInfo *root,
     if (g_debug_join_clause_check)
         elog(INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 	
-    List /* RestrictInfo * or Expr * */ *additional_clauses = NIL;
+    ListOf (RestrictInfo * or Expr *) *additional_clauses = NIL;
 	
 	if (IS_UPPER_REL(grouped_rel))
 	{
@@ -1334,10 +1335,10 @@ static void
 process_having_clauses (PlannerInfo *root,
                         Query *parsed_mv_query,
                         RelOptInfo *grouped_rel,
-                        List /* RestrictInfo * or Expr * */ **additional_where_clauses,
+                        ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
                         struct transform_todo *todo_list)
 {
-    List /* Expr * */ *havingQual = NIL;
+    ListOf (Expr *) *havingQual = NIL;
 
     // FIXME: can we work around need to wrap the existing list in RIs?
     ListCell *lc;
@@ -1362,7 +1363,7 @@ check_where_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                Query *parsed_mv_query,
 											   RelOptInfo *input_rel,
                                                RelOptInfo *grouped_rel,
-                                               List /* RestrictInfo * or Expr * */ *query_where_clauses,
+                                               ListOf (RestrictInfo * or Expr *) *query_where_clauses,
                                                List **transformed_clist_p,
                                                struct transform_todo *todo_list)
 {
@@ -1401,7 +1402,7 @@ static bool
 check_select_clauses_source_from_matview_tlist (PlannerInfo *root,
                                                 Query *parsed_mv_query,
                                                 RelOptInfo *grouped_rel,
-                                                List /* TargetEntry* */ *selected_tlist,
+                                                ListOf (TargetEntry *) *selected_tlist,
                                                 struct transform_todo *todo_list)
 {
     ListCell   *lc;
@@ -1432,8 +1433,8 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
                               StringInfo mv_name, StringInfo mv_schema,
                               Query **alternative_query)
 {
-    List /* Expr* */ *transformed_clist = NIL;
-    List /* TargetEntry * */ *transformed_tlist = grouped_tlist;
+    ListOf (Expr *) *transformed_clist = NIL;
+    ListOf (TargetEntry *) *transformed_tlist = grouped_tlist;
     
     struct transform_todo transform_todo_list = { NIL, NIL };
     
@@ -1455,7 +1456,7 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer
     // where it can be re-aggregated
     
-    List /* RestrictInfo * or Expr * */ *additional_where_clauses = NIL;
+    ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
     if (!check_from_join_clauses_for_matview (root, parsed_mv_query, input_rel, grouped_rel, &additional_where_clauses,
@@ -1584,7 +1585,7 @@ static Plan *plan_mv_rewrite_path (PlannerInfo *root,
 				   List *custom_plans)
 {
 	PlannedStmt *pstmt = list_nth_node (PlannedStmt, best_path->custom_private, 0);
-	List /* TargetEntry * */ *grouped_tlist = list_nth_node (List, best_path->custom_private, 1);
+	ListOf (TargetEntry *) *grouped_tlist = list_nth_node (List, best_path->custom_private, 1);
 	Relids grouped_relids = list_nth (best_path->custom_private, 2);
 	Value *query = list_nth_node (Value, best_path->custom_private, 3);
 	Value *competing_cost = list_nth_node (Value, best_path->custom_private, 4);
@@ -1625,7 +1626,7 @@ void add_rewritten_mv_paths (PlannerInfo *root,
     
     // Take the target list, and transform it to a List of TargetEntry.
     // FIXME: maybe we can avoid this seemingly pointless transformation?
-    List /* TargetEntry * */ *grouped_tlist = NIL;
+    ListOf (TargetEntry *) *grouped_tlist = NIL;
     ListCell *lc;
     foreach (lc, copy_pathtarget(root->upper_targets[UPPERREL_GROUP_AGG])->exprs)
     {
