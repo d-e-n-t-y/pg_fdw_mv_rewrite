@@ -490,8 +490,11 @@ find_related_matviews_for_relation (PlannerInfo *root,
     SPI_finish();
 }
 
-static Query *
-get_mv_query (RelOptInfo *grouped_rel, const char *mv_name, Oid *matviewOid)
+static void
+get_mv_query (RelOptInfo *grouped_rel,
+			  const char *mv_name,
+			  Query **parsed_mv_query,
+			  Oid *matviewOid)
 {
     RangeVar    *matviewRV;
     Relation    matviewRel;
@@ -544,7 +547,7 @@ get_mv_query (RelOptInfo *grouped_rel, const char *mv_name, Oid *matviewOid)
     if (g_trace_parse_select_query)
         elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
 
-    return query;
+    *parsed_mv_query = query;
 }
 
 struct transform_todo {
@@ -1114,6 +1117,7 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 
 		Relids rarg_query_relids = NULL;
 		
+		// Check the right side of the join is legal according to the plan.
 		if (!join_node_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals))
 		{
 			if (g_log_match_progress)
@@ -1130,7 +1134,6 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 		// FIXME: Check the two lists don't overlap!
 		
 		// Give the two legal sides of the join, check it is itself legal according to the plan.
-
 		bool reversed;
 		SpecialJoinInfo *sjinfo;
 		
@@ -1143,7 +1146,6 @@ join_node_valid_for_plan_recurse (PlannerInfo *root,
 		}
 		
 		// Then check the join type.
-
 		JoinType legal_jt = JOIN_INNER;
 		if (sjinfo != NULL)
 			legal_jt = sjinfo->jointype;
@@ -1443,8 +1445,8 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
 	
 	Oid matviewOid;
 	
-	// FIXME: bit crufty for get_mv_query to return via the result, and via out vars...
-    Query *parsed_mv_query = copyObject (get_mv_query (grouped_rel, (const char *) mv_name->data, &matviewOid));
+	Query *parsed_mv_query;
+	get_mv_query (grouped_rel, (const char *) mv_name->data, &parsed_mv_query, &matviewOid);
     
     // 1. Check the GROUP BY clause: it must match exactly.
     if (!check_group_clauses_for_matview(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
@@ -1453,9 +1455,6 @@ evaluate_matview_for_rewrite (PlannerInfo *root,
     // FIXME: the above check only checks some selected clauses; the balance of
     // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
     // check needs to be exact set equality.
-    
-    // FIXME: 1a. Allow a GROUP BY superset and push a re-group to outer
-    // where it can be re-aggregated
     
     ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
     
