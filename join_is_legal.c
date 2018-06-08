@@ -1,6 +1,5 @@
 //
 //  join_is_legal.c
-//  pg_fdw_mv_rewrite
 //
 // copied from joinrels.c
 //

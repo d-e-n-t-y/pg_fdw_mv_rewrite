@@ -12,7 +12,7 @@
 		BF35BACC20949EFC00C29DCE /* extension.h in Headers */ = {isa = PBXBuildFile; fileRef = BF35BACA20949EFC00C29DCE /* extension.h */; };
 		BF35BACD20949EFC00C29DCE /* extension.c in Sources */ = {isa = PBXBuildFile; fileRef = BF35BACB20949EFC00C29DCE /* extension.c */; };
 		BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5A268E1FD9531000E3AD72 /* equalwalker.c */; };
-		BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */; };
+		BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */; };
 		BF8BEFB11FD2C346003A7AC9 /* pg_fdw_mv_rewrite.0.3.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */; };
 /* End PBXBuildFile section */
 
@@ -49,9 +49,9 @@
 		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		BF8BEEEE1FD1E590003A7AC9 /* pg_fdw_mv_rewrite--0.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "pg_fdw_mv_rewrite--0.1.sql"; sourceTree = "<group>"; };
-		BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = postgres_fdw.c; sourceTree = "<group>"; };
+		BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = mv_rewrite.c; sourceTree = "<group>"; };
 		BF8BEEF01FD1E590003A7AC9 /* pg_fdw_mv_rewrite.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = pg_fdw_mv_rewrite.control; sourceTree = "<group>"; };
-		BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = postgres_fdw.h; sourceTree = "<group>"; };
+		BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mv_rewrite.h; sourceTree = "<group>"; };
 		BF8BEF0E1FD1EF5D003A7AC9 /* pg_fdw_mv_rewrite.0.3.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = pg_fdw_mv_rewrite.0.3.so; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF967BFA20666F5E001F9A45 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpq.5.10.dylib"; sourceTree = "<group>"; };
 		BF967BFC20667049001F9A45 /* libpgtypes.3.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpgtypes.3.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpgtypes.3.10.dylib"; sourceTree = "<group>"; };
@@ -93,7 +93,7 @@
 			isa = PBXGroup;
 			children = (
 				BF5A268E1FD9531000E3AD72 /* equalwalker.c */,
-				BF8BEEEF1FD1E590003A7AC9 /* postgres_fdw.c */,
+				BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */,
 				BF35BACB20949EFC00C29DCE /* extension.c */,
 				BF1F881720BAE52E00553FEB /* join_is_legal.c */,
 			);
@@ -125,7 +125,7 @@
 			children = (
 				BF1F881620BAE52E00553FEB /* join_is_legal.h */,
 				BF35BACA20949EFC00C29DCE /* extension.h */,
-				BF8BEEF11FD1E590003A7AC9 /* postgres_fdw.h */,
+				BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */,
 				BF5A26901FD95A0600E3AD72 /* equalswalker.h */,
 			);
 			name = Headers;
@@ -220,7 +220,7 @@
 			files = (
 				BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */,
 				BF35BACD20949EFC00C29DCE /* extension.c in Sources */,
-				BF8BEF151FD1EF73003A7AC9 /* postgres_fdw.c in Sources */,
+				BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */,
 				BF1F881920BAE52E00553FEB /* join_is_legal.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -1,6 +1,5 @@
 //
 //  join_is_legal.h
-//  pg_fdw_mv_rewrite
 //
 //  Created by John Dent on 27/05/2018.
 //  Copyright © 2018 John Dent. All rights reserved.

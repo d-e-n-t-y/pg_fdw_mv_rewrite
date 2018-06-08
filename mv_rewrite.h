@@ -1,17 +1,14 @@
 /*-------------------------------------------------------------------------
  *
- * postgres_fdw.h
- *		  Foreign-data wrapper for remote PostgreSQL servers
+ * mv_rewrite.h
+ *		  Query rewrite for MVs
  *
  * Portions Copyright (c) 2012-2017, PostgreSQL Global Development Group
  *
- * IDENTIFICATION
- *		  contrib/postgres_fdw/postgres_fdw.h
- *
  *-------------------------------------------------------------------------
  */
-#ifndef POSTGRES_FDW_H
-#define POSTGRES_FDW_H
+#ifndef MV_REWRITE_H
+#define MV_REWRITE_H
 
 #include "lib/stringinfo.h"
 #include "nodes/relation.h"
@@ -19,11 +16,10 @@
 
 #include "libpq-fe.h"
 
-/* in postgres_fdw.c */
 extern void
 mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 			      UpperRelationKind stage,
 			      RelOptInfo *input_rel,
 			      RelOptInfo *output_rel);
 
-#endif							/* POSTGRES_FDW_H */
+#endif							/* MV_REWRITE_H */

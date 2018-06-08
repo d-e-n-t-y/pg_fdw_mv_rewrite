@@ -9,7 +9,7 @@
 #include "postgres.h"
 
 #include "extension.h"
-#include "postgres_fdw.h"
+#include "mv_rewrite.h"
 #include "utils/guc.h"
 
 extern create_upper_paths_hook_type create_upper_paths_hook;

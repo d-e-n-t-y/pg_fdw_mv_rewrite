@@ -1,18 +1,15 @@
 /*-------------------------------------------------------------------------
  *
- * postgres_fdw.c
- *		  Foreign-data wrapper for remote PostgreSQL servers
+ * mv_rewrite.c
+ *		  Query rewrite for MVs
  *
  * Portions Copyright (c) 2012-2017, PostgreSQL Global Development Group
- *
- * IDENTIFICATION
- *		  contrib/postgres_fdw/postgres_fdw.c
  *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
 
-#include "postgres_fdw.h"
+#include "mv_rewrite.h"
 #include "equalswalker.h"
 #include "extension.h"
 #include "join_is_legal.h"
