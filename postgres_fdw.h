@@ -21,7 +21,7 @@
 
 /* in postgres_fdw.c */
 extern void
-pg_mv_rewrite_get_upper_paths(PlannerInfo *root,
+mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 			      UpperRelationKind stage,
 			      RelOptInfo *input_rel,
 			      RelOptInfo *output_rel);

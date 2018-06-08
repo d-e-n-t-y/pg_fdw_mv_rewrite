@@ -40,7 +40,7 @@ void
 _PG_init (void)
 {
 	next_create_upper_paths_hook = create_upper_paths_hook;
-	create_upper_paths_hook = pg_mv_rewrite_get_upper_paths;
+	create_upper_paths_hook = mv_rewrite_create_upper_paths_hook;
 	
 	DefineCustomBoolVariable("mv_rewrite.log_match_progress",
 							 gettext_noop("Log progress through matching a candidate materialized view against the query being executed."),

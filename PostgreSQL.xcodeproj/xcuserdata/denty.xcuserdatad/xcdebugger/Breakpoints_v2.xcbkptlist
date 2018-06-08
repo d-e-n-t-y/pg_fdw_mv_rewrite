@@ -31,8 +31,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "184"
             endingLineNumber = "184"
-            landmarkName = "unknown"
-            landmarkType = "0">
+            landmarkName = "mv_rewrite_rescan_scan"
+            landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -74,23 +74,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "313"
             endingLineNumber = "313"
-            landmarkName = "recurse_relation_relids"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "postgres_fdw.c"
-            timestampString = "549711298.52303"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "302"
-            endingLineNumber = "302"
-            landmarkName = "pg_mv_rewrite_get_upper_paths"
+            landmarkName = "recurse_relation_relids_from_rte"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -106,8 +90,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "366"
             endingLineNumber = "366"
-            landmarkName = "unknown"
-            landmarkType = "0">
+            landmarkName = "mv_rewrite_find_related_mvs_for_rel"
+            landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -122,7 +106,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "371"
             endingLineNumber = "371"
-            landmarkName = "recurse_relation_oids_from_rte"
+            landmarkName = "mv_rewrite_find_related_mvs_for_rel"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -138,7 +122,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1700"
             endingLineNumber = "1700"
-            landmarkName = "add_rewritten_mv_paths"
+            landmarkName = "mv_rewrite_add_rewritten_mv_paths"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -154,7 +138,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1399"
             endingLineNumber = "1399"
-            landmarkName = "check_where_clauses_source_from_matview_tlist"
+            landmarkName = "mv_rewrite_evaluate_mv_for_rewrite"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -170,7 +154,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1320"
             endingLineNumber = "1320"
-            landmarkName = "check_from_join_clauses_for_matview"
+            landmarkName = "mv_rewrite_process_having_clauses"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -186,7 +170,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "990"
             endingLineNumber = "990"
-            landmarkName = "join_node_valid_for_plan"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -202,7 +186,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1044"
             endingLineNumber = "1044"
-            landmarkName = "join_node_valid_for_plan_recurse"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -218,7 +202,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1000"
             endingLineNumber = "1000"
-            landmarkName = "join_node_valid_for_plan"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
