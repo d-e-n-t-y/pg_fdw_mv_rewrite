@@ -44,6 +44,7 @@
 #include "utils/snapmgr.h"
 #include "tcop/tcopprot.h"
 #include "server/executor/spi.h"
+#include "utils/varlena.h"
 
 PG_MODULE_MAGIC;
 
@@ -361,61 +362,67 @@ recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset
     return out_relids;
 }
 
+static ListOf (char *) *
+mv_rewrite_get_involved_rel_names (PlannerInfo *root,
+								   RelOptInfo *inner_rel,
+								   RelOptInfo *input_rel, RelOptInfo *outer_rel)
+{
+	Bitmapset *rel_oids = NULL;
+
+	if (input_rel != NULL)
+		rel_oids = recurse_relation_oids (root, input_rel->relids, NULL);
+	else if (inner_rel != NULL && outer_rel != NULL)
+	{
+		rel_oids = recurse_relation_oids (root, inner_rel->relids, NULL);
+		rel_oids = recurse_relation_oids (root, outer_rel->relids, rel_oids);
+	}
+	
+	//elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
+	
+	ListOf (char *) *tables_strlist = NIL;
+	for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
+	{
+		StringInfo table_name = makeStringInfo();
+		
+		/*
+		 * Core code already has some lock on each rel being planned, so we
+		 * can use NoLock here.
+		 */
+		Relation	rel = heap_open((Oid) x, NoLock);
+		
+		heap_close(rel, NoLock);
+		
+		const char *nspname = get_namespace_name (RelationGetNamespace(rel));
+		const char *relname = RelationGetRelationName(rel);
+		
+		appendStringInfo (table_name, "%s.%s",
+						  quote_identifier(nspname), quote_identifier(relname));
+		
+		tables_strlist = lappend (tables_strlist, table_name->data);
+	}
+	return tables_strlist;
+}
+
 static void
-mv_rewrite_find_related_mvs_for_rel (PlannerInfo *root,
-                                    RelOptInfo *input_rel, // if grouping
-                                    RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
-                                    ListOf (StringInfo) **mvs_schema,
-                                    ListOf (StringInfo) **mvs_name)
+mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
+                                     ListOf (StringInfo) **mvs_schema,
+                                     ListOf (StringInfo) **mvs_name)
 {
     *mvs_schema = NIL, *mvs_name = NIL;
     
-    Bitmapset *rel_oids = NULL;
-    if (input_rel != NULL)
-        rel_oids = recurse_relation_oids (root, input_rel->relids, NULL);
-    else if (inner_rel != NULL && outer_rel != NULL)
-    {
-        rel_oids = recurse_relation_oids (root, inner_rel->relids, NULL);
-        rel_oids = recurse_relation_oids (root, outer_rel->relids, rel_oids);
-    }
-    
-    //elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
-
-    StringInfoData find_mvs_query;
-    initStringInfo (&find_mvs_query);
-    
-    appendStringInfoString (&find_mvs_query,
-                            "SELECT v.schemaname, v.matviewname"
-                            " FROM "
-                            "   public.pgx_rewritable_matviews j, pg_matviews v"
-                            " WHERE "
-                            " j.matviewschemaname = v.schemaname"
-                            " AND j.matviewname = v.matviewname"
-                            " AND j.tables @> $1");
-    
-    ListOf (char *) *tables_strlist = NIL;
-    for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
-    {
-        StringInfo table_name = makeStringInfo();
-        
-        /*
-         * Core code already has some lock on each rel being planned, so we
-         * can use NoLock here.
-         */
-        Relation	rel = heap_open((Oid) x, NoLock);
-    
-        heap_close(rel, NoLock);
-        
-        const char *nspname = get_namespace_name (RelationGetNamespace(rel));
-        const char *relname = RelationGetRelationName(rel);
-        
-        appendStringInfo (table_name, "%s.%s",
-                          quote_identifier(nspname), quote_identifier(relname));
-
-        tables_strlist = lappend (tables_strlist, table_name->data);
-    }
-    
-    ArrayType /* text */ *tables_arr = strlist_to_textarray (tables_strlist);
+	StringInfoData find_mvs_query;
+	initStringInfo (&find_mvs_query);
+	
+	appendStringInfoString (&find_mvs_query,
+							"SELECT v.schemaname, v.matviewname"
+							" FROM "
+							"   public.pgx_rewritable_matviews j, pg_matviews v"
+							" WHERE "
+							" j.matviewschemaname = v.schemaname"
+							" AND j.matviewname = v.matviewname"
+							" AND j.tables @> $1");
+	
+    ArrayType /* text */ *tables_arr = strlist_to_textarray (involved_rel_names);
     
     Oid argtypes[] = { TEXTARRAYOID };
     Datum args[] = { PointerGetDatum (tables_arr) };
@@ -1623,6 +1630,50 @@ static CustomPathMethods mv_rewrite_path_methods = {
 	.PlanCustomPath = mv_rewrite_plan_mv_rewrite_path
 };
 
+static bool
+mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
+{
+	// If no list is configured, default to enabling rewrite for any relation.
+	if (g_rewrite_enabled_for_tables == NULL)
+		return true;
+	
+	ListOf (char *) *enabled_tables;
+	
+	if (!SplitIdentifierString (g_rewrite_enabled_for_tables, ',', &enabled_tables))
+	{
+		// There could be a problem with the enabled table list. Default to caution.
+		return false;
+	}
+		
+	// Attempt to locate every involved table in the configured list of enabled-for-rewrite tables.
+	ListCell *lc;
+	foreach (lc, involved_rel_names)
+	{
+		const char *involved_rel_name = lfirst (lc);
+		
+		bool found = false;
+		
+		ListCell *lc2;
+		foreach (lc2, enabled_tables)
+		{
+			const char *enabled_table = lfirst (lc2);
+			
+			if (strcmp (involved_rel_name, enabled_table) == 0)
+			{
+				found = true;
+				break;
+			}
+		}
+		
+		// If even a single table is not matched, then we must reject.
+		if (!found)
+			return false;
+	}
+	
+	// All tables found; good.
+	return true;
+}
+
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *input_rel, // if grouping
@@ -1633,10 +1684,18 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     //elog(INFO, "%s: searching for MVs...", __func__);
     
     // See if there are any candidate MVs...
-    List *mvs_schema, *mvs_name;
-    
-    mv_rewrite_find_related_mvs_for_rel (root, input_rel, inner_rel, outer_rel,
-                                        &mvs_schema, &mvs_name);
+	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, inner_rel, input_rel, outer_rel);
+
+	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))
+	{
+		if (g_log_match_progress)
+			elog(INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
+
+		return;
+	}
+
+	List *mvs_schema, *mvs_name;
+    mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_schema, &mvs_name);
     
     // Take the target list, and transform it to a List of TargetEntry.
     // FIXME: maybe we can avoid this seemingly pointless transformation?
