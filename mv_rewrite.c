@@ -1447,6 +1447,61 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
     return true;
 }
 
+static Query *
+mv_rewrite_build_mv_scan_query (Oid matviewOid,
+								StringInfo mv_name,
+								ListOf (Value *) *colnames,
+								List *mv_scan_quals,
+								List *transformed_tlist)
+{
+	Query *mv_scan_query = makeNode (Query);
+
+	mv_scan_query->commandType = 1;
+	mv_scan_query->targetList = transformed_tlist;
+
+	RangeTblEntry *mvsqrte = makeNode (RangeTblEntry);
+	mvsqrte->relid = matviewOid;
+	mvsqrte->inh = true;
+	mvsqrte->inFromCl = true;
+	mvsqrte->requiredPerms = ACL_SELECT;
+	mvsqrte->selectedCols = 0; // FIXME: TODO
+	mvsqrte->relkind = RELKIND_MATVIEW;
+	mvsqrte->eref = makeNode (Alias);
+	mvsqrte->eref->aliasname = mv_name->data;
+	mvsqrte->eref->colnames = colnames;
+
+	mv_scan_query->rtable = list_make1 (mvsqrte);
+
+	mv_scan_query->jointree = makeNode (FromExpr);
+
+	RangeTblRef *mvsrtr = makeNode (RangeTblRef);
+	mvsrtr->rtindex = 1;
+
+	mv_scan_query->jointree->fromlist = list_make1 (mvsrtr);
+	
+	if (mv_scan_quals != NULL)
+	{
+		Expr *quals_expr;
+		
+		if (list_length (mv_scan_quals) > 1)
+		{
+			quals_expr = (Expr *) makeNode (BoolExpr);
+			
+			BoolExpr *be = (BoolExpr *) quals_expr;
+			
+			be->boolop = AND_EXPR;
+			be->location = -1;
+			be->args = mv_scan_quals;
+		}
+		else
+			quals_expr = (Expr *) list_nth (mv_scan_quals, 0);
+		
+		mv_scan_query->jointree->quals = (Node *) quals_expr;
+	}
+	
+	return mv_scan_query;
+}
+
 static bool
 mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 							  RelOptInfo *input_rel,
@@ -1460,8 +1515,6 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     
     struct mv_rewrite_xform_todo_list transform_todo_list = { NIL, NIL };
     
-    //elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
-	
 	Oid matviewOid;
 	
 	Query *parsed_mv_query;
@@ -1500,48 +1553,9 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	List *quals = mv_rewrite_xform_todos (transformed_clist, &transform_todo_list);
 	
     // 7. Build the alternative query.
-	Query *mv_scan_query = makeNode (Query);
-	mv_scan_query->commandType = 1;
-	RangeTblEntry *mvsqrte = makeNode (RangeTblEntry);
-	mvsqrte->relid = matviewOid;
-	mvsqrte->inh = true;
-	mvsqrte->inFromCl = true;
-	mvsqrte->requiredPerms = ACL_SELECT;
-	mvsqrte->selectedCols = 0; // FIXME: TODO
-	mvsqrte->relkind = RELKIND_MATVIEW;
-	mvsqrte->eref = makeNode (Alias);
-	mvsqrte->eref->aliasname = mv_name->data;
-	mvsqrte->eref->colnames = mv_rewrite_get_query_tlist_colnames (parsed_mv_query);
-	mv_scan_query->rtable = list_make1 (mvsqrte);
-	mv_scan_query->jointree = makeNode (FromExpr);
-	RangeTblRef *mvsrtr = makeNode (RangeTblRef);
-	mvsrtr->rtindex = 1;
-	mv_scan_query->jointree->fromlist = list_make1 (mvsrtr);
-	
-	if (quals != NULL)
-	{
-		Expr *quals_expr;
-		
-		if (list_length (quals) > 1)
-		{
-			quals_expr = (Expr *) makeNode (BoolExpr);
-
-			BoolExpr *be = (BoolExpr *) quals_expr;
-
-			be->boolop = AND_EXPR;
-			be->location = -1;
-			be->args = quals;
-		}
-		else
-			quals_expr = (Expr *) list_nth (quals, 0);
-
-		mv_scan_query->jointree->quals = (Node *) quals_expr;
-	}
-	
-	mv_scan_query->targetList = transformed_tlist;
-	
-	*alternative_query = mv_scan_query;
-	//elog(INFO, "%s: faked query tree: %s", __func__, nodeToString (mv_scan_query));
+	*alternative_query = mv_rewrite_build_mv_scan_query (matviewOid, mv_name,
+														 mv_rewrite_get_query_tlist_colnames (parsed_mv_query),
+														 quals, transformed_tlist);
 	
     return true;
 }
@@ -1674,6 +1688,86 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 	return true;
 }
 
+static Path *
+mv_rewrite_create_mv_scan_path (PlannerInfo *root,
+								Query *alternative_query,
+								RelOptInfo *grouped_rel,
+								List *grouped_tlist,
+								PathTarget *grouping_target,
+								StringInfo mv_name, StringInfo mv_schema)
+{
+	/* plan_params should not be in use in current query level */
+	if (root->plan_params != NIL)
+	{
+		elog(ERROR, "%s: plan_params != NIL", __func__);
+		return NULL;
+	}
+	
+	/* Generate Paths for the subquery. */
+	PlannedStmt *pstmt = pg_plan_query (alternative_query,
+										(root->glob->parallelModeOK ? CURSOR_OPT_PARALLEL_OK : 0 )
+										| (root->tuple_fraction <= 1e-10 ? CURSOR_OPT_FAST_PLAN : 0),
+										root->glob->boundParams);
+	
+	Plan *subplan = pstmt->planTree;
+	
+	/* Bury our subquery inside a CustomPath. We need to do this because
+	 * the SubQueryScanPath code expects the query to be 1:1 related to the
+	 * root's PlannerInfo --- now, of course, the origingal query didn't have
+	 * any such subquery in it at all, let alone with a 1:1 relationship.
+	 */
+	CustomPath *cp = makeNode (CustomPath);
+	cp->path.pathtype = T_CustomScan;
+	cp->flags = 0;
+	cp->methods = &mv_rewrite_path_methods;
+	
+	// Take the cost information from the replacement query...
+	cp->path.startup_cost = subplan->startup_cost;
+	cp->path.total_cost = subplan->total_cost;
+	cp->path.rows = subplan->plan_rows;
+	if (IsA (subplan, Gather))
+		cp->path.parallel_workers = ((Gather *) subplan)->num_workers;
+	else if (IsA (subplan, GatherMerge))
+		cp->path.parallel_workers = ((GatherMerge *) subplan)->num_workers;
+	
+	// The target that the Path will delivr is our grouped_rel/grouping_target
+	cp->path.pathtarget = grouping_target;
+	cp->path.parent = grouped_rel;
+	
+	cp->path.param_info = NULL;
+	cp->path.parallel_aware = subplan->parallel_aware;
+	cp->path.parallel_safe = subplan->parallel_safe;
+	
+	// Work out the cost of the competing (unrewritten) plan...
+	StringInfo competing_cost = makeStringInfo();
+
+	ListCell *lc;
+	foreach (lc, grouped_rel->pathlist)
+	{
+		Path *p = lfirst_node (Path, lc);
+		
+		if (competing_cost->len > 0)
+			appendStringInfo (competing_cost, "; ");
+		
+		appendStringInfo (competing_cost, "cost=%.2f..%.2f rows=%.0f width=%d",
+						  p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
+	}
+	
+	StringInfo alt_query_text = makeStringInfo();
+	appendStringInfo (alt_query_text, "scan of %s.%s", mv_schema->data, mv_name->data);
+		
+	//List	   *rtable = alternative_query->rtable;
+	//List	   *rtable_names = select_rtable_names_for_explain (rtable, bms_make_singleton (1));
+	//ListOf (deparse_namespace) *deparse_cxt = deparse_context_for_plan_rtable (rtable, rtable_names);
+	
+	// FIXME: include at least the additional WHERE clauses in the alternative query text
+	
+	cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
+									 makeString (alt_query_text->data), makeString (competing_cost->data));
+	
+	return (Path *) cp;
+}
+
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *input_rel, // if grouping
@@ -1681,11 +1775,10 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *grouped_rel,
                              PathTarget *grouping_target)
 {
-    //elog(INFO, "%s: searching for MVs...", __func__);
-    
-    // See if there are any candidate MVs...
+    // Find the set of rels involved in the query being planned...
 	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, inner_rel, input_rel, outer_rel);
 
+	// Check first that all of those rels are enabled for query rewrite...
 	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))
 	{
 		if (g_log_match_progress)
@@ -1694,18 +1787,11 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 		return;
 	}
 
+	// See if there are any candidate MVs...
 	List *mvs_schema, *mvs_name;
     mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_schema, &mvs_name);
     
-    // Take the target list, and transform it to a List of TargetEntry.
-    // FIXME: maybe we can avoid this seemingly pointless transformation?
-    ListOf (TargetEntry *) *grouped_tlist = NIL;
-    ListCell *lc;
-    foreach (lc, copy_pathtarget(root->upper_targets[UPPERREL_GROUP_AGG])->exprs)
-    {
-        Expr *e = lfirst (lc);
-        grouped_tlist = add_to_flat_tlist (grouped_tlist, list_make1 (e));
-    }
+    ListOf (TargetEntry *) *grouped_tlist = make_tlist_from_pathtarget (root->upper_targets[UPPERREL_GROUP_AGG]);
 	
     // Evaluate each MV in turn...
     ListCell   *sc, *nc;
@@ -1725,85 +1811,9 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
         if (g_log_match_progress)
             elog(INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
         
-        Path       *path;
-        {
-            /* plan_params should not be in use in current query level */
-            if (root->plan_params != NIL)
-            {
-                elog(ERROR, "%s: plan_params != NIL", __func__);
-                return;
-            }
-
-            /* Generate Paths for the subquery. */
-            PlannedStmt *pstmt = pg_plan_query (alternative_query,
-                                                (root->glob->parallelModeOK ? CURSOR_OPT_PARALLEL_OK : 0 )
-                                                | (root->tuple_fraction <= 1e-10 ? CURSOR_OPT_FAST_PLAN : 0),
-                                                root->glob->boundParams);
-
-            Plan *subplan = pstmt->planTree;
-            
-            /* Bury our subquery inside a CustomPath. We need to do this because
-             * the SubQueryScanPath code expects the query to be 1:1 related to the
-             * root's PlannerInfo --- now, of course, the origingal query didn't have
-             * any such subquery in it at all, let alone with a 1:1 relationship.
-             */
-            CustomPath *cp = makeNode (CustomPath);
-            cp->path.pathtype = T_CustomScan;
-            cp->flags = 0;
-            cp->methods = &mv_rewrite_path_methods;
-
-            // Take the cost information from the replacement query...
-            cp->path.startup_cost = subplan->startup_cost;
-            cp->path.total_cost = subplan->total_cost;
-            cp->path.rows = subplan->plan_rows;
-            if (IsA (subplan, Gather))
-                cp->path.parallel_workers = ((Gather *) subplan)->num_workers;
-            else if (IsA (subplan, GatherMerge))
-                cp->path.parallel_workers = ((GatherMerge *) subplan)->num_workers;
-
-            // The target that the Path will delivr is our grouped_rel/grouping_target
-            cp->path.pathtarget = grouping_target;
-            cp->path.parent = grouped_rel;
-
-            cp->path.param_info = NULL;
-            cp->path.parallel_aware = subplan->parallel_aware;
-            cp->path.parallel_safe = subplan->parallel_safe;
-            
-            // Work out the cost of the competing (unrewritten) plan...
-            StringInfo competing_cost = makeStringInfo();
-            {
-                ListCell *lc;
-                foreach (lc, grouped_rel->pathlist)
-                {
-                    Path *p = lfirst_node (Path, lc);
-                    
-                    if (competing_cost->len > 0)
-                        appendStringInfo (competing_cost, "; ");
-                    
-                    appendStringInfo (competing_cost, "cost=%.2f..%.2f rows=%.0f width=%d",
-                                      p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
-                }
-            }
-			
-			StringInfo alt_query_text = makeStringInfo();
-			{
-				appendStringInfo (alt_query_text, "scan of %s.%s", mv_schema->data, mv_name->data);
-
-				//List	   *rtable = alternative_query->rtable;
-				//List	   *rtable_names = select_rtable_names_for_explain (rtable, bms_make_singleton (1));
-				//ListOf (deparse_namespace) *deparse_cxt = deparse_context_for_plan_rtable (rtable, rtable_names);
-				
-				// FIXME: include at least the additional WHERE clauses in the alternative query text
-			}
-
-            cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
-                                             makeString (alt_query_text->data), makeString (competing_cost->data));
-            
-            path = (Path *) cp;
-        }
-        
-        /* Add generated path into grouped_rel by add_path(). */
-        add_path (grouped_rel, (Path *) path);
+        // Add generated path into grouped_rel.
+        add_path (grouped_rel,
+				  mv_rewrite_create_mv_scan_path (root, alternative_query, grouped_rel, grouped_tlist, grouping_target, mv_name, mv_schema));
 
         if (g_log_match_progress)
             elog(INFO, "%s: path added.", __func__);
