@@ -15,8 +15,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-               BuildableName = "pg_fdw_mv_rewrite.0.3.so"
-               BlueprintName = "pg_fdw_mv_rewrite"
+               BuildableName = "mv_rewrite.0.6.so"
+               BlueprintName = "mv_rewrite"
                ReferencedContainer = "container:PostgreSQL.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -68,8 +68,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "pg_fdw_mv_rewrite.0.3.so"
-            BlueprintName = "pg_fdw_mv_rewrite"
+            BuildableName = "mv_rewrite.0.6.so"
+            BlueprintName = "mv_rewrite"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -117,8 +117,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "pg_fdw_mv_rewrite.0.3.so"
-            BlueprintName = "pg_fdw_mv_rewrite"
+            BuildableName = "mv_rewrite.0.6.so"
+            BlueprintName = "mv_rewrite"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>
       </MacroExpansion>

@@ -1,1 +1,1 @@
-create extension pg_fdw_mv_rewrite;
+create extension mv_rewrite;
