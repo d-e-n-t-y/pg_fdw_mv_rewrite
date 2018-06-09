@@ -1,3 +1,6 @@
+-- Anticipate message "MV contains a join of type not matched in query"
+set mv_rewrite.log_match_progress = 'true';
+
 explain (VERBOSE, COSTS OFF)
 select n.name, n.class, v.additional, count(value) as count
 FROM test_name n LEFT OUTER JOIN test_value v ON n.id1 = v.id1 and n.id2 = v.id2

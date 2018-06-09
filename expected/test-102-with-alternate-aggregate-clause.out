@@ -1,4 +1,16 @@
+-- Anticipate message "expr (...) not found in MV tlist"
+set mv_rewrite.log_match_progress = 'true';
 explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
                         QUERY PLAN                        
 ----------------------------------------------------------
  Finalize GroupAggregate
@@ -18,6 +30,16 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;
 (14 rows)
 
 select key, COUNT (key) from test group by key;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
  key  |  count  
 ------+---------
  key1 |      10

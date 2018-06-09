@@ -254,7 +254,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// Ignore stages we don't support; and skip any duplicate calls.
 	if (stage != UPPERREL_GROUP_AGG)
 	{
-		if (g_log_match_progress)
+		if (g_trace_match_progress)
 			elog(INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
 		
 		return;
@@ -568,7 +568,7 @@ mv_rewrite_xform_todos (ListOf (TargetEntry *) *tlist, struct mv_rewrite_xform_t
 static bool
 mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
                                      Query *parsed_mv_query,
-                                     Expr *expr,
+                                     Node *expr,
                                      struct mv_rewrite_xform_todo_list *todo_list,
                                      bool trace);
 
@@ -758,7 +758,7 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
 static bool
 mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
                                      Query *parsed_mv_query,
-                                     Expr *expr,
+                                     Node *expr,
                                      struct mv_rewrite_xform_todo_list *todo_list,
                                      bool trace)
 {
@@ -819,7 +819,7 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, expr, todo_list, g_trace_group_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_group_clause_source_check))
         {
             if (g_log_match_progress)
                 elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
@@ -829,6 +829,22 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
     }
 
     return true;
+}
+
+static Bitmapset *
+mv_rewrite_all_rels_in_rtable (ListOf (RangeTblEntry) *rtable)
+{
+	Relids set = NULL;
+	
+	int i = 0;
+	ListCell *lc;
+	foreach (lc, rtable)
+	{
+		set = bms_add_member (set, i);
+		i++;
+	}
+	
+	return set;
 }
 
 static bool
@@ -905,7 +921,12 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		if (!found)
 		{
 			if (g_log_match_progress)
-				elog(INFO, "%s: expression not found in clauses in the query: %s", __func__, nodeToString (mv_jq));
+				elog(INFO, "%s: MV expression (%s) not found in clauses in the query.", __func__,
+					 deparse_expression ((Node *) mv_jq,
+										 deparse_context_for_plan_rtable (comparison_context->parsed_mv_query_rtable,
+																		  select_rtable_names_for_explain (comparison_context->parsed_mv_query_rtable,
+																										   mv_rewrite_all_rels_in_rtable (comparison_context->parsed_mv_query_rtable))),
+										 false, false));
 			
 			return false;
 		}
@@ -941,11 +962,7 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 	ListOf (RestrictInfo *) *collated_query_quals = NIL;
 	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
-	collated_mv_quals = list_make1 (parsed_mv_query->jointree->quals);
-	
-	bool ok = mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals);
-	
-	if (!ok)
+	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals))
 		return false;
 
 	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
@@ -963,7 +980,7 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 	if (!bms_equal (join_relids, query_relids_involved))
 	{
 		if (g_log_match_progress)
-			elog(INFO, "%s: join_rel does not involve all rels in the MV", __func__);
+			elog(INFO, "%s: the query does not involve all relations joined by the MV", __func__);
 
 		return false;
 	}
@@ -1180,56 +1197,62 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
 		}
 
-		Relids outrelids = NULL;
-
+		// Note that it is possible that there are /no/ items in the FROM list (e.g.,
+		// in case of UNION ALL).
+		if (list_length (fe->fromlist) >= 2)
 		{
-			// Fake JoinExpr node and create an innter join between successive parties
-			JoinExpr *je = makeNode (JoinExpr);
-			je->jointype = JOIN_INNER; // always an inner join
+			Relids outrelids = NULL;
 			
-			bool first = true;
-			ListCell *lc;
-			foreach (lc, fe->fromlist)
 			{
-				Node *child = lfirst (lc);
+				// Fake JoinExpr node and create an innter join between successive parties
+				JoinExpr *je = makeNode (JoinExpr);
+				je->jointype = JOIN_INNER; // always an inner join
 				
-				List *mv_oids_involved = NIL;
-				
-				if (!first)
-					je->larg = je->rarg; // prior rarg becomes left
-				
-				je->rarg = child; // current child becomes right
-				
-				if (!first)
+				bool first = true;
+				ListCell *lc;
+				foreach (lc, fe->fromlist)
 				{
-					if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals))
-						// Since we can't find a match, the MV doesn't match
-						return false;
+					Node *child = lfirst (lc);
+	
+					List *mv_oids_involved = NIL;
 					
-					*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+					if (!first)
+						je->larg = je->rarg; // prior rarg becomes left
+					
+					je->rarg = child; // current child becomes right
+					
+					if (!first)
+					{
+						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals))
+							// Since we can't find a match, the MV doesn't match
+							return false;
+						
+						*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+					}
+					
+					first = false;
 				}
-				
-				first = false;
 			}
+		
+			RelOptInfo *outerrel = find_join_rel (root, outrelids);
+			
+			// Get hold of the JOIN clauses that relate to this join in the query.
+			if (outerrel->joininfo != NIL)
+				*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, outerrel->joininfo);
+
+			*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+
+			if (query_found_rel != NULL)
+				*query_found_rel = outerrel;
 		}
 		
-		RelOptInfo *outerrel = find_join_rel (root, outrelids);
-		
-		// Get hold of the JOIN clauses that relate to this join in the query.
-		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, outerrel->joininfo);
-		
-		// Similarly record the quals from the MV jointree.
+		// Record the quals from the MV jointree.
 		if (fe->quals != NULL)
 			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 		
 		if (g_trace_join_clause_check)
 			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
-		*query_relids_involved = bms_union (*query_relids_involved, outrelids);
-		
-		if (query_found_rel != NULL)
-			*query_found_rel = outerrel;
-
 		return true;
 	}
 
@@ -1347,7 +1370,7 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
             expr = ((RestrictInfo *) expr)->clause;
         }
         
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, expr, todo_list, g_trace_where_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_where_clause_source_check))
         {
             if (g_log_match_progress)
                 elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
@@ -1361,6 +1384,16 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
     return true;
 }
 
+/**
+ * Determine whether all the expressions selected in the supplied target list
+ * are su supported by clauses in the MV's target list.
+ *
+ * Returns true if they are; false otherwise.
+ *
+ * If a match is found, the todo_list is updated in order to (later) transform
+ * the relevant part of the expression in the seleted target list into a VAR
+ * node that references a column in the replacement MV SELECT list.
+ */
 static bool
 mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
                                                 Query *parsed_mv_query,
@@ -1368,21 +1401,30 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
                                                 ListOf (TargetEntry *) *selected_tlist,
                                                 struct mv_rewrite_xform_todo_list *todo_list)
 {
+	// One by one, check each target in the supplied target list. Each target
+	// must be supported by a matching cluase in the MV's target list.
+	
     ListCell   *lc;
     foreach (lc, selected_tlist)
     {
-        Expr *expr = lfirst(lc);
+        TargetEntry *tle = lfirst(lc);
         
-        //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (expr));
+        //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (tle));
         
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, expr, todo_list, g_trace_select_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, g_trace_select_clause_source_check))
         {
             if (g_log_match_progress)
-                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, nodeToString (expr));
+                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, deparse_expression ((Node *) tle->expr,
+																								deparse_context_for_plan_rtable (root->parse->rtable, select_rtable_names_for_explain (root->parse->rtable,
+																												grouped_rel->relids)),
+																								false, false));
             
             return false;
         }
     }
+	
+	// It is acceptable for the MV to contain other entries in its target list:
+	// its just that we won't pull them in the replacement scan.
     
     // Complete match found!
     return true;

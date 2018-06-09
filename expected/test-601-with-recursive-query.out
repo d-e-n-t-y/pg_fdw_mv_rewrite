@@ -1,0 +1,66 @@
+-- Anticipate message "query requires unsupported features"
+set mv_rewrite.log_match_progress = 'true';
+explain (VERBOSE, COSTS OFF)
+with recursive data as (
+    select 1 n, key, value
+      from test
+      where key = 'key1'
+      and value = 1::text
+  union all
+    select curr.n + 1, next.key, next.value
+      from data curr, test next
+      where
+        curr.key = next.key
+        and next.value = (curr.value::numeric + 1)::text
+)
+select key, count (value)
+  from data
+  group by key;
+INFO:  mv_rewrite_create_upper_paths_hook: query requires unsupported features.
+                                                      QUERY PLAN                                                      
+----------------------------------------------------------------------------------------------------------------------
+ HashAggregate
+   Output: data.key, count(data.value)
+   Group Key: data.key
+   CTE data
+     ->  Recursive Union
+           ->  Gather
+                 Output: 1, test.key, test.value
+                 Workers Planned: 2
+                 ->  Parallel Seq Scan on public.test
+                       Output: 1, test.key, test.value
+                       Filter: ((test.key = 'key1'::text) AND (test.value = '1'::text))
+           ->  Hash Join
+                 Output: (curr.n + 1), next.key, next.value
+                 Hash Cond: ((next.key = curr.key) AND (next.value = (((curr.value)::numeric + '1'::numeric))::text))
+                 ->  Seq Scan on public.test next
+                       Output: next.key, next.hidden, next.value
+                 ->  Hash
+                       Output: curr.n, curr.key, curr.value
+                       ->  WorkTable Scan on data curr
+                             Output: curr.n, curr.key, curr.value
+   ->  CTE Scan on data
+         Output: data.n, data.key, data.value
+(22 rows)
+
+with recursive data as (
+    select 1 n, key, value
+      from test
+      where key = 'key1'
+      and value = 1::text
+  union all
+    select curr.n + 1, next.key, next.value
+      from data curr, test next
+      where
+        curr.key = next.key
+        and next.value = (curr.value::numeric + 1)::text
+)
+select key, count (value)
+  from data
+  group by key;
+INFO:  mv_rewrite_create_upper_paths_hook: query requires unsupported features.
+ key  | count 
+------+-------
+ key1 |    10
+(1 row)
+

@@ -1,6 +1,6 @@
 -- alter server loopback options (add log_match_progress 'true');
 
-explain verbose
+explain (VERBOSE, COSTS OFF) 
 select x.key, x.quantity
 from (
     select key,

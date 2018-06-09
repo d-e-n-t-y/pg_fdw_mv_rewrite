@@ -1,5 +1,5 @@
 -- alter server loopback options (add log_match_progress 'true');
-explain verbose
+explain (VERBOSE, COSTS OFF) 
 select x.key, x.quantity
 from (
     select key,
@@ -22,17 +22,15 @@ from (
 order by x.key;
                                                                                                                                                                                                                                    QUERY PLAN                                                                                                                                                                                                                                    
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Sort  (cost=182.23..187.43 rows=2080 width=64)
+ Sort
    Output: test.key, (CASE WHEN (count(test.value) < 10) THEN 'several'::text WHEN (count(test.value) < 100) THEN 'tens'::text WHEN (count(test.value) < 1000) THEN 'hundreds'::text WHEN (count(test.value) < 10000) THEN 'thousands'::text WHEN (count(test.value) < 100000) THEN 'tens of thousands'::text WHEN (count(test.value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(test.value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
    Sort Key: test.key
-   ->  Append  (cost=0.00..67.60 rows=2080 width=64)
-         ->  Custom Scan (MVRewriteScan)  (cost=0.00..18.80 rows=880 width=64)
+   ->  Append
+         ->  Custom Scan (MVRewriteScan)
                Output: test.key, (CASE WHEN (count(test.value) < 10) THEN 'several'::text WHEN (count(test.value) < 100) THEN 'tens'::text WHEN (count(test.value) < 1000) THEN 'hundreds'::text WHEN (count(test.value) < 10000) THEN 'thousands'::text WHEN (count(test.value) < 100000) THEN 'tens of thousands'::text WHEN (count(test.value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(test.value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
                Rewritten: scan of public.test_expr_mv1
-               Original costs: cost=10017.10..10031.60 rows=200 width=64; cost=18791.50..18797.00 rows=200 width=64; cost=64708.22..74029.84 rows=200 width=64
-         ->  Custom Scan (MVRewriteScan)  (cost=0.00..28.00 rows=1200 width=64)
+         ->  Custom Scan (MVRewriteScan)
                Output: test_1.key, ((count(test_1.value))::text)
                Rewritten: scan of public.test_mv1
-               Original costs: cost=10017.10..10023.10 rows=200 width=64; cost=12580.75..12583.75 rows=200 width=64; cost=64708.22..67816.59 rows=200 width=64
-(12 rows)
+(10 rows)
 
