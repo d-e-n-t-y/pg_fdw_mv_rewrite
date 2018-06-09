@@ -1,0 +1,137 @@
+-- Anticipate rewrite
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
+-- Anticipate rewrite
+set mv_rewrite.rewrite_enabled_for_tables = 'public.test';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
+-- Anticipate no rewrite
+set mv_rewrite.rewrite_enabled_for_tables = '';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+
+-- Anticipate rewrite
+set mv_rewrite.rewrite_enabled_for_tables = ' public.test, public.test   ,     public.test     ';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
+-- Anticipate no rewrite
+set mv_rewrite.rewrite_enabled_for_tables = 'public.not_test';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+
+-- Anticipate no rewrite
+set mv_rewrite.rewrite_enabled_for_tables = 'other_schema.test';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+
+-- Anticipate message "MV rewrite not enabled for one or more table in the query"
+set mv_rewrite.log_match_progress = 'true';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+
+-- Anticipate rewrite
+set mv_rewrite.log_match_progress = 'false';
+set mv_rewrite.rewrite_enabled_for_tables to default;
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
