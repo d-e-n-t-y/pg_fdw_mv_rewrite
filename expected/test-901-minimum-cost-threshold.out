@@ -1,0 +1,68 @@
+-- Anticipate rewrite
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
+-- Anticipate rewrite
+set mv_rewrite.rewrite_minimum_cost = '1.0';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+(6 rows)
+
+-- Anticipate no rewrite
+set mv_rewrite.rewrite_minimum_cost = '1000000000';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+
+-- Anticipate message "already have path with acceptable cost"
+set mv_rewrite.log_match_progress = 'true';
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
+INFO:  mv_rewrite_create_upper_paths_hook: already have path with acceptable cost.
+                        QUERY PLAN                        
+----------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Sort
+         Output: key, (PARTIAL count(value))
+         Sort Key: test.key
+         ->  Gather
+               Output: key, (PARTIAL count(value))
+               Workers Planned: 2
+               ->  Partial HashAggregate
+                     Output: key, PARTIAL count(value)
+                     Group Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+(14 rows)
+

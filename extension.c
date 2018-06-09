@@ -11,6 +11,7 @@
 #include "extension.h"
 #include "mv_rewrite.h"
 #include "utils/guc.h"
+#include "float.h"
 
 extern create_upper_paths_hook_type create_upper_paths_hook;
 
@@ -34,7 +35,8 @@ bool g_trace_where_clause_source_check;
 bool g_trace_select_clause_source_check;
 bool g_trace_join_clause_check;
 bool g_debug_join_clause_check;
-
+char *g_rewrite_enabled_for_tables;
+double g_rewrite_minimum_cost;
 
 void
 _PG_init (void)
@@ -113,6 +115,22 @@ _PG_init (void)
 							 false,
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
+
+	DefineCustomStringVariable("mv_rewrite.rewrite_enabled_for_tables",
+							   gettext_noop("Enable query rewrite for queries mentioning any table in this comma-separated list of fully-qualified tables names. (Default if not specified is to be enabled for all tables; empty string is equivalent to disabling rewrite.)"),
+							   NULL,
+							   &g_rewrite_enabled_for_tables,
+							   NULL,
+							   PGC_SUSET, 0,
+							   NULL, NULL, NULL);
+
+	DefineCustomRealVariable ("mv_rewrite.rewrite_minimum_cost",
+							  gettext_noop("Consider rewriting only if the cheapest total cost plan is greater than this value. (Default of -1 indicates to always consider rewrite, no matter the cost.)"),
+							  NULL,
+							  &g_rewrite_minimum_cost,
+							  -1.0, -1.0, DBL_MAX,
+							  PGC_SUSET, 0,
+							  NULL, NULL, NULL);
 }
 
 void

@@ -20,6 +20,8 @@ extern bool g_trace_where_clause_source_check;
 extern bool g_trace_select_clause_source_check;
 extern bool g_trace_join_clause_check;
 extern bool g_debug_join_clause_check;
+extern char *g_rewrite_enabled_for_tables;
+extern double g_rewrite_minimum_cost;
 
 extern void
 _PG_init (void);

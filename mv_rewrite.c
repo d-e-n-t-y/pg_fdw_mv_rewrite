@@ -269,6 +269,16 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 		return;
 	}
 	
+	if (input_rel->cheapest_total_path != NULL)
+		if (g_rewrite_minimum_cost > 0.0)
+			if (input_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
+			{
+				if (g_log_match_progress)
+					elog(INFO, "%s: already have path with acceptable cost.", __func__);
+
+				return;
+			}
+	
 	if (g_trace_match_progress)
 	{
 		elog(INFO, "%s: stage: %d", __func__, stage);
