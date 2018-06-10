@@ -839,8 +839,13 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_group_clause_source_check))
         {
             if (g_log_match_progress)
-                elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
-            
+                elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
+					 deparse_expression ((Node *) expr,
+										 deparse_context_for_plan_rtable (root->parse->rtable,
+																		  select_rtable_names_for_explain (root->parse->rtable,
+																										   grouped_rel->relids)),
+										 false, false));
+			
             return false;
         }
     }
@@ -1790,6 +1795,30 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	// See if there are any candidate MVs...
 	List *mvs_schema, *mvs_name;
     mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_schema, &mvs_name);
+	
+	if (mvs_name == NULL ||
+		list_length (mvs_name) == 0)
+	{
+		if (g_log_match_progress)
+		{
+			StringInfo involved_rel_string = makeStringInfo();
+			
+			ListCell *lc;
+			foreach (lc, involved_rel_names)
+			{
+				const char *involved_rel_name = lfirst (lc);
+				
+				if (involved_rel_string->len > 0)
+					appendStringInfoString (involved_rel_string, ",");
+				
+				appendStringInfoString (involved_rel_string, involved_rel_name);
+			}
+			
+			elog(INFO, "%s: no candidate MVs for query involving {%s}.", __func__, involved_rel_string->data);
+		}
+
+		return;
+	}
     
     ListOf (TargetEntry *) *grouped_tlist = make_tlist_from_pathtarget (root->upper_targets[UPPERREL_GROUP_AGG]);
 	
