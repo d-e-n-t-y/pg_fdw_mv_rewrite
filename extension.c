@@ -35,6 +35,7 @@ bool g_trace_where_clause_source_check;
 bool g_trace_select_clause_source_check;
 bool g_trace_join_clause_check;
 bool g_debug_join_clause_check;
+bool g_trace_pushed_down_clauses_collation;
 char *g_rewrite_enabled_for_tables;
 double g_rewrite_minimum_cost;
 
@@ -112,6 +113,14 @@ _PG_init (void)
 							 gettext_noop("Debug the matching of the GROUP BY clauses."),
 							 NULL,
 							 &g_debug_join_clause_check,
+							 false,
+							 PGC_SUSET, 0,
+							 NULL, NULL, NULL);
+
+	DefineCustomBoolVariable("mv_rewrite.trace_pushed_down_clauses_collation",
+							 gettext_noop("Trace the collation of clauses in the query that have been pushed down into the query."),
+							 NULL,
+							 &g_trace_pushed_down_clauses_collation,
 							 false,
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);

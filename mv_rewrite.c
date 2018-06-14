@@ -45,6 +45,7 @@
 #include "tcop/tcopprot.h"
 #include "server/executor/spi.h"
 #include "utils/varlena.h"
+#include "rewrite/rewriteHandler.h"
 
 PG_MODULE_MAGIC;
 
@@ -200,6 +201,33 @@ mv_rewrite_explain_scan (CustomScanState *node,
 	// Add the subquery scan PS child to allow it to be EXPLAINed.
 	// FIXME: we don't do this right now because it results in rather confused output
 	// sstate->sstate.custom_ps = list_make1 (sstate->qdesc->planstate);
+}
+
+static Bitmapset *
+mv_rewrite_all_rels_in_rtable (ListOf (RangeTblEntry) *rtable)
+{
+	Relids set = NULL;
+	
+	int i = 0;
+	ListCell *lc;
+	foreach (lc, rtable)
+	{
+		set = bms_add_member (set, i);
+		i++;
+	}
+	
+	return set;
+}
+
+static char *
+mv_rewrite_deparse_expression (ListOf (RangeTblEntry *) *rtable,
+							   Expr *expr)
+{
+	return deparse_expression ((Node *) expr,
+							   deparse_context_for_plan_rtable (rtable,
+																select_rtable_names_for_explain (rtable,
+																								 mv_rewrite_all_rels_in_rtable (rtable))),
+							   true, false);
 }
 
 /*
@@ -468,6 +496,46 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     SPI_finish();
 }
 
+static Query *
+mv_rewrite_rewrite_mv_query (Query *query)
+{
+	if (g_trace_parse_select_query)
+		elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
+	
+	/* Lock and rewrite, using a copy to preserve the original query. */
+	Query *copied_query = (Query *) copyObject (query);
+	AcquireRewriteLocks (copied_query, true, false);
+	ListOf (Query *) *rewritten = QueryRewrite (copied_query);
+	
+	/* SELECT should never rewrite to more or less than one SELECT query */
+	if (list_length (rewritten) != 1)
+		elog(ERROR, "unexpected rewrite result");
+	query = (Query *) linitial (rewritten);
+
+	if (false) {
+	ListCell *e;
+	foreach (e, query->targetList)
+	{
+		TargetEntry *tle = lfirst_node (TargetEntry, e);
+		
+		if (g_trace_parse_select_query)
+			elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
+		
+		Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
+		
+		tle->expr = new_expr;
+		
+		if (g_trace_parse_select_query)
+			elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
+	}
+	}
+	
+	if (g_trace_parse_select_query)
+		elog(INFO, "%s: query: %s", __func__, nodeToString (query));
+	
+	return query;
+}
+
 static void
 mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
 			  const char *mv_name,
@@ -480,13 +548,13 @@ mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
     List       *actions;
     Query       *query;
 
-    LOCKMODE    lockmode = NoLock; // FIXME: is this the correct lockmode?
+    LOCKMODE    lockmode = NoLock;
 
     matviewRV = makeRangeVarFromNameList (stringToQualifiedNameList (mv_name));
 
     *matviewOid = RangeVarGetRelid (matviewRV, lockmode, false);
 
-    matviewRel = heap_open(*matviewOid, NoLock);
+    matviewRel = heap_open (*matviewOid, lockmode);
     
     /* Make sure it is a materialized view. */
     if (matviewRel->rd_rel->relkind != RELKIND_MATVIEW)
@@ -514,16 +582,14 @@ mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
     if (list_length(actions) != 1)
         elog(ERROR, "the rule for materialized view \"%s\" is not a single action", RelationGetRelationName(matviewRel));
     
-    /*
-     * The stored query was rewritten at the time of the MV definition, but
-     * has not been scribbled on by the planner.
-     */
-    query = linitial_node(Query, actions);
+    query = linitial_node (Query, actions);
     
-    heap_close (matviewRel, NoLock);
+    heap_close (matviewRel, lockmode);
 
     if (g_trace_parse_select_query)
         elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
+	
+	query = mv_rewrite_rewrite_mv_query (query);
 
     *parsed_mv_query = query;
 }
@@ -531,14 +597,17 @@ mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
 struct mv_rewrite_xform_todo_list {
     ListOf (Index) *replacement_var;
     ListOf (Expr *) *replaced_expr;
+	Index replacement_varno;
 };
 
 static void
 mv_rewrite_add_xform_todo_list_entry (struct mv_rewrite_xform_todo_list *todo_list, Index i, Expr *replaced_node, TargetEntry *replacement_te)
 {
     //elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
-	
-    todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
+	if (todo_list == NULL)
+		return;
+
+	todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
     todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
 }
 
@@ -559,7 +628,7 @@ mv_rewrite_xform_todos_mutator (Node *node, struct mv_rewrite_xform_todo_list *t
 			// The Var in the replacement node will always reference Level 1
 			// because we replace the query/Rel with a simple SELECT subquery
 			// that pulls data from the MV.
-            v->varno = v->varnoold = 1;
+            v->varno = v->varnoold = todo_list->replacement_varno;
 			
             v->varattno = v->varoattno = (int) i;
             v->varcollid = exprCollation ((Node *) replaced_node);
@@ -577,7 +646,8 @@ mv_rewrite_xform_todos_mutator (Node *node, struct mv_rewrite_xform_todo_list *t
 }
 
 static ListOf (TargetEntry *) *
-mv_rewrite_xform_todos (ListOf (TargetEntry *) *tlist, struct mv_rewrite_xform_todo_list *todo_list)
+mv_rewrite_xform_todos (ListOf (TargetEntry *) *tlist,
+						struct mv_rewrite_xform_todo_list *todo_list)
 {
     return (List *) expression_tree_mutator ((Node *) tlist, mv_rewrite_xform_todos_mutator, todo_list);
 }
@@ -603,6 +673,8 @@ mv_rewrite_expr_targets_equals_walker (Node *a, Node *b, struct mv_rewrite_expr_
     if (a != NULL && b != NULL && nodeTag(a) == nodeTag(b) && nodeTag(a) == T_Var)
     {
         //elog (INFO, "%s: comparing Var", __func__);
+
+		// FIXME: and also compare levelsup, varno's oid
         
         Value *a_col_name = list_nth_node(Value,
                                           planner_rt_fetch((int) ((Var *)a)->varno, ctx->root)->eref->colnames,
@@ -840,33 +912,13 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         {
             if (g_log_match_progress)
                 elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
-					 deparse_expression ((Node *) expr,
-										 deparse_context_for_plan_rtable (root->parse->rtable,
-																		  select_rtable_names_for_explain (root->parse->rtable,
-																										   grouped_rel->relids)),
-										 false, false));
+					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
 			
             return false;
         }
     }
 
     return true;
-}
-
-static Bitmapset *
-mv_rewrite_all_rels_in_rtable (ListOf (RangeTblEntry) *rtable)
-{
-	Relids set = NULL;
-	
-	int i = 0;
-	ListCell *lc;
-	foreach (lc, rtable)
-	{
-		set = bms_add_member (set, i);
-		i++;
-	}
-	
-	return set;
 }
 
 static bool
@@ -895,6 +947,25 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 {
 	ListOf (RestrictInfo * or Expr *) *query_clauses_copy = list_copy (*query_clauses);
 	
+	if (g_debug_join_clause_check)
+	{
+		StringInfo cl = makeStringInfo();
+		ListCell *lc;
+		foreach (lc, query_clauses_copy)
+		{
+			RestrictInfo *query_ri = lfirst (lc);
+			Expr *query_expr = (Expr *) query_ri;
+			
+			/* Extract clause from RestrictInfo, if required */
+			if (IsA (query_ri, RestrictInfo))
+				query_expr = query_ri->clause;
+			if (cl->len > 0)
+				appendStringInfoString (cl, ", ");
+			appendStringInfoString (cl, mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
+		}
+		elog (INFO, "%s: clause list to check: %s", __func__, cl->data);
+	}
+
 	ListCell *lc2;
 	foreach (lc2, mv_join_quals)
 	{
@@ -918,22 +989,23 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		ListCell *lc3;
 		foreach (lc3, query_clauses_copy)
 		{
-			RestrictInfo *ri = lfirst (lc3);
-			Expr *expr = (Expr *) ri;
+			RestrictInfo *query_ri = lfirst (lc3);
+			Expr *query_expr = (Expr *) query_ri;
 			
 			/* Extract clause from RestrictInfo, if required */
-			if (IsA (ri, RestrictInfo))
-				expr = ri->clause;
+			if (IsA (query_ri, RestrictInfo))
+				query_expr = query_ri->clause;
 			
 			if (g_trace_join_clause_check)
-				elog(INFO, "%s: against expression: %s", __func__, nodeToString (expr));
+				elog(INFO, "%s: against expression: %s", __func__,
+					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
 			
-			if (mv_rewrite_expr_targets_equals_walker ((Node *) expr, (Node *) mv_jq, comparison_context))
+			if (mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_jq, comparison_context))
 			{
 				if (g_debug_join_clause_check)
-					elog(INFO, "%s: matched expression: %s", __func__, nodeToString (expr));
+					elog(INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
 				
-				*query_clauses = list_delete_ptr (*query_clauses, ri);
+				*query_clauses = list_delete_ptr (*query_clauses, query_ri);
 				
 				found = true;
 				break;
@@ -944,11 +1016,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		{
 			if (g_log_match_progress)
 				elog(INFO, "%s: MV expression (%s) not found in clauses in the query.", __func__,
-					 deparse_expression ((Node *) mv_jq,
-										 deparse_context_for_plan_rtable (comparison_context->parsed_mv_query_rtable,
-																		  select_rtable_names_for_explain (comparison_context->parsed_mv_query_rtable,
-																										   mv_rewrite_all_rels_in_rtable (comparison_context->parsed_mv_query_rtable))),
-										 false, false));
+					 mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
 			
 			return false;
 		}
@@ -1010,6 +1078,154 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 	return true;
 }
 
+static bool
+mv_rewrite_rte_equals_walker (Node *a, Node *b, void *ctx)
+{
+	if (a != NULL && b != NULL && nodeTag (a) == nodeTag (b) && nodeTag (a) == T_RangeTblEntry)
+	{
+		// Shallow copy before we fixup...
+		RangeTblEntry my_a = *castNode (RangeTblEntry, a);
+		RangeTblEntry my_b = *castNode (RangeTblEntry, b);
+		
+		// Best case is they match already. But anticipate a mismatching checkAsUser...
+		my_a.checkAsUser = my_b.checkAsUser = (Oid) 0;
+		// ...same for selectedCols...
+		my_a.selectedCols = my_b.selectedCols = NULL;
+
+		return equal_tree_walker (&my_a, &my_b, mv_rewrite_rte_equals_walker, ctx);
+	}
+	else if (a != NULL && b != NULL && nodeTag (a) == nodeTag (b) && nodeTag (a) == T_Alias)
+	{
+		Alias my_a = *castNode (Alias, a);
+		Alias my_b = *castNode (Alias, b);
+
+		// ...and alias name.
+		my_a.aliasname = my_b.aliasname = "dummy";
+		
+		return equal_tree_walker (&my_a, &my_b, mv_rewrite_rte_equals_walker, ctx);
+	}
+	
+	return equal_tree_walker(a, b, mv_rewrite_rte_equals_walker, ctx);
+}
+
+ListOf (RestrictInfo *) *
+mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
+								  RelOptInfo *rel,
+								  Index relid)
+{
+	elog (INFO, "%s: >>>>", __func__);
+
+	ListOf (Expr *) *out_ris = NIL;
+
+	ListOf (RestrictInfo *) *rel_ris = NIL;
+
+	if (IS_SIMPLE_REL (rel))
+		rel_ris = rel->baserestrictinfo;
+	else if (IS_JOIN_REL (rel))
+		rel_ris = rel->joininfo;
+	
+	ListCell *lc;
+	foreach (lc, rel_ris)
+	{
+		RestrictInfo *rel_ri = lfirst_node (RestrictInfo, lc);
+		
+		if (rel_ri->is_pushed_down)
+		{
+			if (g_trace_pushed_down_clauses_collation)
+				elog (INFO, "%s: found pushed down clause: %s", __func__, mv_rewrite_deparse_expression (root->parse->rtable, rel_ri->clause));
+
+			// The RI Vars are live structures in the query plan, so take a copy before
+			// perfroming any transformation on them.
+			out_ris = lappend (out_ris, copyObject (rel_ri->clause));
+		}
+	}
+	
+	// FIXME: not sure if we should specially handle any other rtekinds.
+	
+	if (rel->rtekind != RTE_SUBQUERY)
+		goto done;
+	
+	PlannerInfo *subroot = rel->subroot;
+
+	ListOf (Expr *) *sub_ris = NIL;
+	
+	for (int i = 1; i < subroot->simple_rel_array_size; i++)
+	{
+		RelOptInfo *subrel = subroot->simple_rel_array[i];
+		
+		if (subrel != NULL && IS_SIMPLE_REL (subrel))
+		{
+			ListOf (RestrictInfo *) *subris = mv_rewrite_get_pushed_down_exprs (rel->subroot, subrel, (Index) i);
+
+			sub_ris = list_concat (sub_ris, subris);
+		}
+	}
+	
+	if (g_trace_pushed_down_clauses_collation)
+	{
+		StringInfo cl = makeStringInfo();
+		ListCell *lc;
+		foreach (lc, sub_ris)
+		{
+			if (cl->len > 0)
+				appendStringInfoString (cl, ", ");
+			appendStringInfoString (cl, mv_rewrite_deparse_expression (subroot->parse->rtable, (Expr *) lfirst (lc)));
+		}
+		elog (INFO, "%s: collated clause list: %s", __func__, cl->data);
+	}
+
+	// Done with this query level: thin out the list, and include only those
+	// RI clauses that can be pulled back up. We do this by matching each
+	// calsue against the returning subquery's target list.
+	
+	struct mv_rewrite_xform_todo_list xform_todo_list = {
+		.replaced_expr = NIL,
+		.replacement_var = NIL,
+		.replacement_varno = relid
+	};
+	
+	ListCell *lc2;
+	foreach (lc2, sub_ris)
+	{
+		Expr *rel_ri_expr = (Expr *) lfirst (lc2);
+		
+		// FIXME: we should check that none of the Expr's Vars references a levelsup > 0
+		
+		if (!mv_rewrite_check_expr_targets_in_mv_tlist (subroot, subroot->parse, (Node *) rel_ri_expr, &xform_todo_list, false))
+		{
+			if (g_trace_pushed_down_clauses_collation)
+				elog (INFO, "%s: discounting pushed down clause due to no match in above subquery target list: %s", __func__,
+					  mv_rewrite_deparse_expression (subroot->parse->rtable, rel_ri_expr));
+			
+			sub_ris = list_delete (sub_ris, rel_ri_expr);
+		}
+	}
+	
+	// Rewrite RIs from the subquery, such that their Vars reference the subquery's target list,
+	// which has the effect of pulling them up a level.
+	sub_ris = mv_rewrite_xform_todos (sub_ris, &xform_todo_list);
+
+	out_ris = list_concat (out_ris, sub_ris);
+	
+	if (g_trace_pushed_down_clauses_collation)
+	{
+		StringInfo cl = makeStringInfo();
+		ListCell *lc;
+		foreach (lc, out_ris)
+		{
+			if (cl->len > 0)
+				appendStringInfoString (cl, ", ");
+			appendStringInfoString (cl, mv_rewrite_deparse_expression (root->parse->rtable, (Expr *) lfirst (lc)));
+		}
+		elog (INFO, "%s: resulting clause list: %s", __func__, cl->data);
+	}
+
+done:
+	elog (INFO, "%s: <<<<", __func__);
+
+	return out_ris;
+}
+
 /**
  * Recursively descend into the MV's jointree, and do two things:
  *
@@ -1035,54 +1251,75 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 	if (IsA (node, RangeTblRef))
 	{
 		RangeTblRef *rtr = (RangeTblRef *) node;
-		
-		RangeTblEntry *rte = rt_fetch (rtr->rtindex, parsed_mv_query->rtable);
-
-		// Check the type of the RTE.
-		if (rte->rtekind != RTE_RELATION)
-		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: RTE ref other than plain relation not supported.", __func__);
-			
-			return false;
-		}
+		RangeTblEntry *mv_rte = rt_fetch (rtr->rtindex, parsed_mv_query->rtable);
 		
 		// Find the OID it references.
-		Oid mv_oid = rte->relid;
+		Oid mv_oid = mv_rte->relid;
 		
-		if (list_member_oid (*mv_oids_involved, mv_oid))
-		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
+		if (mv_rte->rtekind == RTE_RELATION)
+			if (list_member_oid (*mv_oids_involved, mv_oid))
+			{
+				if (g_log_match_progress)
+					elog(INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
 
-			return false;
-		}
+				return false;
+			}
 		
 		// Locate the same OID the query plan.
 		for (int i = bms_next_member (join_relids, -1);
 			 i >= 0;
 			 i = bms_next_member (join_relids, i))
 		{
-			RangeTblEntry *rte = planner_rt_fetch (i, root);
-			Oid join_oid = rte->relid;
-
-			// If found, keep a record so we know what joins to what later.
-			if (mv_oid == join_oid)
+			RangeTblEntry *plan_rte = planner_rt_fetch (i, root);
+			
+			if (g_trace_join_clause_check)
+				elog(INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
+			if (g_trace_join_clause_check)
+				elog(INFO, "%s: plan RTE: %s", __func__, nodeToString (plan_rte));
+			
+			if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_RELATION)
 			{
-				*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
-				*query_relids_involved = bms_add_member (*query_relids_involved, i);
+				Oid join_oid = plan_rte->relid;
 
-				if (g_trace_join_clause_check)
-					elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+				// If found, keep a record so we know what joins to what later.
+				if (mv_oid == join_oid)
+				{
+					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
+					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 
-				RelOptInfo *rel = find_base_rel (root, i);
-				if (rel->baserestrictinfo != NULL)
-					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, rel->baserestrictinfo);
+					if (g_trace_join_clause_check)
+						elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
 
-				if (query_found_rel != NULL)
-					*query_found_rel = rel;
-				
-				return true;
+					RelOptInfo *rel = find_base_rel (root, i);
+					if (rel->baserestrictinfo != NULL)
+						*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, rel->baserestrictinfo);
+
+					if (query_found_rel != NULL)
+						*query_found_rel = rel;
+					
+					return true;
+				}
+			}
+			else if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_SUBQUERY)
+			{
+				if (equal_tree_walker (mv_rte, plan_rte, mv_rewrite_rte_equals_walker, NULL))
+				{
+					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
+					*query_relids_involved = bms_add_member (*query_relids_involved, i);
+					
+					if (g_trace_join_clause_check)
+						elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+					
+					RelOptInfo *rel = find_base_rel (root, i);
+					
+					ListOf (RestrictInfo *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
+					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, pushed_quals);
+
+					if (query_found_rel != NULL)
+						*query_found_rel = rel;
+
+					return true;
+				}
 			}
 		}
 
@@ -1436,10 +1673,7 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, g_trace_select_clause_source_check))
         {
             if (g_log_match_progress)
-                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, deparse_expression ((Node *) tle->expr,
-																								deparse_context_for_plan_rtable (root->parse->rtable, select_rtable_names_for_explain (root->parse->rtable,
-																												grouped_rel->relids)),
-																								false, false));
+                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, mv_rewrite_deparse_expression (root->parse->rtable, tle->expr));
             
             return false;
         }
@@ -1518,7 +1752,11 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     ListOf (Expr *) *transformed_clist = NIL;
     ListOf (TargetEntry *) *transformed_tlist = grouped_tlist;
     
-    struct mv_rewrite_xform_todo_list transform_todo_list = { NIL, NIL };
+    struct mv_rewrite_xform_todo_list transform_todo_list = {
+		.replaced_expr = NIL,
+		.replacement_var = NIL,
+		.replacement_varno = 1
+	};
     
 	Oid matviewOid;
 	
