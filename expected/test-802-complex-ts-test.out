@@ -1,0 +1,132 @@
+explain (verbose, costs off)
+select timestamp, value
+	from ordered_ts ('2018-06-09 00:00:00+01', '2018-06-10 00:00:00+01', 'Room 1', 'TEMPERATURE', 'N/A', 'minute', 15);
+                                                                                                                                                 QUERY PLAN                                                                                                                                                  
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Subquery Scan on ordered_ts
+   Output: ordered_ts."timestamp", ordered_ts.value
+   ->  Sort
+         Output: (ts_to_bucket(s.s, 'minute'::text, 15)), ((sum((g.avg_detail * (g.count_measurements)::double precision)) / (sum(g.count_measurements))::double precision)), NULL::double precision, NULL::double precision, NULL::double precision, NULL::bigint, NULL::bigint, NULL::double precision
+         Sort Key: (ts_to_bucket(s.s, 'minute'::text, 15))
+         ->  HashAggregate
+               Output: (ts_to_bucket(s.s, 'minute'::text, 15)), (sum((g.avg_detail * (g.count_measurements)::double precision)) / (sum(g.count_measurements))::double precision), NULL::double precision, NULL::double precision, NULL::double precision, NULL::bigint, NULL::bigint, NULL::double precision
+               Group Key: ts_to_bucket(s.s, 'minute'::text, 15)
+               ->  Hash Left Join
+                     Output: ts_to_bucket(s.s, 'minute'::text, 15), g.avg_detail, g.count_measurements
+                     Inner Unique: true
+                     Hash Cond: (ts_to_bucket(s.s, 'minute'::text, 15) = g.ts_bucket)
+                     ->  Function Scan on pg_catalog.generate_series s
+                           Output: s.s
+                           Function Call: generate_series('Fri Jun 08 16:00:00 2018 PDT'::timestamp with time zone, 'Sat Jun 09 16:00:00 2018 PDT'::timestamp with time zone, ('15 minute'::cstring)::interval)
+                           Filter: (s.s < 'Sat Jun 09 16:00:00 2018 PDT'::timestamp with time zone)
+                     ->  Hash
+                           Output: g.avg_detail, g.count_measurements, g.ts_bucket
+                           ->  Subquery Scan on g
+                                 Output: g.avg_detail, g.count_measurements, g.ts_bucket
+                                 ->  Custom Scan (MVRewriteScan)
+                                       Output: (ts_to_bucket("timestamp", 'minute'::text, 15)), (avg(detail)), NULL::double precision, NULL::double precision, NULL::double precision, (count(detail)), NULL::bigint
+                                       Rewritten: scan of public.test99
+(23 rows)
+
+select timestamp, value
+from ordered_ts ('2018-06-09 00:00:00+01', '2018-06-10 00:00:00+01', 'Room 1', 'TEMPERATURE', 'N/A', 'minute', 15);
+          timestamp           |      value       
+------------------------------+------------------
+ Fri Jun 08 16:00:00 2018 PDT |               14
+ Fri Jun 08 16:15:00 2018 PDT |               14
+ Fri Jun 08 16:30:00 2018 PDT |               14
+ Fri Jun 08 16:45:00 2018 PDT |               14
+ Fri Jun 08 17:00:00 2018 PDT |               14
+ Fri Jun 08 17:15:00 2018 PDT |               14
+ Fri Jun 08 17:30:00 2018 PDT |               14
+ Fri Jun 08 17:45:00 2018 PDT | 14.0666666666667
+ Fri Jun 08 18:00:00 2018 PDT |               15
+ Fri Jun 08 18:15:00 2018 PDT |               15
+ Fri Jun 08 18:30:00 2018 PDT |               15
+ Fri Jun 08 18:45:00 2018 PDT |               15
+ Fri Jun 08 19:00:00 2018 PDT |               15
+ Fri Jun 08 19:15:00 2018 PDT |               15
+ Fri Jun 08 19:30:00 2018 PDT |               15
+ Fri Jun 08 19:45:00 2018 PDT |               15
+ Fri Jun 08 20:00:00 2018 PDT |               15
+ Fri Jun 08 20:15:00 2018 PDT |               15
+ Fri Jun 08 20:30:00 2018 PDT |               15
+ Fri Jun 08 20:45:00 2018 PDT |               15
+ Fri Jun 08 21:00:00 2018 PDT |               15
+ Fri Jun 08 21:15:00 2018 PDT | 15.7333333333333
+ Fri Jun 08 21:30:00 2018 PDT |               16
+ Fri Jun 08 21:45:00 2018 PDT |               16
+ Fri Jun 08 22:00:00 2018 PDT |               16
+ Fri Jun 08 22:15:00 2018 PDT |               16
+ Fri Jun 08 22:30:00 2018 PDT |               16
+ Fri Jun 08 22:45:00 2018 PDT |               16
+ Fri Jun 08 23:00:00 2018 PDT |               16
+ Fri Jun 08 23:15:00 2018 PDT |               16
+ Fri Jun 08 23:30:00 2018 PDT |               16
+ Fri Jun 08 23:45:00 2018 PDT |               16
+ Sat Jun 09 00:00:00 2018 PDT |               16
+ Sat Jun 09 00:15:00 2018 PDT |               16
+ Sat Jun 09 00:30:00 2018 PDT |             16.4
+ Sat Jun 09 00:45:00 2018 PDT |               17
+ Sat Jun 09 01:00:00 2018 PDT |               17
+ Sat Jun 09 01:15:00 2018 PDT |               17
+ Sat Jun 09 01:30:00 2018 PDT |               17
+ Sat Jun 09 01:45:00 2018 PDT |               17
+ Sat Jun 09 02:00:00 2018 PDT |               17
+ Sat Jun 09 02:15:00 2018 PDT |               17
+ Sat Jun 09 02:30:00 2018 PDT |               17
+ Sat Jun 09 02:45:00 2018 PDT |               17
+ Sat Jun 09 03:00:00 2018 PDT |               17
+ Sat Jun 09 03:15:00 2018 PDT |               17
+ Sat Jun 09 03:30:00 2018 PDT |               17
+ Sat Jun 09 03:45:00 2018 PDT | 17.0666666666667
+ Sat Jun 09 04:00:00 2018 PDT |               18
+ Sat Jun 09 04:15:00 2018 PDT |               18
+ Sat Jun 09 04:30:00 2018 PDT |               18
+ Sat Jun 09 04:45:00 2018 PDT |               18
+ Sat Jun 09 05:00:00 2018 PDT |               18
+ Sat Jun 09 05:15:00 2018 PDT |               18
+ Sat Jun 09 05:30:00 2018 PDT |               18
+ Sat Jun 09 05:45:00 2018 PDT |               18
+ Sat Jun 09 06:00:00 2018 PDT |               18
+ Sat Jun 09 06:15:00 2018 PDT |               18
+ Sat Jun 09 06:30:00 2018 PDT |               18
+ Sat Jun 09 06:45:00 2018 PDT |               18
+ Sat Jun 09 07:00:00 2018 PDT |               18
+ Sat Jun 09 07:15:00 2018 PDT | 18.7333333333333
+ Sat Jun 09 07:30:00 2018 PDT |               19
+ Sat Jun 09 07:45:00 2018 PDT |               19
+ Sat Jun 09 08:00:00 2018 PDT |               19
+ Sat Jun 09 08:15:00 2018 PDT |               19
+ Sat Jun 09 08:30:00 2018 PDT |               19
+ Sat Jun 09 08:45:00 2018 PDT |               19
+ Sat Jun 09 09:00:00 2018 PDT |               19
+ Sat Jun 09 09:15:00 2018 PDT |               19
+ Sat Jun 09 09:30:00 2018 PDT |               19
+ Sat Jun 09 09:45:00 2018 PDT |               19
+ Sat Jun 09 10:00:00 2018 PDT |               19
+ Sat Jun 09 10:15:00 2018 PDT |               19
+ Sat Jun 09 10:30:00 2018 PDT |             19.4
+ Sat Jun 09 10:45:00 2018 PDT |               20
+ Sat Jun 09 11:00:00 2018 PDT |               20
+ Sat Jun 09 11:15:00 2018 PDT |               20
+ Sat Jun 09 11:30:00 2018 PDT |               20
+ Sat Jun 09 11:45:00 2018 PDT |               20
+ Sat Jun 09 12:00:00 2018 PDT |               20
+ Sat Jun 09 12:15:00 2018 PDT |               20
+ Sat Jun 09 12:30:00 2018 PDT |               20
+ Sat Jun 09 12:45:00 2018 PDT |               20
+ Sat Jun 09 13:00:00 2018 PDT |               20
+ Sat Jun 09 13:15:00 2018 PDT |               20
+ Sat Jun 09 13:30:00 2018 PDT |               20
+ Sat Jun 09 13:45:00 2018 PDT | 20.0666666666667
+ Sat Jun 09 14:00:00 2018 PDT |               21
+ Sat Jun 09 14:15:00 2018 PDT |               21
+ Sat Jun 09 14:30:00 2018 PDT |               21
+ Sat Jun 09 14:45:00 2018 PDT |               21
+ Sat Jun 09 15:00:00 2018 PDT |               21
+ Sat Jun 09 15:15:00 2018 PDT |               21
+ Sat Jun 09 15:30:00 2018 PDT |               21
+ Sat Jun 09 15:45:00 2018 PDT |               21
+(96 rows)
+
