@@ -70,8 +70,6 @@ static bool
 mv_rewrite_dest_receiveSlot (TupleTableSlot *slot,
 			     DestReceiver *self)
 {
-	// elog (INFO, "%s DestReceiver (%p)", __func__, self);
-    
 	struct mv_rewrite_dest_receiver *dest =
     		(struct mv_rewrite_dest_receiver *) self;
 
@@ -327,7 +325,6 @@ recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmaps
 {
 	if (rte->rtekind == RTE_RELATION)
 	{
-		//elog(INFO, "%s: add relation: %d", __func__, rte->relid);
 		out_relids = bms_add_member (out_relids, (int) rte->relid);
 	}
 	else if (rte->rtekind == RTE_SUBQUERY)
@@ -357,7 +354,6 @@ recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, Bitmapset *
     for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
     {
         RangeTblEntry *rte = planner_rt_fetch(x, root);
-        //elog(INFO, "%s: recurse relid %d (rtekind %d)", __func__, x, rte->rtekind);
         out_relids = recurse_relation_oids_from_rte (root, rte, out_relids);
     }
     
@@ -369,7 +365,6 @@ recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset
 {
     if (rte->rtekind == RTE_RELATION)
     {
-        //elog(INFO, "%s: add relation: %d", __func__, rte->relid);
         out_relids = bms_add_member (out_relids, (int) rte->relid);
     }
     else if (rte->rtekind == RTE_SUBQUERY)
@@ -404,8 +399,6 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 		rel_oids = recurse_relation_oids (root, inner_rel->relids, NULL);
 		rel_oids = recurse_relation_oids (root, outer_rel->relids, rel_oids);
 	}
-	
-	//elog(INFO, "%s: relids=%s", __func__, bmsToString (relids));
 	
 	ListOf (char *) *tables_strlist = NIL;
 	for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
@@ -469,6 +462,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     
     if (plan == NULL) {
         elog(WARNING, "%s: SPI_connect() failed", __func__);
+		// FIXME: SPI_finish()?
         return; // (an empty set of matviews)
     }
     
@@ -601,18 +595,21 @@ struct mv_rewrite_xform_todo_list {
 };
 
 static void
-mv_rewrite_add_xform_todo_list_entry (struct mv_rewrite_xform_todo_list *todo_list, Index i, Expr *replaced_node, TargetEntry *replacement_te)
+mv_rewrite_add_xform_todo_list_entry (struct mv_rewrite_xform_todo_list *todo_list,
+									  Index i,
+									  Expr *replaced_node,
+									  TargetEntry *replacement_te)
 {
-    //elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
-	if (todo_list == NULL)
-		return;
+	if (g_trace_transform_vars)
+    	elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
 
 	todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
     todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
 }
 
 static Node *
-mv_rewrite_xform_todos_mutator (Node *node, struct mv_rewrite_xform_todo_list *todo_list)
+mv_rewrite_xform_todos_mutator (Node *node,
+								struct mv_rewrite_xform_todo_list *todo_list)
 {
     ListCell *lc1, *lc2;
     forboth(lc1, todo_list->replaced_expr, lc2, todo_list->replacement_var)
@@ -625,9 +622,6 @@ mv_rewrite_xform_todos_mutator (Node *node, struct mv_rewrite_xform_todo_list *t
             
             Var *v = makeNode (Var);
 			
-			// The Var in the replacement node will always reference Level 1
-			// because we replace the query/Rel with a simple SELECT subquery
-			// that pulls data from the MV.
             v->varno = v->varnoold = todo_list->replacement_varno;
 			
             v->varattno = v->varoattno = (int) i;
@@ -637,7 +631,8 @@ mv_rewrite_xform_todos_mutator (Node *node, struct mv_rewrite_xform_todo_list *t
             v->vartypmod = -1;
             v->location = -1;
             
-            //elog(INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
+			if (g_trace_transform_vars)
+				elog(INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
             
             return (Node *) v;
         }
@@ -666,14 +661,12 @@ struct mv_rewrite_expr_targets_equals_ctx
 };
 
 static bool
-mv_rewrite_expr_targets_equals_walker (Node *a, Node *b, struct mv_rewrite_expr_targets_equals_ctx *ctx)
+mv_rewrite_expr_targets_equals_walker (Node *a,
+									   Node *b,
+									   struct mv_rewrite_expr_targets_equals_ctx *ctx)
 {
-    //elog (INFO, "%s: comparing: %s with: %s", __func__, nodeToString (a), nodeToString (b));
-    
     if (a != NULL && b != NULL && nodeTag(a) == nodeTag(b) && nodeTag(a) == T_Var)
     {
-        //elog (INFO, "%s: comparing Var", __func__);
-
 		// FIXME: and also compare levelsup, varno's oid
         
         Value *a_col_name = list_nth_node(Value,
@@ -684,29 +677,13 @@ mv_rewrite_expr_targets_equals_walker (Node *a, Node *b, struct mv_rewrite_expr_
                                           list_nth_node (RangeTblEntry, ctx->parsed_mv_query_rtable, (int) ((Var *)b)->varno - 1)->eref->colnames,
                                           (int) ((Var *)b)->varattno - 1);
         
-        if (0 == strcmp (a_col_name->val.str, b_col_name->val.str))
-        {
-            //elog(INFO, "%s: match for Var: %d/%d->%d/%d (%s)", __func__, ((Var *)a)->varno, ((Var *)a)->varattno, ((Var *)b)->varno, ((Var *)b)->varattno, a_col_name->val.str);
-            return true;
-        }
-        else
-        {
-            //elog(INFO, "%s: no match for Var: %d/%d, %d/%d (%s, %s)", __func__, ((Var *)a)->varno, ((Var *)a)->varattno, ((Var *)b)->varno, ((Var *)b)->varattno, a_col_name->val.str, b_col_name->val.str);
-            return false;
-        }
+		bool result = (0 == strcmp (a_col_name->val.str, b_col_name->val.str));
+
+		return result;
     }
     
     bool result = equal_tree_walker(a, b, mv_rewrite_expr_targets_equals_walker, ctx);
-    
-    if (result)
-    {
-        //elog(INFO, "%s: matched", __func__);
-    }
-    else
-    {
-        //elog(INFO, "%s: not matched", __func__);
-    }
-    
+
     return result;
 }
 
@@ -892,16 +869,12 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
                                  List *transformed_tlist,
                                  struct mv_rewrite_xform_todo_list *todo_list)
 {
-    //elog(INFO, "%s: target list: %s", __func__, nodeToString(transformed_tlist));
-    
     // Check each GROUP BY clause (Expr) in turn...
     ListCell   *lc;
     foreach (lc, root->parse->groupClause)
     {
         SortGroupClause *sgc = lfirst (lc);
         Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
-        
-        //elog(INFO, "%s: checking index %d node: %s", __func__, sgc->tleSortGroupRef, nodeToString(expr));
         
         // Check that the Expr either direclty matches an TLE Expr in the MV target list, or
         // is an expression that builds upon one of them.
@@ -1663,8 +1636,6 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
     foreach (lc, selected_tlist)
     {
         TargetEntry *tle = lfirst(lc);
-        
-        //elog(INFO, "%s: matching expr: %s", __func__, nodeToString (tle));
         
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, g_trace_select_clause_source_check))
         {

@@ -21,6 +21,7 @@ extern bool g_trace_select_clause_source_check;
 extern bool g_trace_join_clause_check;
 extern bool g_debug_join_clause_check;
 extern bool g_trace_pushed_down_clauses_collation;
+extern bool g_trace_transform_vars;
 extern char *g_rewrite_enabled_for_tables;
 extern double g_rewrite_minimum_cost;
 

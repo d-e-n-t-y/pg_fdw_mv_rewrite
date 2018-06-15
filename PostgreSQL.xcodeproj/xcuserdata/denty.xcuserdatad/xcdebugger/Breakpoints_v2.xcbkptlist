@@ -300,7 +300,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "1210"
             endingLineNumber = "1210"
-            landmarkName = "mv_rewrite_get_pushed_down_exprs"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>

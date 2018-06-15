@@ -36,6 +36,7 @@ bool g_trace_select_clause_source_check;
 bool g_trace_join_clause_check;
 bool g_debug_join_clause_check;
 bool g_trace_pushed_down_clauses_collation;
+bool g_trace_transform_vars;
 char *g_rewrite_enabled_for_tables;
 double g_rewrite_minimum_cost;
 
@@ -125,6 +126,14 @@ _PG_init (void)
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
 
+	DefineCustomBoolVariable("mv_rewrite.trace_transform_vars",
+							 gettext_noop("Trace the transformation of expression nodes in the query to reference target entries from the MV."),
+							 NULL,
+							 &g_trace_transform_vars,
+							 false,
+							 PGC_SUSET, 0,
+							 NULL, NULL, NULL);
+	
 	DefineCustomStringVariable("mv_rewrite.rewrite_enabled_for_tables",
 							   gettext_noop("Enable query rewrite for queries mentioning any table in this comma-separated list of fully-qualified tables names. (Default if not specified is to be enabled for all tables; empty string is equivalent to disabling rewrite.)"),
 							   NULL,
