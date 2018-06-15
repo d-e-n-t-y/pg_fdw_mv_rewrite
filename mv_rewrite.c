@@ -1113,8 +1113,6 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 								  RelOptInfo *rel,
 								  Index relid)
 {
-	elog (INFO, "%s: >>>>", __func__);
-
 	ListOf (Expr *) *out_ris = NIL;
 
 	ListOf (RestrictInfo *) *rel_ris = NIL;
@@ -1221,8 +1219,6 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 	}
 
 done:
-	elog (INFO, "%s: <<<<", __func__);
-
 	return out_ris;
 }
 
