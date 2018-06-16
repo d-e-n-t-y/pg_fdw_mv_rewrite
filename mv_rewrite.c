@@ -49,6 +49,8 @@
 
 PG_MODULE_MAGIC;
 
+#define elog_if(cond, ...) if ((cond)) elog (__VA_ARGS__);
+
 #define ListOf(type) List /* type */
 
 typedef struct {
@@ -281,8 +283,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// Ignore stages we don't support; and skip any duplicate calls.
 	if (stage != UPPERREL_GROUP_AGG)
 	{
-		if (g_trace_match_progress)
-			elog(INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
+		elog_if (g_trace_match_progress, INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
 		
 		return;
 	}
@@ -290,8 +291,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// Evaluate the query being planned for any unsupported features.
 	if (!mv_rewrite_eval_query_for_rewrite_support (root))
 	{
-		if (g_log_match_progress)
-			elog(INFO, "%s: query requires unsupported features.", __func__);
+		elog_if (g_log_match_progress, INFO, "%s: query requires unsupported features.", __func__);
 		
 		return;
 	}
@@ -300,19 +300,15 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 		if (g_rewrite_minimum_cost > 0.0)
 			if (input_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
 			{
-				if (g_log_match_progress)
-					elog(INFO, "%s: already have path with acceptable cost.", __func__);
+				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
 
 				return;
 			}
 	
-	if (g_trace_match_progress)
-	{
-		elog(INFO, "%s: stage: %d", __func__, stage);
-		elog(INFO, "%s: root: %s", __func__, nodeToString (root));
-		elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-		elog(INFO, "%s: output_rel: %s", __func__, nodeToString (output_rel));
-	}
+	elog_if (g_trace_match_progress, INFO, "%s: stage: %d", __func__, stage);
+	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
+	elog_if (g_trace_match_progress, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+	elog_if (g_trace_match_progress, INFO, "%s: output_rel: %s", __func__, nodeToString (output_rel));
 
 	// If we can rewrite, add those alternate paths...
 	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
@@ -434,6 +430,8 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
 	StringInfoData find_mvs_query;
 	initStringInfo (&find_mvs_query);
 	
+	// FIXME: this query will fail if the pgx_ table is not present, we might
+	// instead catch the error and continue... or something else.
 	appendStringInfoString (&find_mvs_query,
 							"SELECT v.schemaname, v.matviewname"
 							" FROM "
@@ -493,8 +491,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
 static Query *
 mv_rewrite_rewrite_mv_query (Query *query)
 {
-	if (g_trace_parse_select_query)
-		elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
+	elog_if (g_trace_parse_select_query, INFO, "%s: parse tree: %s", __func__, nodeToString (query));
 	
 	/* Lock and rewrite, using a copy to preserve the original query. */
 	Query *copied_query = (Query *) copyObject (query);
@@ -502,8 +499,7 @@ mv_rewrite_rewrite_mv_query (Query *query)
 	ListOf (Query *) *rewritten = QueryRewrite (copied_query);
 	
 	/* SELECT should never rewrite to more or less than one SELECT query */
-	if (list_length (rewritten) != 1)
-		elog(ERROR, "unexpected rewrite result");
+	elog_if (list_length (rewritten) != 1,  ERROR, "unexpected rewrite result");
 	query = (Query *) linitial (rewritten);
 
 	if (false) {
@@ -512,20 +508,17 @@ mv_rewrite_rewrite_mv_query (Query *query)
 	{
 		TargetEntry *tle = lfirst_node (TargetEntry, e);
 		
-		if (g_trace_parse_select_query)
-			elog(INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
+		elog_if (g_trace_parse_select_query, INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
 		
 		Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
 		
 		tle->expr = new_expr;
 		
-		if (g_trace_parse_select_query)
-			elog(INFO, "%s: revised: %s", __func__, nodeToString (tle));
+		elog_if (g_trace_parse_select_query, INFO, "%s: revised: %s", __func__, nodeToString (tle));
 	}
 	}
 	
-	if (g_trace_parse_select_query)
-		elog(INFO, "%s: query: %s", __func__, nodeToString (query));
+	elog_if (g_trace_parse_select_query, INFO, "%s: query: %s", __func__, nodeToString (query));
 	
 	return query;
 }
@@ -551,8 +544,7 @@ mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
     matviewRel = heap_open (*matviewOid, lockmode);
     
     /* Make sure it is a materialized view. */
-    if (matviewRel->rd_rel->relkind != RELKIND_MATVIEW)
-        elog(ERROR, "\"%s\" is not a materialized view", RelationGetRelationName(matviewRel));
+    elog_if (matviewRel->rd_rel->relkind != RELKIND_MATVIEW, ERROR, "\"%s\" is not a materialized view", RelationGetRelationName(matviewRel));
 
     /* We don't allow an oid column for a materialized view. */
     Assert(!matviewRel->rd_rel->relhasoids);
@@ -561,27 +553,23 @@ mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
      * Check that everything is correct for a refresh. Problems at this point
      * are internal errors, so elog is sufficient.
      */
-    if (matviewRel->rd_rel->relhasrules == false ||
-        matviewRel->rd_rules->numLocks < 1)
-        elog(ERROR, "materialized view \"%s\" is missing rewrite information", RelationGetRelationName(matviewRel));
+    elog_if (matviewRel->rd_rel->relhasrules == false ||
+        matviewRel->rd_rules->numLocks < 1,
+			 ERROR, "materialized view \"%s\" is missing rewrite information", RelationGetRelationName(matviewRel));
     
-    if (matviewRel->rd_rules->numLocks > 1)
-        elog(ERROR, "materialized view \"%s\" has too many rules", RelationGetRelationName(matviewRel));
+    elog_if (matviewRel->rd_rules->numLocks > 1, ERROR, "materialized view \"%s\" has too many rules", RelationGetRelationName(matviewRel));
     
     rule = matviewRel->rd_rules->rules[0];
-    if (rule->event != CMD_SELECT || !(rule->isInstead))
-        elog(ERROR, "the rule for materialized view \"%s\" is not a SELECT INSTEAD OF rule", RelationGetRelationName(matviewRel));
+    elog_if (rule->event != CMD_SELECT || !(rule->isInstead), ERROR, "the rule for materialized view \"%s\" is not a SELECT INSTEAD OF rule", RelationGetRelationName(matviewRel));
     
     actions = rule->actions;
-    if (list_length(actions) != 1)
-        elog(ERROR, "the rule for materialized view \"%s\" is not a single action", RelationGetRelationName(matviewRel));
+    elog_if (list_length(actions) != 1, ERROR, "the rule for materialized view \"%s\" is not a single action", RelationGetRelationName(matviewRel));
     
     query = linitial_node (Query, actions);
     
     heap_close (matviewRel, lockmode);
 
-    if (g_trace_parse_select_query)
-        elog(INFO, "%s: parse tree: %s", __func__, nodeToString (query));
+    elog_if (g_trace_parse_select_query, INFO, "%s: parse tree: %s", __func__, nodeToString (query));
 	
 	query = mv_rewrite_rewrite_mv_query (query);
 
@@ -600,8 +588,7 @@ mv_rewrite_add_xform_todo_list_entry (struct mv_rewrite_xform_todo_list *todo_li
 									  Expr *replaced_node,
 									  TargetEntry *replacement_te)
 {
-	if (g_trace_transform_vars)
-    	elog(INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
+	elog_if (g_trace_transform_vars, INFO, "%s: will replace node %s: with Var (varattrno=%d)", __func__, nodeToString (replaced_node), i);
 
 	todo_list->replacement_var = lappend_int(todo_list->replacement_var, (int) i);
     todo_list->replaced_expr = lappend(todo_list->replaced_expr, replaced_node);
@@ -631,8 +618,7 @@ mv_rewrite_xform_todos_mutator (Node *node,
             v->vartypmod = -1;
             v->location = -1;
             
-			if (g_trace_transform_vars)
-				elog(INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
+			elog_if (g_trace_transform_vars, INFO, "%s: transforming node: %s into: %s", __func__, nodeToString (replaced_node), nodeToString (v));
             
             return (Node *) v;
         }
@@ -703,21 +689,18 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
     bool done = false;
     bool local_match_found = false;
     
-    if (ctx->trace)
-        elog(INFO, "%s: >>>>", __func__);
+    elog_if (ctx->trace, INFO, "%s: >>>>", __func__);
     
     ctx->did_search_anything = true;
     
     if (!ctx->match_found)
     {
-        if (ctx->trace)
-            elog(INFO, "%s: previous expr didn't match; no point continuing...", __func__);
+        elog_if (ctx->trace, INFO, "%s: previous expr didn't match; no point continuing...", __func__);
 
         return false;
     }
     
-    if (ctx->trace)
-        elog(INFO, "%s: checking expr: %s", __func__, nodeToString (node));
+    elog_if (ctx->trace, INFO, "%s: checking expr: %s", __func__, nodeToString (node));
     
     if (!done)
     {
@@ -725,8 +708,7 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
         {
             done = true;
             
-            if (ctx->trace)
-                elog(INFO, "%s: NULL node", __func__);
+            elog_if (ctx->trace, INFO, "%s: NULL node", __func__);
         }
     }
     
@@ -737,8 +719,7 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
             local_match_found = true;
             done = true;
             
-            if (ctx->trace)
-                elog(INFO, "%s: constants are always acceptable", __func__);
+            elog_if (ctx->trace, INFO, "%s: constants are always acceptable", __func__);
         }
     }
     
@@ -752,15 +733,13 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
         {
             TargetEntry *te = lfirst(lc);
             
-            if (ctx->trace)
-                elog(INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
+            elog_if (ctx->trace, INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
             
             local_match_found = mv_rewrite_expr_targets_equals_walker ((Node *) node, (Node *) te->expr, ctx->col_names);
             
             if (local_match_found)
             {
-                if (ctx->trace)
-                    elog(INFO, "%s: matched!", __func__);
+                elog_if (ctx->trace, INFO, "%s: matched!", __func__);
 				
                 mv_rewrite_add_xform_todo_list_entry (ctx->todo_list, i, (Expr *) node, te);
                 
@@ -780,20 +759,17 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
         sub_ctx.match_found = true; // walker will set to false if not matched
         sub_ctx.did_search_anything = false; // indicates whether match_found is valid
         
-        if (ctx->trace)
-            elog(INFO, "%s: walking sub-expressions...", __func__);
+        elog_if (ctx->trace, INFO, "%s: walking sub-expressions...", __func__);
         
         // Look at the sub-expressions inside the Node. All must either match
         // exactly, or derive from something that does.
         expression_tree_walker (node, mv_rewrite_expr_targets_in_mv_tlist_walker, &sub_ctx);
         
         if (!sub_ctx.did_search_anything) {
-            if (ctx->trace)
-                elog(INFO, "%s: (no sub-expressions walked)", __func__);
+            elog_if (ctx->trace, INFO, "%s: (no sub-expressions walked)", __func__);
         }
         
-        if (ctx->trace)
-            elog(INFO, "%s: done walking sub-expressions.", __func__);
+        elog_if (ctx->trace, INFO, "%s: done walking sub-expressions.", __func__);
         
         local_match_found = sub_ctx.did_search_anything && sub_ctx.match_found;
         
@@ -802,20 +778,17 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
     
     if (done)
     {
-        if (ctx->trace)
-            elog(INFO, "%s: done; local match found: %d", __func__, local_match_found);
+        elog_if (ctx->trace, INFO, "%s: done; local match found: %d", __func__, local_match_found);
         
         // We got a match: record it, but we can't abort the walk because
         // there may be adjacent arguments. Unfortunately, we can't directly
         // signal to go no deepper, but continue with the adjacent walk.
         ctx->match_found = ctx->match_found && local_match_found;
         
-        if (ctx->trace)
-            elog(INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
+        elog_if (ctx->trace, INFO, "%s: done; resulting match indicator: %d", __func__, ctx->match_found);
     }
     
-    if (ctx->trace)
-        elog(INFO, "%s: <<<<", __func__);
+    elog_if (ctx->trace, INFO, "%s: <<<<", __func__);
     
     // Always continue to search adjacent expressions, even if we didn't dive down.
     return false;
@@ -883,8 +856,7 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         // MV TLE directly.
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_group_clause_source_check))
         {
-            if (g_log_match_progress)
-                elog(INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
+            elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
 					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
 			
             return false;
@@ -954,8 +926,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 			continue;
 		}
 		
-		if (g_debug_join_clause_check)
-			elog(INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (mv_jq));
+		elog_if (g_debug_join_clause_check, INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (mv_jq));
 		
 		bool found = false;
 		
@@ -969,14 +940,12 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 			if (IsA (query_ri, RestrictInfo))
 				query_expr = query_ri->clause;
 			
-			if (g_trace_join_clause_check)
-				elog(INFO, "%s: against expression: %s", __func__,
+			elog_if (g_trace_join_clause_check, INFO, "%s: against expression: %s", __func__,
 					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
 			
 			if (mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_jq, comparison_context))
 			{
-				if (g_debug_join_clause_check)
-					elog(INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
+				elog_if (g_debug_join_clause_check, INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
 				
 				*query_clauses = list_delete_ptr (*query_clauses, query_ri);
 				
@@ -987,8 +956,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		
 		if (!found)
 		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: MV expression (%s) not found in clauses in the query.", __func__,
+			elog_if (g_log_match_progress, INFO, "%s: MV expression (%s) not found in clauses in the query.", __func__,
 					 mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
 			
 			return false;
@@ -1004,11 +972,9 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 					      RelOptInfo *join_rel,
 						  ListOf (RestrictInfo * or Expr *) **additional_where_clauses)
 {
-	if (g_debug_join_clause_check)
-		elog(INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
+	elog_if (g_debug_join_clause_check, INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
 
-	if (g_trace_join_clause_check)
-		elog(INFO, "%s: join_rel: %s", __func__, nodeToString (join_rel));
+	elog_if (g_trace_join_clause_check, INFO, "%s: join_rel: %s", __func__, nodeToString (join_rel));
 
 	// Attempt to find a legal join in the plan for each of the joins in the MV's jointree.
 	
@@ -1017,8 +983,7 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 	
 	Relids join_relids = join_rel->relids;
 	
-	if (g_trace_join_clause_check)
-		elog(INFO, "%s: join_relids: %s", __func__, bmsToString (join_relids));
+	elog_if (g_trace_join_clause_check, INFO, "%s: join_relids: %s", __func__, bmsToString (join_relids));
 	
 	// As we walk the join tree, build up a list of quals. We will check each qual
 	// for presence in the query later.
@@ -1042,8 +1007,7 @@ mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
 	// The join should now have accounted for every rel in the join_rel: if not, we don't have a match
 	if (!bms_equal (join_relids, query_relids_involved))
 	{
-		if (g_log_match_progress)
-			elog(INFO, "%s: the query does not involve all relations joined by the MV", __func__);
+		elog_if (g_log_match_progress, INFO, "%s: the query does not involve all relations joined by the MV", __func__);
 
 		return false;
 	}
@@ -1102,8 +1066,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		if (rel_ri->is_pushed_down)
 		{
-			if (g_trace_pushed_down_clauses_collation)
-				elog (INFO, "%s: found pushed down clause: %s", __func__, mv_rewrite_deparse_expression (root->parse->rtable, rel_ri->clause));
+			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%s: found pushed down clause: %s", __func__, mv_rewrite_deparse_expression (root->parse->rtable, rel_ri->clause));
 
 			// The RI Vars are live structures in the query plan, so take a copy before
 			// perfroming any transformation on them.
@@ -1164,8 +1127,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		if (!mv_rewrite_check_expr_targets_in_mv_tlist (subroot, subroot->parse, (Node *) rel_ri_expr, &xform_todo_list, false))
 		{
-			if (g_trace_pushed_down_clauses_collation)
-				elog (INFO, "%s: discounting pushed down clause due to no match in above subquery target list: %s", __func__,
+			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%s: discounting pushed down clause due to no match in above subquery target list: %s", __func__,
 					  mv_rewrite_deparse_expression (subroot->parse->rtable, rel_ri_expr));
 			
 			sub_ris = list_delete (sub_ris, rel_ri_expr);
@@ -1214,8 +1176,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 								  ListOf (RestrictInfo *) **collated_query_quals,
 								  ListOf (RestrictInfo *) **collated_mv_quals)
 {
-	if (g_trace_join_clause_check)
-		elog(INFO, "%s: processing node: %s", __func__, nodeToString (node));
+	elog_if (g_trace_join_clause_check, INFO, "%s: processing node: %s", __func__, nodeToString (node));
 	
 	if (IsA (node, RangeTblRef))
 	{
@@ -1228,8 +1189,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (mv_rte->rtekind == RTE_RELATION)
 			if (list_member_oid (*mv_oids_involved, mv_oid))
 			{
-				if (g_log_match_progress)
-					elog(INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
+				elog_if (g_log_match_progress, INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
 
 				return false;
 			}
@@ -1241,10 +1201,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		{
 			RangeTblEntry *plan_rte = planner_rt_fetch (i, root);
 			
-			if (g_trace_join_clause_check)
-				elog(INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
-			if (g_trace_join_clause_check)
-				elog(INFO, "%s: plan RTE: %s", __func__, nodeToString (plan_rte));
+			elog_if (g_trace_join_clause_check, INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
+			elog_if (g_trace_join_clause_check, INFO, "%s: plan RTE: %s", __func__, nodeToString (plan_rte));
 			
 			if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_RELATION)
 			{
@@ -1256,8 +1214,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 
-					if (g_trace_join_clause_check)
-						elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+					elog_if (g_trace_join_clause_check, INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
 
 					RelOptInfo *rel = find_base_rel (root, i);
 					if (rel->baserestrictinfo != NULL)
@@ -1276,8 +1233,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 					
-					if (g_trace_join_clause_check)
-						elog(INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+					elog_if (g_trace_join_clause_check, INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
 					
 					RelOptInfo *rel = find_base_rel (root, i);
 					
@@ -1294,8 +1250,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 
 		// Otherwise, since we can't find a match, that means the MV doesn't match the query.
 
-		if (g_log_match_progress)
-			elog(INFO, "%s: no match found in plan for MV rtindex: %d; MV Oid: %d", __func__, rtr->rtindex, (int) mv_oid);
+		elog_if (g_log_match_progress, INFO, "%s: no match found in plan for MV rtindex: %d; MV Oid: %d", __func__, rtr->rtindex, (int) mv_oid);
 		
 		return false;
 	}
@@ -1314,8 +1269,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		// Check the left side of the join is legal according to the plan.
 		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals))
 		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: left side of join is not valid for plan: %s", __func__, nodeToString (larg));
+			elog_if (g_log_match_progress, INFO, "%s: left side of join is not valid for plan: %s", __func__, nodeToString (larg));
 
 			return false;
 		}
@@ -1325,14 +1279,12 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		// Check the right side of the join is legal according to the plan.
 		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals))
 		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: right side of join is not valid for plan: %s", __func__, nodeToString (rarg));
+			elog_if (g_log_match_progress, INFO, "%s: right side of join is not valid for plan: %s", __func__, nodeToString (rarg));
 			
 			return false;
 		}
 		
-		if (g_trace_join_clause_check)
-			elog(INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
+		elog_if (g_trace_join_clause_check, INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
 
 		Relids outrelids = bms_union (larg_query_relids, rarg_query_relids);
 		
@@ -1344,8 +1296,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		
 		if (!join_is_legal (root, lrel, rrel, outrelids, &sjinfo, &reversed))
 		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: MV contains a join not matched in query: %s", __func__, nodeToString (node));
+			elog_if (g_log_match_progress, INFO, "%s: MV contains a join not matched in query: %s", __func__, nodeToString (node));
 			
 			return false;
 		}
@@ -1370,8 +1321,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 	
 		if (legal_jt != je->jointype)
 		{
-			if (g_log_match_progress)
-				elog(INFO, "%s: MV contains a join of type not matched in query.", __func__);
+			elog_if (g_log_match_progress, INFO, "%s: MV contains a join of type not matched in query.", __func__);
 				
 			return false;
 		}
@@ -1387,8 +1337,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (je->quals != NULL)
 			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, je->quals);
 		
-		if (g_trace_join_clause_check)
-			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+		elog_if (g_trace_join_clause_check, INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
 		*query_relids_involved = bms_union (*query_relids_involved, outrelids);
 		
@@ -1478,8 +1427,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (fe->quals != NULL)
 			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 		
-		if (g_trace_join_clause_check)
-			elog(INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+		elog_if (g_trace_join_clause_check, INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
 		return true;
 	}
@@ -1504,13 +1452,10 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
                                      ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
                                      struct mv_rewrite_xform_todo_list *todo_list)
 {
-	if (g_trace_join_clause_check)
-		elog(INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
-    if (g_trace_join_clause_check)
-        elog(INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
+	elog_if (g_trace_join_clause_check, INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
+    elog_if (g_trace_join_clause_check, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
 
-    if (g_debug_join_clause_check)
-        elog(INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
+    elog_if (g_debug_join_clause_check, INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 	
     ListOf (RestrictInfo * or Expr *) *additional_clauses = NIL;
 	
@@ -1530,8 +1475,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	else
 		return false;
     
-    if (g_debug_join_clause_check)
-        elog(INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (additional_clauses));
+    elog_if (g_debug_join_clause_check, INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (additional_clauses));
 	
     // 4. The balance of clauses must now be treated as if they were part of the
     //    WHERE clause list. Return them so the WHERE clause processing can handle
@@ -1539,8 +1483,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
     
     *additional_where_clauses = additional_clauses;
 
-    if (g_debug_join_clause_check)
-        elog(INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
+    elog_if (g_debug_join_clause_check, INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
     
     return true;
 }
@@ -1563,8 +1506,7 @@ mv_rewrite_process_having_clauses (PlannerInfo *root,
         havingQual = lappend (havingQual, expr);
     }
 
-    if (g_trace_having_clause_source_check)
-        elog(INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
+    elog_if (g_trace_having_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
     
     // Having qualifiers may simply be appended to our working set of additional WHERE clauses:
     // they will be checked for validity against the MV tList later.
@@ -1584,8 +1526,7 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
 	// All WHERE clauses fo a JOIN_REL will have been elicited during processing of
 	// the FROM/JOIN clauses of the input_rel.
 	
-    if (g_trace_where_clause_source_check)
-        elog(INFO, "%s: clauses: %s", __func__, nodeToString (query_where_clauses));
+    elog_if (g_trace_where_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (query_where_clauses));
 	
     ListCell   *lc;
     foreach (lc, query_where_clauses)
@@ -1600,8 +1541,7 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
         
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_where_clause_source_check))
         {
-            if (g_log_match_progress)
-                elog(INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             
             return false;
         }
@@ -1639,8 +1579,7 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
         
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, g_trace_select_clause_source_check))
         {
-            if (g_log_match_progress)
-                elog(INFO, "%s: expr (%s) not found in MV tlist", __func__, mv_rewrite_deparse_expression (root->parse->rtable, tle->expr));
+            elog_if (g_log_match_progress, INFO, "%s: expr (%s) not found in MV tlist", __func__, mv_rewrite_deparse_expression (root->parse->rtable, tle->expr));
             
             return false;
         }
@@ -1907,11 +1846,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 								StringInfo mv_name, StringInfo mv_schema)
 {
 	/* plan_params should not be in use in current query level */
-	if (root->plan_params != NIL)
-	{
-		elog(ERROR, "%s: plan_params != NIL", __func__);
-		return NULL;
-	}
+	elog_if (root->plan_params != NIL, ERROR, "%s: plan_params != NIL", __func__);
 	
 	/* Generate Paths for the subquery. */
 	PlannedStmt *pstmt = pg_plan_query (alternative_query,
@@ -1991,8 +1926,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	// Check first that all of those rels are enabled for query rewrite...
 	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))
 	{
-		if (g_log_match_progress)
-			elog(INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
+		elog_if (g_log_match_progress, INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
 
 		return;
 	}
@@ -2033,8 +1967,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     {
         StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc);
         
-        if (g_log_match_progress)
-            elog(INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
 
         Query *alternative_query;
         
@@ -2042,15 +1975,13 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
             continue;
         
         // 8. Finally, create and add the path.
-        if (g_log_match_progress)
-            elog(INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
+        elog_if (g_log_match_progress, INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
         
         // Add generated path into grouped_rel.
         add_path (grouped_rel,
 				  mv_rewrite_create_mv_scan_path (root, alternative_query, grouped_rel, grouped_tlist, grouping_target, mv_name, mv_schema));
 
-        if (g_log_match_progress)
-            elog(INFO, "%s: path added.", __func__);
+        elog_if (g_log_match_progress, INFO, "%s: path added.", __func__);
         
         return;
     }

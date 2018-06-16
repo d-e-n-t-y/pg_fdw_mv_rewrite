@@ -129,7 +129,7 @@ INFO:  mv_rewrite_create_upper_paths_hook: already have path with acceptable cos
 It may be desirable that rewrite is applied only to a certain set of large tables, or to tables that are typically
 subjected to complex queries. This limitation can be configured by by setting `mv_rewrite.rewrite_enabled_for_tables`.
 
-The SETting `mv_rewrite.rewrite_enabled_for_tables` to `DEFAULT` results in rewrite being considered for all 
+SETting `mv_rewrite.rewrite_enabled_for_tables` to `DEFAULT` results in rewrite being considered for all 
 tables, whereas an empty string means it is effectively disabled.
 
 ```SQL

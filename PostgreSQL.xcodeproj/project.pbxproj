@@ -39,6 +39,7 @@
 		BF1F881720BAE52E00553FEB /* join_is_legal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = join_is_legal.c; sourceTree = "<group>"; };
 		BF35BACA20949EFC00C29DCE /* extension.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = extension.h; sourceTree = "<group>"; };
 		BF35BACB20949EFC00C29DCE /* extension.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = extension.c; sourceTree = "<group>"; };
+		BF519BB820D5511900CF8FA2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
 		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
 		BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mv_rewrite--0.6.sql"; sourceTree = "<group>"; };
@@ -70,6 +71,7 @@
 		BF8BEEDD1FD1E500003A7AC9 = {
 			isa = PBXGroup;
 			children = (
+				BF519BB820D5511900CF8FA2 /* README.md */,
 				BF8BEEEC1FD1E590003A7AC9 /* Makefile */,
 				BF8BEEF61FD1E99D003A7AC9 /* Source code */,
 				BF8BEF1F1FD1F23E003A7AC9 /* Headers */,
