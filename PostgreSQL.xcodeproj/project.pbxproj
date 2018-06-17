@@ -15,7 +15,7 @@
 		BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */; };
 		BF650D8020CC1852009B5649 /* equalswalker.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5A26901FD95A0600E3AD72 /* equalswalker.h */; };
 		BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */; };
-		BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.so */; };
+		BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.1.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,7 +25,7 @@
 			dstPath = "$(PG_HOME)/lib";
 			dstSubfolderSpec = 0;
 			files = (
-				BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.so in Copy Files */,
+				BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.1.so in Copy Files */,
 			);
 			name = "Copy Files";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -40,6 +40,8 @@
 		BF35BACA20949EFC00C29DCE /* extension.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = extension.h; sourceTree = "<group>"; };
 		BF35BACB20949EFC00C29DCE /* extension.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = extension.c; sourceTree = "<group>"; };
 		BF519BB820D5511900CF8FA2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		BF519BB920D6577A00CF8FA2 /* mv_rewrite--0.6--0.6.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6--0.6.1.sql"; sourceTree = "<group>"; };
+		BF519BBA20D6578400CF8FA2 /* mv_rewrite--0.6.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6.1.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
 		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
 		BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mv_rewrite--0.6.sql"; sourceTree = "<group>"; };
@@ -47,7 +49,7 @@
 		BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = mv_rewrite.c; sourceTree = "<group>"; };
 		BF8BEEF01FD1E590003A7AC9 /* mv_rewrite.control */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = mv_rewrite.control; sourceTree = "<group>"; };
 		BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = mv_rewrite.h; sourceTree = "<group>"; };
-		BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = mv_rewrite.0.6.so; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = mv_rewrite.0.6.1.so; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF967BFA20666F5E001F9A45 /* libpq.5.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpq.5.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpq.5.10.dylib"; sourceTree = "<group>"; };
 		BF967BFC20667049001F9A45 /* libpgtypes.3.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpgtypes.3.10.dylib; path = "../../../junk/postgresql-10.1/lib/libpgtypes.3.10.dylib"; sourceTree = "<group>"; };
 		BF967BFE2066708D001F9A45 /* libecpg.6.10.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libecpg.6.10.dylib; path = "../../../junk/postgresql-10.1/lib/libecpg.6.10.dylib"; sourceTree = "<group>"; };
@@ -99,7 +101,7 @@
 		BF8BEEFC1FD1EBD0003A7AC9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.so */,
+				BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,6 +134,8 @@
 			children = (
 				BF8BEEF01FD1E590003A7AC9 /* mv_rewrite.control */,
 				BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */,
+				BF519BB920D6577A00CF8FA2 /* mv_rewrite--0.6--0.6.1.sql */,
+				BF519BBA20D6578400CF8FA2 /* mv_rewrite--0.6.1.sql */,
 			);
 			name = "Control files";
 			sourceTree = "<group>";
@@ -168,7 +172,7 @@
 			);
 			name = mv_rewrite;
 			productName = postgres_fdw.so;
-			productReference = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.so */;
+			productReference = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */;
 			productType = "com.apple.product-type.library.dynamic";
 		};
 /* End PBXNativeTarget section */
@@ -310,7 +314,7 @@
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
 				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
-				CURRENT_PROJECT_VERSION = 0.6;
+				CURRENT_PROJECT_VERSION = 0.6.1;
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_EXTENSION = so;
@@ -341,7 +345,7 @@
 				CODE_SIGN_IDENTITY = "";
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
 				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
-				CURRENT_PROJECT_VERSION = 0.6;
+				CURRENT_PROJECT_VERSION = 0.6.1;
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_EXTENSION = so;

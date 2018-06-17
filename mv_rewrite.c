@@ -502,7 +502,8 @@ mv_rewrite_rewrite_mv_query (Query *query)
 	elog_if (list_length (rewritten) != 1,  ERROR, "unexpected rewrite result");
 	query = (Query *) linitial (rewritten);
 
-	if (false) {
+	// Simplify constants in the target list because the raw rewrittten parse trees won't otherwise
+	// match the expression trees that the planner shows us to match against.
 	ListCell *e;
 	foreach (e, query->targetList)
 	{
@@ -515,7 +516,6 @@ mv_rewrite_rewrite_mv_query (Query *query)
 		tle->expr = new_expr;
 		
 		elog_if (g_trace_parse_select_query, INFO, "%s: revised: %s", __func__, nodeToString (tle));
-	}
 	}
 	
 	elog_if (g_trace_parse_select_query, INFO, "%s: query: %s", __func__, nodeToString (query));
