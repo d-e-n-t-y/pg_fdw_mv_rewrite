@@ -316,12 +316,12 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	mv_rewrite_add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, grouping_target);
 }
 
-static Bitmapset *
-recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
+static void
+recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **out_relids)
 {
 	if (rte->rtekind == RTE_RELATION)
 	{
-		out_relids = bms_add_member (out_relids, (int) rte->relid);
+		*out_relids = list_append_unique_oid (*out_relids, rte->relid);
 	}
 	else if (rte->rtekind == RTE_SUBQUERY)
 	{
@@ -333,35 +333,18 @@ recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmaps
 				{
 					RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
 					
-					// FIXME: should not use BMS to store the large integers that are Oids!
-					out_relids = recurse_relation_relids_from_rte (root, srte, out_relids);
+					recurse_relation_relids_from_rte (root, srte, out_relids);
 				}
 			}
 	}
-	return out_relids;
 }
 
-static Bitmapset *
-recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *relids);
-
-static Bitmapset *
-recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, Bitmapset *out_relids)
-{
-    for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
-    {
-        RangeTblEntry *rte = planner_rt_fetch(x, root);
-        out_relids = recurse_relation_oids_from_rte (root, rte, out_relids);
-    }
-    
-    return out_relids;
-}
-
-static Bitmapset *
-recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset *out_relids)
+static void
+recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **out_relids)
 {
     if (rte->rtekind == RTE_RELATION)
     {
-        out_relids = bms_add_member (out_relids, (int) rte->relid);
+		*out_relids = list_append_unique_oid (*out_relids, rte->relid);
     }
     else if (rte->rtekind == RTE_SUBQUERY)
     {
@@ -373,12 +356,20 @@ recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, Bitmapset
                 {
                     RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
 					
-					// FIXME: should not use BMS to store the large integers that are Oids!
-                    out_relids = recurse_relation_relids_from_rte (root, srte, out_relids);
+                    recurse_relation_relids_from_rte (root, srte, out_relids);
                 }
             }
     }
-    return out_relids;
+}
+
+static void
+recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, List **out_relids)
+{
+	for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
+	{
+		RangeTblEntry *rte = planner_rt_fetch(x, root);
+		recurse_relation_oids_from_rte (root, rte, out_relids);
+	}
 }
 
 static ListOf (char *) *
@@ -386,18 +377,19 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 								   RelOptInfo *inner_rel,
 								   RelOptInfo *input_rel, RelOptInfo *outer_rel)
 {
-	Bitmapset *rel_oids = NULL;
+	List *rel_oids = NIL;
 
 	if (input_rel != NULL)
-		rel_oids = recurse_relation_oids (root, input_rel->relids, NULL);
+		recurse_relation_oids (root, input_rel->relids, &rel_oids);
 	else if (inner_rel != NULL && outer_rel != NULL)
 	{
-		rel_oids = recurse_relation_oids (root, inner_rel->relids, NULL);
-		rel_oids = recurse_relation_oids (root, outer_rel->relids, rel_oids);
+		recurse_relation_oids (root, inner_rel->relids, &rel_oids);
+		recurse_relation_oids (root, outer_rel->relids, &rel_oids);
 	}
 	
 	ListOf (char *) *tables_strlist = NIL;
-	for (int x = bms_next_member (rel_oids, -1); x >= 0; x = bms_next_member (rel_oids, x))
+	ListCell *lc;
+	foreach (lc, rel_oids)
 	{
 		StringInfo table_name = makeStringInfo();
 		
@@ -405,9 +397,9 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 		 * Core code already has some lock on each rel being planned, so we
 		 * can use NoLock here.
 		 */
-		Relation	rel = heap_open((Oid) x, NoLock);
+		Relation	rel = heap_open (lfirst_oid (lc), NoLock);
 		
-		heap_close(rel, NoLock);
+		heap_close (rel, NoLock);
 		
 		const char *nspname = get_namespace_name (RelationGetNamespace(rel));
 		const char *relname = RelationGetRelationName(rel);
@@ -1228,6 +1220,9 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			}
 			else if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_SUBQUERY)
 			{
+				// FIXME: we presume that, if the subquery's Query matches the MV's subquery Query,
+				// then the subquery's plan must also match the MV's. However, is there a chance
+				// that some other rel and join info is pushed down?
 				if (equal_tree_walker (mv_rte, plan_rte, mv_rewrite_rte_equals_walker, NULL))
 				{
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
@@ -1246,6 +1241,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					return true;
 				}
 			}
+			// FIXME: other rtekinds?
 		}
 
 		// Otherwise, since we can't find a match, that means the MV doesn't match the query.
@@ -1362,18 +1358,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
 		}
 		
-		// Handle the special case of a list of two.
-		if (list_length (fe->fromlist) == 2)
-		{
-			JoinExpr *je = makeNode (JoinExpr);
-			je->jointype = JOIN_INNER; // always an inner join
-			je->larg = list_nth_node (Node, fe->fromlist, 0);
-			je->rarg = list_nth_node (Node, fe->fromlist, 1);
-			je->quals = fe->quals;
-
-			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
-		}
-
 		// Note that it is possible that there are /no/ items in the FROM list (e.g.,
 		// in case of UNION ALL).
 		if (list_length (fe->fromlist) >= 2)
@@ -1457,31 +1441,29 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 
     elog_if (g_debug_join_clause_check, INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 	
-    ListOf (RestrictInfo * or Expr *) *additional_clauses = NIL;
-	
 	if (IS_UPPER_REL(grouped_rel))
 	{
 		if (IS_SIMPLE_REL (input_rel))
-			additional_clauses = list_copy (input_rel->baserestrictinfo);
+			*additional_where_clauses = list_copy (input_rel->baserestrictinfo);
 		
 		else if (IS_JOIN_REL (input_rel))
 		{
 			// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV, and
 			// that the every join in the MV is legal and correct according to the plan.
-			if (!mv_rewrite_join_node_is_valid_for_plan (root, parsed_mv_query, input_rel, &additional_clauses))
+			if (!mv_rewrite_join_node_is_valid_for_plan (root, parsed_mv_query, input_rel, additional_where_clauses))
 				return false;
 		}
+		
+		// FIXME: IS_OTHER_REL?
 	}
 	else
 		return false;
     
-    elog_if (g_debug_join_clause_check, INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (additional_clauses));
+    elog_if (g_debug_join_clause_check, INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (*additional_where_clauses));
 	
-    // 4. The balance of clauses must now be treated as if they were part of the
-    //    WHERE clause list. Return them so the WHERE clause processing can handle
-    //    them appropriately.
-    
-    *additional_where_clauses = additional_clauses;
+    // The balance of clauses must now be treated as if they were part of the
+    // WHERE clause list. Return them so the WHERE clause processing can handle
+    // them appropriately.
 
     elog_if (g_debug_join_clause_check, INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
     
@@ -1495,16 +1477,7 @@ mv_rewrite_process_having_clauses (PlannerInfo *root,
                         ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
                         struct mv_rewrite_xform_todo_list *todo_list)
 {
-    ListOf (Expr *) *havingQual = NIL;
-
-    // FIXME: can we work around need to wrap the existing list in RIs?
-    ListCell *lc;
-    foreach(lc, (List *) root->parse->havingQual)
-    {
-        Expr       *expr = (Expr *) lfirst(lc);
-        
-        havingQual = lappend (havingQual, expr);
-    }
+    ListOf (Expr *) *havingQual = list_copy ((List *) root->parse->havingQual);
 
     elog_if (g_trace_having_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
     
@@ -1668,6 +1641,10 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	
 	Query *parsed_mv_query;
 	mv_rewrite_get_mv_query (grouped_rel, (const char *) mv_name->data, &parsed_mv_query, &matviewOid);
+	
+	// The query obtained which represents the MV is now locked.
+	
+	// FIXME: ... but when we decide the MV does not match, we don't release those locks.
     
     // 1. Check the GROUP BY clause: it must match exactly.
     if (!mv_rewrite_check_group_clauses_for_mv(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
