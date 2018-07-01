@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "0830"
+   LastUpgradeVersion = "0940"
    version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-               BuildableName = "mv_rewrite.0.6.so"
+               BuildableName = "mv_rewrite.0.6.1.so"
                BlueprintName = "mv_rewrite"
                ReferencedContainer = "container:PostgreSQL.xcodeproj">
             </BuildableReference>
@@ -68,7 +68,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "mv_rewrite.0.6.so"
+            BuildableName = "mv_rewrite.0.6.1.so"
             BlueprintName = "mv_rewrite"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>
@@ -117,7 +117,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "BF8BEF0D1FD1EF5D003A7AC9"
-            BuildableName = "mv_rewrite.0.6.so"
+            BuildableName = "mv_rewrite.0.6.1.so"
             BlueprintName = "mv_rewrite"
             ReferencedContainer = "container:PostgreSQL.xcodeproj">
          </BuildableReference>

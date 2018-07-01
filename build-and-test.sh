@@ -1,7 +1,7 @@
 #!/bin/sh
 
-set -e
-set -x
+#set -e
+#set -x
 
 export PGPORT=58329
 
@@ -15,6 +15,11 @@ $PG_HOME/bin/pg_ctl --pgdata=/tmp/$PGPORT start;\
 make clean && make CFLAGS='-g' && make install && make installcheck;\
 $PG_HOME/bin/pg_ctl --pgdata=/tmp/$PGPORT stop;\
 rm -r /tmp/$PGPORT'
+
+env PG_HOME=/Users/denty/junk/postgresql-11beta2 \
+    PATH=/Users/denty/junk/postgresql-11beta2/bin:$PATH \
+    USE_PGXS=yes \
+    bash -c "$PROGRAM"
 
 env PG_HOME=/Users/denty/junk/postgresql-10.3 \
     PATH=/Users/denty/junk/postgresql-10.3/bin:$PATH \

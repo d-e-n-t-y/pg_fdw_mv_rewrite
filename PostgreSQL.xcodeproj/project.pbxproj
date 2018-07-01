@@ -9,14 +9,28 @@
 /* Begin PBXBuildFile section */
 		BF1F881820BAE52E00553FEB /* join_is_legal.h in Headers */ = {isa = PBXBuildFile; fileRef = BF1F881620BAE52E00553FEB /* join_is_legal.h */; };
 		BF1F881920BAE52E00553FEB /* join_is_legal.c in Sources */ = {isa = PBXBuildFile; fileRef = BF1F881720BAE52E00553FEB /* join_is_legal.c */; };
+		BF25E65620E8C4C000B69F12 /* generate_equalswalker.sh in Sources */ = {isa = PBXBuildFile; fileRef = BF25E65520E8C45F00B69F12 /* generate_equalswalker.sh */; };
 		BF35BACC20949EFC00C29DCE /* extension.h in Headers */ = {isa = PBXBuildFile; fileRef = BF35BACA20949EFC00C29DCE /* extension.h */; };
 		BF35BACD20949EFC00C29DCE /* extension.c in Sources */ = {isa = PBXBuildFile; fileRef = BF35BACB20949EFC00C29DCE /* extension.c */; };
-		BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5A268E1FD9531000E3AD72 /* equalwalker.c */; };
 		BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */; };
-		BF650D8020CC1852009B5649 /* equalswalker.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5A26901FD95A0600E3AD72 /* equalswalker.h */; };
+		BF650D8020CC1852009B5649 /* equalwalker.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5A26901FD95A0600E3AD72 /* equalwalker.h */; };
 		BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */; };
 		BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.1.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXBuildRule section */
+		BF25E65320E8BC0700B69F12 /* PBXBuildRule */ = {
+			isa = PBXBuildRule;
+			compilerSpec = com.apple.compilers.proxy.script;
+			filePatterns = "*.sh";
+			fileType = pattern.proxy;
+			isEditable = 1;
+			outputFiles = (
+				"$(PROJECT_DIR)/equalwalker.c",
+			);
+			script = "${PROJECT_DIR}/generate_equalswalker.sh > ${SCRIPT_OUTPUT_FILE_0}";
+		};
+/* End PBXBuildRule section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		BF8BEFAD1FD2C2DF003A7AC9 /* Copy Files */ = {
@@ -37,13 +51,14 @@
 		BF0F801F20A89B990058CD6D /* build-and-install.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "build-and-install.sh"; sourceTree = "<group>"; };
 		BF1F881620BAE52E00553FEB /* join_is_legal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = join_is_legal.h; sourceTree = "<group>"; };
 		BF1F881720BAE52E00553FEB /* join_is_legal.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = join_is_legal.c; sourceTree = "<group>"; };
+		BF25E65520E8C45F00B69F12 /* generate_equalswalker.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = generate_equalswalker.sh; sourceTree = "<group>"; };
 		BF35BACA20949EFC00C29DCE /* extension.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = extension.h; sourceTree = "<group>"; };
 		BF35BACB20949EFC00C29DCE /* extension.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = extension.c; sourceTree = "<group>"; };
 		BF519BB820D5511900CF8FA2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		BF519BB920D6577A00CF8FA2 /* mv_rewrite--0.6--0.6.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6--0.6.1.sql"; sourceTree = "<group>"; };
 		BF519BBA20D6578400CF8FA2 /* mv_rewrite--0.6.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6.1.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
-		BF5A26901FD95A0600E3AD72 /* equalswalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalswalker.h; sourceTree = "<group>"; };
+		BF5A26901FD95A0600E3AD72 /* equalwalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalwalker.h; sourceTree = "<group>"; };
 		BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mv_rewrite--0.6.sql"; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = mv_rewrite.c; sourceTree = "<group>"; };
@@ -94,6 +109,7 @@
 				BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */,
 				BF35BACB20949EFC00C29DCE /* extension.c */,
 				BF1F881720BAE52E00553FEB /* join_is_legal.c */,
+				BF25E65520E8C45F00B69F12 /* generate_equalswalker.sh */,
 			);
 			name = "Source code";
 			sourceTree = "<group>";
@@ -124,7 +140,7 @@
 				BF1F881620BAE52E00553FEB /* join_is_legal.h */,
 				BF35BACA20949EFC00C29DCE /* extension.h */,
 				BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */,
-				BF5A26901FD95A0600E3AD72 /* equalswalker.h */,
+				BF5A26901FD95A0600E3AD72 /* equalwalker.h */,
 			);
 			name = Headers;
 			sourceTree = "<group>";
@@ -150,7 +166,7 @@
 				BF1F881820BAE52E00553FEB /* join_is_legal.h in Headers */,
 				BF35BACC20949EFC00C29DCE /* extension.h in Headers */,
 				BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */,
-				BF650D8020CC1852009B5649 /* equalswalker.h in Headers */,
+				BF650D8020CC1852009B5649 /* equalwalker.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -167,6 +183,7 @@
 				BF8BEF0C1FD1EF5D003A7AC9 /* Headers */,
 			);
 			buildRules = (
+				BF25E65320E8BC0700B69F12 /* PBXBuildRule */,
 			);
 			dependencies = (
 			);
@@ -181,7 +198,7 @@
 		BF8BEEDE1FD1E500003A7AC9 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0830;
+				LastUpgradeCheck = 0940;
 				ORGANIZATIONNAME = "John Dent";
 				TargetAttributes = {
 					BF8BEF0D1FD1EF5D003A7AC9 = {
@@ -212,10 +229,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BF5A268F1FD9531000E3AD72 /* equalwalker.c in Sources */,
 				BF35BACD20949EFC00C29DCE /* extension.c in Sources */,
 				BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */,
 				BF1F881920BAE52E00553FEB /* join_is_legal.c in Sources */,
+				BF25E65620E8C4C000B69F12 /* generate_equalswalker.sh in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -232,15 +249,23 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -277,15 +302,23 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
 				CLANG_WARN_SUSPICIOUS_MOVE = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;

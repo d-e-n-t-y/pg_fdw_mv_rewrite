@@ -10,16 +10,23 @@
 #ifndef MV_REWRITE_H
 #define MV_REWRITE_H
 
+#include "pg_config.h"
+
 #include "lib/stringinfo.h"
 #include "nodes/relation.h"
 #include "utils/relcache.h"
+#include "optimizer/planner.h"
 
 #include "libpq-fe.h"
 
 extern void
-mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
-			      UpperRelationKind stage,
-			      RelOptInfo *input_rel,
-			      RelOptInfo *output_rel);
+mv_rewrite_create_upper_paths_hook (PlannerInfo *root,
+									UpperRelationKind stage,
+									RelOptInfo *input_rel,
+									RelOptInfo *output_rel
+#if PG_VERSION_NUM >= 110000
+									, void *extra
+#endif
+									);
 
 #endif							/* MV_REWRITE_H */

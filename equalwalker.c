@@ -28,11 +28,12 @@
  */
 
 #include "postgres.h"
-#include "equalswalker.h"
+#include "equalwalker.h"
 
 #include "nodes/extensible.h"
 #include "nodes/relation.h"
 #include "utils/datum.h"
+
 
 /*
  * Macros to simplify comparison of different kinds of fields.  Use these
@@ -2311,7 +2312,7 @@ _equalParamRef(const ParamRef *a, const ParamRef *b, bool (*walker) (), void *co
 static bool
 _equalAConst(const A_Const *a, const A_Const *b, bool (*walker) (), void *context)
 {
-	if (!equal(&a->val, &b->val))	/* hack for in-line Value field */
+	if (!walker(&a->val, &b->val, context))	/* hack for in-line Value field */
 		return false;
 	COMPARE_LOCATION_FIELD(location);
 

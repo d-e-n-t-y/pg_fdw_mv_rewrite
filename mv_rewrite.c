@@ -8,9 +8,10 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+#include "pg_config.h"
 
 #include "mv_rewrite.h"
-#include "equalswalker.h"
+#include "equalwalker.h"
 #include "extension.h"
 #include "join_is_legal.h"
 
@@ -274,11 +275,19 @@ void
 mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 			      UpperRelationKind stage,
 			      RelOptInfo *input_rel,
-			      RelOptInfo *output_rel)
+			      RelOptInfo *output_rel
+#if PG_VERSION_NUM >= 110000
+			      , void *extra
+#endif
+)
 {
 	// Delegate first to any other extensions if they are already hooked.
 	if (next_create_upper_paths_hook)
-		(*next_create_upper_paths_hook) (root, stage, input_rel, output_rel);
+		(*next_create_upper_paths_hook) (root, stage, input_rel, output_rel
+#if PG_VERSION_NUM >= 110000
+						 , extra
+#endif
+						 );
 
 	// Ignore stages we don't support; and skip any duplicate calls.
 	if (stage != UPPERREL_GROUP_AGG)
