@@ -223,7 +223,13 @@
                   symbolName = "elog_finish"
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
-                  offsetFromSymbolStart = "0">
+                  urlString = "file:///Users/denty/junk/postgresql-10.3/src/backend/utils/error/elog.c"
+                  timestampString = "552340906.943445"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "1350"
+                  endingLineNumber = "1350"
+                  offsetFromSymbolStart = "128">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -235,11 +241,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "550523442.625594"
+            timestampString = "552340906.872786"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1210"
-            endingLineNumber = "1210"
+            startingLineNumber = "1248"
+            endingLineNumber = "1248"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>
@@ -251,11 +257,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "550523442.626224"
+            timestampString = "552340906.8764091"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1244"
-            endingLineNumber = "1244"
+            startingLineNumber = "1282"
+            endingLineNumber = "1282"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
             landmarkType = "9">
          </BreakpointContent>

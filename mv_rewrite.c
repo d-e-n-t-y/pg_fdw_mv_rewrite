@@ -47,6 +47,7 @@
 #include "server/executor/spi.h"
 #include "utils/varlena.h"
 #include "rewrite/rewriteHandler.h"
+#include "utils/fmgroids.h"
 
 PG_MODULE_MAGIC;
 
@@ -263,6 +264,43 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
                              RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
                              RelOptInfo *grouped_rel,
                              PathTarget *grouping_target);
+
+void
+mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
+								   RelOptInfo *joinrel,
+								   RelOptInfo *outerrel,
+								   RelOptInfo *innerrel,
+								   JoinType jointype,
+								   JoinPathExtraData *extra)
+{
+	// Evaluate the query being planned for any unsupported features.
+	if (!mv_rewrite_eval_query_for_rewrite_support (root))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: query requires unsupported features.", __func__);
+		
+		return;
+	}
+	
+	if (g_rewrite_minimum_cost > 0.0)
+	{
+		// We need to first identify the cheapest cost paths from the set of possible paths.
+		// (The planner would normally call this a little later.)
+		set_cheapest (joinrel);
+
+		if (joinrel->cheapest_total_path != NULL)
+			if (joinrel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
+			{
+				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
+				
+				return;
+			}
+	}
+	
+	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
+	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (joinrel));
+	
+	return;
+}
 
 /*
  * mv_rewrite_create_upper_paths_hook
@@ -1926,20 +1964,13 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	{
 		if (g_log_match_progress)
 		{
-			StringInfo involved_rel_string = makeStringInfo();
-			
-			ListCell *lc;
-			foreach (lc, involved_rel_names)
-			{
-				const char *involved_rel_name = lfirst (lc);
-				
-				if (involved_rel_string->len > 0)
-					appendStringInfoString (involved_rel_string, ",");
-				
-				appendStringInfoString (involved_rel_string, involved_rel_name);
-			}
-			
-			elog(INFO, "%s: no candidate MVs for query involving {%s}.", __func__, involved_rel_string->data);
+			FmgrInfo	a2t_proc;
+			fmgr_info (F_ARRAY_TO_TEXT, &a2t_proc);
+
+			elog(INFO, "%s: no candidate MVs for query involving {%s}.", __func__,
+				 TextDatumGetCString (FunctionCall2Coll (&a2t_proc, InvalidOid,
+														 PointerGetDatum (strlist_to_textarray (involved_rel_names)),
+														 PointerGetDatum (cstring_to_text (",")))));
 		}
 
 		return;

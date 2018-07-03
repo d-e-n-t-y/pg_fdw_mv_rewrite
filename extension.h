@@ -10,6 +10,7 @@
 #define extension_h
 
 #include "optimizer/planner.h"
+#include "optimizer/paths.h"
 
 extern bool g_log_match_progress;
 extern bool g_trace_match_progress;
@@ -38,5 +39,6 @@ _PG_fini (void);
  * be set to the current value (if any) of the hook during initialization.
  */
 extern create_upper_paths_hook_type next_create_upper_paths_hook;
+extern set_join_pathlist_hook_type next_set_join_pathlist_hook;
 
 #endif /* exension_h */

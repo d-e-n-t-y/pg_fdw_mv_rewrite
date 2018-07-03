@@ -20,6 +20,14 @@
 #include "libpq-fe.h"
 
 extern void
+mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
+								   RelOptInfo *joinrel,
+								   RelOptInfo *outerrel,
+								   RelOptInfo *innerrel,
+								   JoinType jointype,
+								   JoinPathExtraData *extra);
+
+extern void
 mv_rewrite_create_upper_paths_hook (PlannerInfo *root,
 									UpperRelationKind stage,
 									RelOptInfo *input_rel,

@@ -14,6 +14,7 @@
 #include "float.h"
 
 extern create_upper_paths_hook_type create_upper_paths_hook;
+extern set_join_pathlist_hook_type set_join_pathlist_hook;
 
 /*
  * Old hook values.
@@ -22,6 +23,7 @@ extern create_upper_paths_hook_type create_upper_paths_hook;
  * be set to the current value (if any) of the hook during initialization.
  */
 create_upper_paths_hook_type next_create_upper_paths_hook = NULL;
+set_join_pathlist_hook_type next_set_join_pathlist_hook = NULL;
 
 /*
  * GUC parameters.
@@ -46,6 +48,9 @@ _PG_init (void)
 	next_create_upper_paths_hook = create_upper_paths_hook;
 	create_upper_paths_hook = mv_rewrite_create_upper_paths_hook;
 	
+	next_set_join_pathlist_hook = set_join_pathlist_hook;
+	set_join_pathlist_hook = mv_rewrite_set_join_pathlist_hook;
+
 	DefineCustomBoolVariable("mv_rewrite.log_match_progress",
 							 gettext_noop("Log progress through matching a candidate materialized view against the query being executed."),
 							 NULL,
@@ -156,4 +161,7 @@ _PG_fini (void)
 {
 	create_upper_paths_hook = next_create_upper_paths_hook;
 	next_create_upper_paths_hook = NULL;
+	
+	set_join_pathlist_hook = next_set_join_pathlist_hook;
+	next_set_join_pathlist_hook = NULL;
 }
