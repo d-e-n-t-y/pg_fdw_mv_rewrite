@@ -895,6 +895,8 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         // MV TLE directly.
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_group_clause_source_check))
         {
+			// FIXME: the above check looks wrong — it will claim a match where (for example)
+			// the GROUP BY is for a * 2 when the MV only GROUPs BY a.
             elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
 					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
 			
@@ -1694,8 +1696,9 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	// FIXME: ... but when we decide the MV does not match, we don't release those locks.
     
     // 1. Check the GROUP BY clause: it must match exactly.
-    if (!mv_rewrite_check_group_clauses_for_mv(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
-        return false;
+	if (grouped_rel != NULL)
+	    if (!mv_rewrite_check_group_clauses_for_mv(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
+    	    return false;
     
     // FIXME: the above check only checks some selected clauses; the balance of
     // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
