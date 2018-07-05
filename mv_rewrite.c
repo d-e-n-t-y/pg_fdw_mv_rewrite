@@ -260,10 +260,9 @@ mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
-                             RelOptInfo *input_rel, // if grouping
-                             RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
-                             RelOptInfo *grouped_rel,
-                             PathTarget *grouping_target);
+								   RelOptInfo *input_rel,
+								   RelOptInfo *grouped_rel,
+								   PathTarget *grouping_target);
 
 void
 mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
@@ -313,7 +312,7 @@ void
 mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 			      UpperRelationKind stage,
 			      RelOptInfo *input_rel,
-			      RelOptInfo *output_rel
+			      RelOptInfo *upper_rel
 #if PG_VERSION_NUM >= 110000
 			      , void *extra
 #endif
@@ -321,7 +320,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 {
 	// Delegate first to any other extensions if they are already hooked.
 	if (next_create_upper_paths_hook)
-		(*next_create_upper_paths_hook) (root, stage, input_rel, output_rel
+		(*next_create_upper_paths_hook) (root, stage, input_rel, upper_rel
 #if PG_VERSION_NUM >= 110000
 						 , extra
 #endif
@@ -355,12 +354,12 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: stage: %d", __func__, stage);
 	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
 	elog_if (g_trace_match_progress, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-	elog_if (g_trace_match_progress, INFO, "%s: output_rel: %s", __func__, nodeToString (output_rel));
+	elog_if (g_trace_match_progress, INFO, "%s: upper_rel: %s", __func__, nodeToString (upper_rel));
 
 	// If we can rewrite, add those alternate paths...
 	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
 
-	mv_rewrite_add_rewritten_mv_paths(root, input_rel, NULL, NULL, output_rel, grouping_target);
+	mv_rewrite_add_rewritten_mv_paths (root, input_rel, upper_rel, grouping_target);
 }
 
 static void
@@ -421,18 +420,12 @@ recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, List **out_
 
 static ListOf (char *) *
 mv_rewrite_get_involved_rel_names (PlannerInfo *root,
-								   RelOptInfo *inner_rel,
-								   RelOptInfo *input_rel, RelOptInfo *outer_rel)
+								   RelOptInfo *rel)
 {
 	List *rel_oids = NIL;
 
-	if (input_rel != NULL)
-		recurse_relation_oids (root, input_rel->relids, &rel_oids);
-	else if (inner_rel != NULL && outer_rel != NULL)
-	{
-		recurse_relation_oids (root, inner_rel->relids, &rel_oids);
-		recurse_relation_oids (root, outer_rel->relids, &rel_oids);
-	}
+	if (rel != NULL)
+		recurse_relation_oids (root, rel->relids, &rel_oids);
 	
 	ListOf (char *) *tables_strlist = NIL;
 	ListCell *lc;
@@ -464,8 +457,6 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
                                      ListOf (StringInfo) **mvs_schema,
                                      ListOf (StringInfo) **mvs_name)
 {
-    *mvs_schema = NIL, *mvs_name = NIL;
-    
 	StringInfoData find_mvs_query;
 	initStringInfo (&find_mvs_query);
 	
@@ -563,10 +554,9 @@ mv_rewrite_rewrite_mv_query (Query *query)
 }
 
 static void
-mv_rewrite_get_mv_query (RelOptInfo *grouped_rel,
-			  const char *mv_name,
-			  Query **parsed_mv_query,
-			  Oid *matviewOid)
+mv_rewrite_get_mv_query (const char *mv_name,
+						 Query **parsed_mv_query,
+						 Oid *matviewOid)
 {
     RangeVar    *matviewRV;
     Relation    matviewRel;
@@ -1481,30 +1471,24 @@ static bool
 mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
                                      Query *parsed_mv_query,
 									 RelOptInfo *input_rel,
-                                     RelOptInfo *grouped_rel,
                                      ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
                                      struct mv_rewrite_xform_todo_list *todo_list)
 {
-	elog_if (g_trace_join_clause_check, INFO, "%s: grouped_rel: %s", __func__, nodeToString (grouped_rel));
     elog_if (g_trace_join_clause_check, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
 
     elog_if (g_debug_join_clause_check, INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
 	
-	if (IS_UPPER_REL(grouped_rel))
+	if (IS_SIMPLE_REL (input_rel))
+		*additional_where_clauses = list_copy (input_rel->baserestrictinfo);
+	
+	else if (IS_JOIN_REL (input_rel))
 	{
-		if (IS_SIMPLE_REL (input_rel))
-			*additional_where_clauses = list_copy (input_rel->baserestrictinfo);
-		
-		else if (IS_JOIN_REL (input_rel))
-		{
-			// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV, and
-			// that the every join in the MV is legal and correct according to the plan.
-			if (!mv_rewrite_join_node_is_valid_for_plan (root, parsed_mv_query, input_rel, additional_where_clauses))
-				return false;
-		}
-		
-		// FIXME: IS_OTHER_REL?
+		// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV, and
+		// that the every join in the MV is legal and correct according to the plan.
+		if (!mv_rewrite_join_node_is_valid_for_plan (root, parsed_mv_query, input_rel, additional_where_clauses))
+			return false;
 	}
+
 	else
 		return false;
     
@@ -1539,8 +1523,6 @@ mv_rewrite_process_having_clauses (PlannerInfo *root,
 static bool
 mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
                                                Query *parsed_mv_query,
-											   RelOptInfo *input_rel,
-                                               RelOptInfo *grouped_rel,
                                                ListOf (RestrictInfo * or Expr *) *query_where_clauses,
                                                List **transformed_clist_p,
                                                struct mv_rewrite_xform_todo_list *todo_list)
@@ -1587,7 +1569,6 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
 static bool
 mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
                                                 Query *parsed_mv_query,
-                                                RelOptInfo *grouped_rel,
                                                 ListOf (TargetEntry *) *selected_tlist,
                                                 struct mv_rewrite_xform_todo_list *todo_list)
 {
@@ -1671,15 +1652,14 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 
 static bool
 mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
-							  RelOptInfo *input_rel,
-                              RelOptInfo *grouped_rel,
-                              List *grouped_tlist,
-                              StringInfo mv_name, StringInfo mv_schema,
-                              Query **alternative_query)
+									RelOptInfo *input_rel,
+									RelOptInfo *upper_rel,
+									List *selected_tlist,
+									StringInfo mv_name, StringInfo mv_schema,
+									Query **alternative_query)
 {
-    ListOf (Expr *) *transformed_clist = NIL;
-    ListOf (TargetEntry *) *transformed_tlist = grouped_tlist;
-    
+    ListOf (Expr *) *transformed_clauses = NIL;
+	
     struct mv_rewrite_xform_todo_list transform_todo_list = {
 		.replaced_expr = NIL,
 		.replacement_var = NIL,
@@ -1689,15 +1669,15 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	Oid matviewOid;
 	
 	Query *parsed_mv_query;
-	mv_rewrite_get_mv_query (grouped_rel, (const char *) mv_name->data, &parsed_mv_query, &matviewOid);
+	mv_rewrite_get_mv_query ((const char *) mv_name->data, &parsed_mv_query, &matviewOid);
 	
 	// The query obtained which represents the MV is now locked.
 	
 	// FIXME: ... but when we decide the MV does not match, we don't release those locks.
     
     // 1. Check the GROUP BY clause: it must match exactly.
-	if (grouped_rel != NULL)
-	    if (!mv_rewrite_check_group_clauses_for_mv(root, parsed_mv_query, grouped_rel, transformed_tlist, &transform_todo_list))
+	if (upper_rel != NULL)
+	    if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
     	    return false;
     
     // FIXME: the above check only checks some selected clauses; the balance of
@@ -1707,26 +1687,25 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
-    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, grouped_rel, &additional_where_clauses,
-                                              &transform_todo_list))
+    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses, &transform_todo_list))
         return false;
     
     // 3. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
     //    evaluated as part of the WHERE clause procesing.)
-    mv_rewrite_process_having_clauses (root, parsed_mv_query, grouped_rel, &additional_where_clauses, &transform_todo_list);
+	if (upper_rel != NULL)
+	    mv_rewrite_process_having_clauses (root, parsed_mv_query, upper_rel, &additional_where_clauses, &transform_todo_list);
     
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
-    if (!mv_rewrite_where_clauses_are_valid_for_mv(root, parsed_mv_query, input_rel, grouped_rel, additional_where_clauses,
-                                                       &transformed_clist, &transform_todo_list))
+    if (!mv_rewrite_where_clauses_are_valid_for_mv (root, parsed_mv_query, additional_where_clauses, &transformed_clauses, &transform_todo_list))
         return false;
     
     // 5. Check the SELECT clauses: they must be a subset of the MV's tList
-    if (!mv_rewrite_select_clauses_are_valid_for_mv (root, parsed_mv_query, grouped_rel, grouped_tlist, &transform_todo_list))
+    if (!mv_rewrite_select_clauses_are_valid_for_mv (root, parsed_mv_query, selected_tlist, &transform_todo_list))
         return false;
     
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
-    transformed_tlist = mv_rewrite_xform_todos (transformed_tlist, &transform_todo_list);
-	List *quals = mv_rewrite_xform_todos (transformed_clist, &transform_todo_list);
+    ListOf (TargetEntry *) *transformed_tlist = mv_rewrite_xform_todos (selected_tlist, &transform_todo_list);
+	List *quals = mv_rewrite_xform_todos (transformed_clauses, &transform_todo_list);
 	
     // 7. Build the alternative query.
 	*alternative_query = mv_rewrite_build_mv_scan_query (matviewOid, mv_name,
@@ -1867,9 +1846,9 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 static Path *
 mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 								Query *alternative_query,
-								RelOptInfo *grouped_rel,
-								List *grouped_tlist,
-								PathTarget *grouping_target,
+								RelOptInfo *rel,
+								List *selected_tlist,
+								PathTarget *pathtarget,
 								StringInfo mv_name, StringInfo mv_schema)
 {
 	/* plan_params should not be in use in current query level */
@@ -1903,8 +1882,8 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 		cp->path.parallel_workers = ((GatherMerge *) subplan)->num_workers;
 	
 	// The target that the Path will delivr is our grouped_rel/grouping_target
-	cp->path.pathtarget = grouping_target;
-	cp->path.parent = grouped_rel;
+	cp->path.pathtarget = pathtarget;
+	cp->path.parent = rel;
 	
 	cp->path.param_info = NULL;
 	cp->path.parallel_aware = subplan->parallel_aware;
@@ -1914,7 +1893,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	StringInfo competing_cost = makeStringInfo();
 
 	ListCell *lc;
-	foreach (lc, grouped_rel->pathlist)
+	foreach (lc, rel->pathlist)
 	{
 		Path *p = lfirst_node (Path, lc);
 		
@@ -1934,7 +1913,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	
 	// FIXME: include at least the additional WHERE clauses in the alternative query text
 	
-	cp->custom_private = list_make5 (pstmt, grouped_tlist, grouped_rel->relids,
+	cp->custom_private = list_make5 (pstmt, selected_tlist, rel->relids,
 									 makeString (alt_query_text->data), makeString (competing_cost->data));
 	
 	return (Path *) cp;
@@ -1942,13 +1921,12 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
-                             RelOptInfo *input_rel, // if grouping
-                             RelOptInfo *inner_rel, RelOptInfo *outer_rel, // if joining
-                             RelOptInfo *grouped_rel,
-                             PathTarget *grouping_target)
+								   RelOptInfo *input_rel,
+								   RelOptInfo *upper_rel,
+								   PathTarget *pathtarget)
 {
     // Find the set of rels involved in the query being planned...
-	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, inner_rel, input_rel, outer_rel);
+	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, input_rel);
 
 	// Check first that all of those rels are enabled for query rewrite...
 	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))
@@ -1959,7 +1937,8 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	}
 
 	// See if there are any candidate MVs...
-	List *mvs_schema, *mvs_name;
+	List *mvs_schema = NIL;
+	List *mvs_name = NIL;
     mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_schema, &mvs_name);
 	
 	if (mvs_name == NULL ||
@@ -1979,7 +1958,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 		return;
 	}
     
-    ListOf (TargetEntry *) *grouped_tlist = make_tlist_from_pathtarget (root->upper_targets[UPPERREL_GROUP_AGG]);
+	ListOf (TargetEntry *) *selected_tlist = make_tlist_from_pathtarget (pathtarget);
 	
     // Evaluate each MV in turn...
     ListCell   *sc, *nc;
@@ -1991,19 +1970,18 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 
         Query *alternative_query;
         
-		if (!mv_rewrite_evaluate_mv_for_rewrite (root, input_rel, grouped_rel, grouped_tlist, mv_name, mv_schema, &alternative_query))
+		if (!mv_rewrite_evaluate_mv_for_rewrite (root, input_rel, upper_rel, selected_tlist, mv_name, mv_schema, &alternative_query))
             continue;
         
         // 8. Finally, create and add the path.
         elog_if (g_log_match_progress, INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
         
         // Add generated path into grouped_rel.
-        add_path (grouped_rel,
-				  mv_rewrite_create_mv_scan_path (root, alternative_query, grouped_rel, grouped_tlist, grouping_target, mv_name, mv_schema));
+        add_path (upper_rel,
+				  mv_rewrite_create_mv_scan_path (root, alternative_query, upper_rel, selected_tlist, pathtarget, mv_name, mv_schema));
 
         elog_if (g_log_match_progress, INFO, "%s: path added.", __func__);
         
         return;
     }
 }
-
