@@ -454,7 +454,6 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 
 static void
 mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
-                                     ListOf (StringInfo) **mvs_schema,
                                      ListOf (StringInfo) **mvs_name)
 {
 	StringInfoData find_mvs_query;
@@ -463,7 +462,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
 	// FIXME: this query will fail if the pgx_ table is not present, we might
 	// instead catch the error and continue... or something else.
 	appendStringInfoString (&find_mvs_query,
-							"SELECT v.schemaname, v.matviewname"
+							"SELECT v.schemaname || '.' || v.matviewname"
 							" FROM "
 							"   public.pgx_rewritable_matviews j, pg_matviews v"
 							" WHERE "
@@ -502,12 +501,9 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     {
         MemoryContext spiCtx = MemoryContextSwitchTo (mainCtx);
         
-        StringInfo schema = makeStringInfo();
-        appendStringInfoString (schema, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
         StringInfo name = makeStringInfo();
-        appendStringInfoString (name, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 2));
+        appendStringInfoString (name, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
 
-        *mvs_schema = lappend (*mvs_schema, schema);
         *mvs_name = lappend (*mvs_name, name);
         
         MemoryContextSwitchTo (spiCtx);
@@ -1655,7 +1651,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 									RelOptInfo *input_rel,
 									RelOptInfo *upper_rel,
 									List *selected_tlist,
-									StringInfo mv_name, StringInfo mv_schema,
+									StringInfo mv_name,
 									Query **alternative_query)
 {
     ListOf (Expr *) *transformed_clauses = NIL;
@@ -1849,7 +1845,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 								RelOptInfo *rel,
 								List *selected_tlist,
 								PathTarget *pathtarget,
-								StringInfo mv_name, StringInfo mv_schema)
+								StringInfo mv_name)
 {
 	/* plan_params should not be in use in current query level */
 	elog_if (root->plan_params != NIL, ERROR, "%s: plan_params != NIL", __func__);
@@ -1905,7 +1901,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	}
 	
 	StringInfo alt_query_text = makeStringInfo();
-	appendStringInfo (alt_query_text, "scan of %s.%s", mv_schema->data, mv_name->data);
+	appendStringInfo (alt_query_text, "scan of %s", mv_name->data);
 		
 	//List	   *rtable = alternative_query->rtable;
 	//List	   *rtable_names = select_rtable_names_for_explain (rtable, bms_make_singleton (1));
@@ -1937,9 +1933,8 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	}
 
 	// See if there are any candidate MVs...
-	List *mvs_schema = NIL;
 	List *mvs_name = NIL;
-    mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_schema, &mvs_name);
+    mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_name);
 	
 	if (mvs_name == NULL ||
 		list_length (mvs_name) == 0)
@@ -1961,16 +1956,16 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	ListOf (TargetEntry *) *selected_tlist = make_tlist_from_pathtarget (pathtarget);
 	
     // Evaluate each MV in turn...
-    ListCell   *sc, *nc;
-    forboth (sc, mvs_schema, nc, mvs_name)
+    ListCell   *nc;
+    foreach (nc, mvs_name)
     {
-        StringInfo mv_schema = lfirst(sc), mv_name = lfirst(nc);
+        StringInfo mv_name = lfirst(nc);
         
-        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s.%s", __func__, mv_schema->data, mv_name->data);
+        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s", __func__, mv_name->data);
 
         Query *alternative_query;
         
-		if (!mv_rewrite_evaluate_mv_for_rewrite (root, input_rel, upper_rel, selected_tlist, mv_name, mv_schema, &alternative_query))
+		if (!mv_rewrite_evaluate_mv_for_rewrite (root, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
             continue;
         
         // 8. Finally, create and add the path.
@@ -1978,7 +1973,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
         
         // Add generated path into grouped_rel.
         add_path (upper_rel,
-				  mv_rewrite_create_mv_scan_path (root, alternative_query, upper_rel, selected_tlist, pathtarget, mv_name, mv_schema));
+				  mv_rewrite_create_mv_scan_path (root, alternative_query, upper_rel, selected_tlist, pathtarget, mv_name));
 
         elog_if (g_log_match_progress, INFO, "%s: path added.", __func__);
         
