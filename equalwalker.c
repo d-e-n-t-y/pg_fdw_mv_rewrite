@@ -2545,7 +2545,6 @@ _equalColumnDef(const ColumnDef *a, const ColumnDef *b, bool (*walker) (), void 
 	COMPARE_NODE_FIELD(raw_default);
 	COMPARE_NODE_FIELD(cooked_default);
 	COMPARE_SCALAR_FIELD(identity);
-	COMPARE_NODE_FIELD(identitySequence);
 	COMPARE_NODE_FIELD(collClause);
 	COMPARE_SCALAR_FIELD(collOid);
 	COMPARE_NODE_FIELD(constraints);

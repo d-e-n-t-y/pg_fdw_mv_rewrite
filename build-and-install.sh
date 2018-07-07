@@ -8,6 +8,11 @@ export PGPORT=58329
 PROGRAM='set -x; set -e;\
 make clean && make CFLAGS='-g' && make install'
 
+env PG_HOME=/Users/denty/junk/postgresql-11beta2 \
+    PATH=/Users/denty/junk/postgresql-11beta2/bin:$PATH \
+    USE_PGXS=yes \
+    bash -c "$PROGRAM"
+
 env PG_HOME=/Users/denty/junk/postgresql-10.3 \
     PATH=/Users/denty/junk/postgresql-10.3/bin:$PATH \
     USE_PGXS=yes \

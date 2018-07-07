@@ -361,7 +361,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OBJROOT = "";
 				OTHER_LDFLAGS = "-lpq";
-				PG_HOME = "/Users/denty/junk/postgresql-10.1";
+				PG_HOME = "/Users/denty/junk/postgresql-11beta2";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
 				SYMROOT = "";
@@ -391,7 +391,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OBJROOT = "";
 				OTHER_LDFLAGS = "-lpq";
-				PG_HOME = "/Users/denty/junk/postgresql-10.1";
+				PG_HOME = "/Users/denty/junk/postgresql-11beta2";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
 				SYMROOT = "";
