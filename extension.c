@@ -28,6 +28,7 @@ set_join_pathlist_hook_type next_set_join_pathlist_hook = NULL;
 /*
  * GUC parameters.
  */
+bool g_rewrite_enabled;
 bool g_log_match_progress;
 bool g_trace_match_progress;
 bool g_trace_parse_select_query;
@@ -51,6 +52,14 @@ _PG_init (void)
 	next_set_join_pathlist_hook = set_join_pathlist_hook;
 	set_join_pathlist_hook = mv_rewrite_set_join_pathlist_hook;
 
+	DefineCustomBoolVariable("mv_rewrite.rewrite_enabled",
+							 gettext_noop("Globally disable the query rewrite for all queries."),
+							 NULL,
+							 &g_rewrite_enabled,
+							 true,
+							 PGC_SUSET, 0,
+							 NULL, NULL, NULL);
+	
 	DefineCustomBoolVariable("mv_rewrite.log_match_progress",
 							 gettext_noop("Log progress through matching a candidate materialized view against the query being executed."),
 							 NULL,

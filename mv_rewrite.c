@@ -266,7 +266,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 
 void
 mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
-								   RelOptInfo *joinrel,
+								   RelOptInfo *join_rel,
 								   RelOptInfo *outerrel,
 								   RelOptInfo *innerrel,
 								   JoinType jointype,
@@ -284,10 +284,10 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	{
 		// We need to first identify the cheapest cost paths from the set of possible paths.
 		// (The planner would normally call this a little later.)
-		set_cheapest (joinrel);
+		set_cheapest (join_rel);
 
-		if (joinrel->cheapest_total_path != NULL)
-			if (joinrel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
+		if (join_rel->cheapest_total_path != NULL)
+			if (join_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
 			{
 				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
 				
@@ -296,9 +296,10 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	}
 	
 	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
-	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (joinrel));
+	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (join_rel));
 	
-	return;
+	// If we can rewrite, add those alternate paths...
+	mv_rewrite_add_rewritten_mv_paths (root, join_rel, NULL, join_rel->reltarget);
 }
 
 /*
@@ -475,14 +476,17 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     Oid argtypes[] = { TEXTARRAYOID };
     Datum args[] = { PointerGetDatum (tables_arr) };
 
+	bool old_rewrite_enabled = g_rewrite_enabled;
+	g_rewrite_enabled = false;
+	
     // We must be careful to manage the SPI memory context.
     
     MemoryContext mainCtx = CurrentMemoryContext;
-    
+	
     if (SPI_connect() != SPI_OK_CONNECT)
     {
         elog(WARNING, "%s: SPI_connect() failed", __func__);
-        return; // (an empty set of matviews)
+        goto done; // (an empty set of matviews)
     }
     
     SPIPlanPtr plan = SPI_prepare (find_mvs_query.data, 1, argtypes);
@@ -490,7 +494,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     if (plan == NULL) {
         elog(WARNING, "%s: SPI_connect() failed", __func__);
 		// FIXME: SPI_finish()?
-        return; // (an empty set of matviews)
+        goto done; // (an empty set of matviews)
     }
     
     Portal port = SPI_cursor_open (NULL, plan, args, NULL, true);
@@ -512,6 +516,9 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     SPI_cursor_close (port);
 
     SPI_finish();
+	
+done:
+	g_rewrite_enabled = old_rewrite_enabled;
 }
 
 static Query *
@@ -1811,10 +1818,15 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 	}
 		
 	// Attempt to locate every involved table in the configured list of enabled-for-rewrite tables.
-	ListCell *lc;
-	foreach (lc, involved_rel_names)
+	ListCell *lc2;
+	foreach (lc2, involved_rel_names)
 	{
-		const char *involved_rel_name = lfirst (lc);
+		const char *involved_rel_name = lfirst (lc2);
+		
+		// Don't rewrite anything involving this because otherwise we'll recurse
+		// indefinitely.
+		if (strcmp (involved_rel_name, "public.pgx_rewritable_matviews") == 0)
+			return false;
 		
 		bool found = false;
 		
@@ -1921,6 +1933,9 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 								   RelOptInfo *upper_rel,
 								   PathTarget *pathtarget)
 {
+	if (!g_rewrite_enabled)
+		return;
+	
     // Find the set of rels involved in the query being planned...
 	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, input_rel);
 

@@ -12,6 +12,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
 
+extern bool g_rewrite_enabled;
 extern bool g_log_match_progress;
 extern bool g_trace_match_progress;
 extern bool g_trace_parse_select_query;
