@@ -453,9 +453,8 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 	return tables_strlist;
 }
 
-static void
-mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
-                                     ListOf (StringInfo) **mvs_name)
+static ListOf (StringInfo) *
+mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
 {
 	StringInfoData find_mvs_query;
 	initStringInfo (&find_mvs_query);
@@ -483,6 +482,8 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
     
     MemoryContext mainCtx = CurrentMemoryContext;
 	
+	ListOf (StringInfo) *mvs_name = NIL;
+	
     if (SPI_connect() != SPI_OK_CONNECT)
     {
         elog(WARNING, "%s: SPI_connect() failed", __func__);
@@ -508,7 +509,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
         StringInfo name = makeStringInfo();
         appendStringInfoString (name, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
 
-        *mvs_name = lappend (*mvs_name, name);
+        mvs_name = lappend (mvs_name, name);
         
         MemoryContextSwitchTo (spiCtx);
     }
@@ -519,6 +520,8 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names,
 	
 done:
 	g_rewrite_enabled = old_rewrite_enabled;
+	
+	return mvs_name;
 }
 
 static Query *
@@ -874,6 +877,25 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
                                  List *transformed_tlist,
                                  struct mv_rewrite_xform_todo_list *todo_list)
 {
+	// If we have an MV including GROUP BY clauses, check we are rewriting for a
+	// grouped_rel...
+	if ((parsed_mv_query->groupClause != NULL && grouped_rel == NULL))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite JOIN, but MV is GROUP BY.", __func__);
+
+		return false;
+	}
+	if ((parsed_mv_query->groupClause == NULL && grouped_rel != NULL))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite GROUP BY, but MV has no GROUP BY.", __func__);
+		
+		return false;
+	}
+
+	// If both MV and quey are not GROUP BY, then we are done here...
+	if (grouped_rel == NULL)
+		return true;
+	
     // Check each GROUP BY clause (Expr) in turn...
     ListCell   *lc;
     foreach (lc, root->parse->groupClause)
@@ -1679,9 +1701,8 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	// FIXME: ... but when we decide the MV does not match, we don't release those locks.
     
     // 1. Check the GROUP BY clause: it must match exactly.
-	if (upper_rel != NULL)
-	    if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
-    	    return false;
+	if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+    	return false;
     
     // FIXME: the above check only checks some selected clauses; the balance of
     // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
@@ -1948,8 +1969,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	}
 
 	// See if there are any candidate MVs...
-	List *mvs_name = NIL;
-    mv_rewrite_find_related_mvs_for_rel (involved_rel_names, &mvs_name);
+	List *mvs_name = mv_rewrite_find_related_mvs_for_rel (involved_rel_names);
 	
 	if (mvs_name == NULL ||
 		list_length (mvs_name) == 0)

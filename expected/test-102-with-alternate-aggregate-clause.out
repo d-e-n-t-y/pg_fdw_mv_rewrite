@@ -1,6 +1,7 @@
 -- Anticipate message "expr (...) not found in MV tlist"
 set mv_rewrite.log_match_progress = 'true';
-explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;
+-- We don't actually care about the plan itself, only the log output.
+DO LANGUAGE plpgsql $$BEGIN EXECUTE 'explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;'; END; $$;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
@@ -8,27 +9,9 @@ INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found i
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
-                        QUERY PLAN                        
-----------------------------------------------------------
- Finalize GroupAggregate
-   Output: key, count(key)
-   Group Key: test.key
-   ->  Sort
-         Output: key, (PARTIAL count(key))
-         Sort Key: test.key
-         ->  Gather
-               Output: key, (PARTIAL count(key))
-               Workers Planned: 2
-               ->  Partial HashAggregate
-                     Output: key, PARTIAL count(key)
-                     Group Key: test.key
-                     ->  Parallel Seq Scan on public.test
-                           Output: key
-(14 rows)
-
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 select key, COUNT (key) from test group by key;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
@@ -37,9 +20,9 @@ INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found i
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (count(key)) not found in MV tlist
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
  key  |  count  
 ------+---------
  key1 |      10
