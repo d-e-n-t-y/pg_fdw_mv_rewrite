@@ -1,0 +1,26 @@
+set mv_rewrite.log_match_progress = 'true';
+explain (verbose, costs off)
+select * from events_all_room;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
+INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
+INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
+INFO:  ...: creating and adding path for alternate query: ...
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
+INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: no match found in plan for MV rtindex: 3; MV Oid: 0
+                                                                                                                                          QUERY PLAN                                                                                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Custom Scan (MVRewriteScan)
+  Output: (ts_to_bucket("timestamp", 'minute'::text, 15)), (avg(detail)), NULL::double precision, NULL::double precision, NULL::double precision, (count(detail)), NULL::bigint
+  Rewritten: scan of public.test99
+(3 rows)
+

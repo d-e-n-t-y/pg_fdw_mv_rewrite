@@ -1250,6 +1250,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 				return false;
 			}
 		
+		elog_if (g_trace_join_clause_check, INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
+
 		// Locate the same OID the query plan.
 		for (int i = bms_next_member (join_relids, -1);
 			 i >= 0;
@@ -1257,7 +1259,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		{
 			RangeTblEntry *plan_rte = planner_rt_fetch (i, root);
 			
-			elog_if (g_trace_join_clause_check, INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
 			elog_if (g_trace_join_clause_check, INFO, "%s: plan RTE: %s", __func__, nodeToString (plan_rte));
 			
 			if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_RELATION)
