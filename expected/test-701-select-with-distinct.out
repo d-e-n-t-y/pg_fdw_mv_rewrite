@@ -1,34 +1,15 @@
 -- Anticipate message "query requires unsupported features"
+-- We don't actually care about the plan itself, only the log output.
 set mv_rewrite.log_match_progress = 'true';
-set mv_rewrite.log_match_progress = 'true';
-explain (VERBOSE, COSTS OFF)
-select distinct key, hidden, count (value)
-  from test
-  group by key, hidden;
+set mv_rewrite.rewrite_enabled_for_tables = '';
+-- Anticipate no rewrite
+DO LANGUAGE plpgsql $$ DECLARE t text; BEGIN FOR t IN
+	explain (VERBOSE, COSTS OFF)
+		select distinct key, hidden, count (value)
+  		from test
+  		group by key, hidden
+LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
 INFO:  mv_rewrite_create_upper_paths_hook: query requires unsupported features.
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- Unique
-   Output: key, hidden, (count(value))
-   ->  Sort
-         Output: key, hidden, (count(value))
-         Sort Key: test.key, test.hidden, (count(test.value))
-         ->  Finalize GroupAggregate
-               Output: key, hidden, count(value)
-               Group Key: test.key, test.hidden
-               ->  Gather Merge
-                     Output: key, hidden, (PARTIAL count(value))
-                     Workers Planned: 2
-                     ->  Partial GroupAggregate
-                           Output: key, hidden, PARTIAL count(value)
-                           Group Key: test.key, test.hidden
-                           ->  Sort
-                                 Output: key, hidden, value
-                                 Sort Key: test.key, test.hidden
-                                 ->  Parallel Seq Scan on public.test
-                                       Output: key, hidden, value
-(19 rows)
-
 select distinct key, hidden, count (value)
   from test
   group by key, hidden;
