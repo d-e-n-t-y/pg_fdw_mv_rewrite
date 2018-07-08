@@ -15,12 +15,10 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.events_all_room_mv
-INFO:  mv_rewrite_add_rewritten_mv_paths: path added.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test99
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.events_all_room_mv
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.events_all_room_mv
-INFO:  mv_rewrite_add_rewritten_mv_paths: path added.
                                                 QUERY PLAN                                                 
 -----------------------------------------------------------------------------------------------------------
  Custom Scan (MVRewriteScan)

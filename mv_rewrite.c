@@ -2022,8 +2022,6 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 		add_path (the_rel,
 				  mv_rewrite_create_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name));
 
-        elog_if (g_log_match_progress, INFO, "%s: path added.", __func__);
-        
         return;
     }
 }
