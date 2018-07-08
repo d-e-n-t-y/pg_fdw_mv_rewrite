@@ -14,6 +14,7 @@
 #include "equalwalker.h"
 #include "extension.h"
 #include "join_is_legal.h"
+#include "build_joinrel_restrictlist.h"
 
 #include "catalog/namespace.h"
 #include "commands/explain.h"
@@ -1276,6 +1277,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					RelOptInfo *rel = find_base_rel (root, i);
 					if (rel->baserestrictinfo != NULL)
 						*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, rel->baserestrictinfo);
+					
+					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
 
 					if (query_found_rel != NULL)
 						*query_found_rel = rel;
@@ -1297,6 +1300,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					
 					RelOptInfo *rel = find_base_rel (root, i);
 					
+					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
+
 					ListOf (RestrictInfo *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
 					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, pushed_quals);
 
@@ -1347,7 +1352,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		
 		elog_if (g_trace_join_clause_check, INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
 
-		Relids outrelids = bms_union (larg_query_relids, rarg_query_relids);
+		Relids joinrelids = bms_union (larg_query_relids, rarg_query_relids);
 		
 		// FIXME: Check the two lists don't overlap!
 		
@@ -1355,7 +1360,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		bool reversed;
 		SpecialJoinInfo *sjinfo;
 		
-		if (!join_is_legal (root, lrel, rrel, outrelids, &sjinfo, &reversed))
+		if (!join_is_legal (root, lrel, rrel, joinrelids, &sjinfo, &reversed))
 		{
 			elog_if (g_log_match_progress, INFO, "%s: MV contains a join not matched in query: %s", __func__, nodeToString (node));
 			
@@ -1387,12 +1392,13 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			return false;
 		}
 		
-		RelOptInfo *outerrel = find_join_rel (root, outrelids);
+		RelOptInfo *joinrel = find_join_rel (root, joinrelids);
 		
 		// Get hold of the JOIN clauses that relate to this join in the query.
-		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, outerrel->joininfo);
-		// (The list in RelOptInfo doesn't include the implied ECs.)
-		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, generate_join_implied_equalities (root, outrelids, rarg_query_relids, lrel));
+		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, joinrel->joininfo);
+		// The list in joinrel doesn't include the implied ECs, nor those in the joined
+		// rel's joininfo lists, so add them too.
+		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, build_joinrel_restrictlist (root, joinrel, rrel, lrel));
 
 		// Similarly record the quals from the MV jointree.
 		if (je->quals != NULL)
@@ -1400,10 +1406,10 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		
 		elog_if (g_trace_join_clause_check, INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
 		
-		*query_relids_involved = bms_union (*query_relids_involved, outrelids);
+		*query_relids_involved = bms_union (*query_relids_involved, joinrelids);
 		
 		if (query_found_rel != NULL)
-			*query_found_rel = outerrel;
+			*query_found_rel = joinrel;
 
 		return true;
 	}
@@ -1935,14 +1941,13 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	}
 	
 	StringInfo alt_query_text = makeStringInfo();
-	appendStringInfo (alt_query_text, "scan of %s", mv_name->data);
-		
-	//List	   *rtable = alternative_query->rtable;
-	//List	   *rtable_names = select_rtable_names_for_explain (rtable, bms_make_singleton (1));
-	//ListOf (deparse_namespace) *deparse_cxt = deparse_context_for_plan_rtable (rtable, rtable_names);
-	
-	// FIXME: include at least the additional WHERE clauses in the alternative query text
-	
+	appendStringInfo (alt_query_text, "scan of %s%s%s",
+			 mv_name->data,
+			 alternative_query->jointree->quals != NULL ? " WHERE " : "",
+			 alternative_query->jointree->quals != NULL ?
+			 mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
+			 : "");
+
 	cp->custom_private = list_make5 (pstmt, selected_tlist, rel->relids,
 									 makeString (alt_query_text->data), makeString (competing_cost->data));
 	
@@ -2005,8 +2010,13 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
             continue;
         
         // 8. Finally, create and add the path.
-        elog_if (g_log_match_progress, INFO, "%s: creating and adding path for alternate query: %s", __func__, nodeToString (alternative_query));
-        
+		elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
+				 mv_name->data,
+				 alternative_query->jointree->quals != NULL ? " WHERE " : "",
+				 alternative_query->jointree->quals != NULL ?
+					mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
+					: "");
+		
 		// Add generated path into the appropriate rel.
 		RelOptInfo *the_rel = upper_rel != NULL ? upper_rel : input_rel;
 		add_path (the_rel,

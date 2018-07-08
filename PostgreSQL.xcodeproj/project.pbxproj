@@ -12,6 +12,8 @@
 		BF25E65620E8C4C000B69F12 /* generate_equalswalker.sh in Sources */ = {isa = PBXBuildFile; fileRef = BF25E65520E8C45F00B69F12 /* generate_equalswalker.sh */; };
 		BF35BACC20949EFC00C29DCE /* extension.h in Headers */ = {isa = PBXBuildFile; fileRef = BF35BACA20949EFC00C29DCE /* extension.h */; };
 		BF35BACD20949EFC00C29DCE /* extension.c in Sources */ = {isa = PBXBuildFile; fileRef = BF35BACB20949EFC00C29DCE /* extension.c */; };
+		BF5F5C1E20F1F37B00C82DBE /* build_joinrel_restrictlist.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5F5C1C20F1F37B00C82DBE /* build_joinrel_restrictlist.h */; };
+		BF5F5C1F20F1F37B00C82DBE /* build_joinrel_restrictlist.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5F5C1D20F1F37B00C82DBE /* build_joinrel_restrictlist.c */; };
 		BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */; };
 		BF650D8020CC1852009B5649 /* equalwalker.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5A26901FD95A0600E3AD72 /* equalwalker.h */; };
 		BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */; };
@@ -59,6 +61,8 @@
 		BF519BBA20D6578400CF8FA2 /* mv_rewrite--0.6.1.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6.1.sql"; sourceTree = "<group>"; };
 		BF5A268E1FD9531000E3AD72 /* equalwalker.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = equalwalker.c; sourceTree = "<group>"; };
 		BF5A26901FD95A0600E3AD72 /* equalwalker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = equalwalker.h; sourceTree = "<group>"; };
+		BF5F5C1C20F1F37B00C82DBE /* build_joinrel_restrictlist.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = build_joinrel_restrictlist.h; sourceTree = "<group>"; };
+		BF5F5C1D20F1F37B00C82DBE /* build_joinrel_restrictlist.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = build_joinrel_restrictlist.c; sourceTree = "<group>"; };
 		BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = "mv_rewrite--0.6.sql"; sourceTree = "<group>"; };
 		BF8BEEEC1FD1E590003A7AC9 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
 		BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */ = {isa = PBXFileReference; fileEncoding = 4; indentWidth = 4; lastKnownFileType = sourcecode.c.c; path = mv_rewrite.c; sourceTree = "<group>"; };
@@ -109,6 +113,7 @@
 				BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */,
 				BF35BACB20949EFC00C29DCE /* extension.c */,
 				BF1F881720BAE52E00553FEB /* join_is_legal.c */,
+				BF5F5C1D20F1F37B00C82DBE /* build_joinrel_restrictlist.c */,
 				BF25E65520E8C45F00B69F12 /* generate_equalswalker.sh */,
 			);
 			name = "Source code";
@@ -138,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				BF1F881620BAE52E00553FEB /* join_is_legal.h */,
+				BF5F5C1C20F1F37B00C82DBE /* build_joinrel_restrictlist.h */,
 				BF35BACA20949EFC00C29DCE /* extension.h */,
 				BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */,
 				BF5A26901FD95A0600E3AD72 /* equalwalker.h */,
@@ -167,6 +173,7 @@
 				BF35BACC20949EFC00C29DCE /* extension.h in Headers */,
 				BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */,
 				BF650D8020CC1852009B5649 /* equalwalker.h in Headers */,
+				BF5F5C1E20F1F37B00C82DBE /* build_joinrel_restrictlist.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -233,6 +240,7 @@
 				BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */,
 				BF1F881920BAE52E00553FEB /* join_is_legal.c in Sources */,
 				BF25E65620E8C4C000B69F12 /* generate_equalswalker.sh in Sources */,
+				BF5F5C1F20F1F37B00C82DBE /* build_joinrel_restrictlist.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

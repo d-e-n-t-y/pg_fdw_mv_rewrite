@@ -25,7 +25,7 @@ select timestamp, value
                                  Output: g.avg_detail, g.count_measurements, g.ts_bucket
                                  ->  Custom Scan (MVRewriteScan)
                                        Output: (ts_to_bucket("timestamp", 'minute'::text, 15)), (avg(detail)), NULL::double precision, NULL::double precision, NULL::double precision, (count(detail)), NULL::bigint
-                                       Rewritten: scan of public.test99
+                                       Rewritten: scan of public.test99 WHERE (ts_bucket >= 'Fri Jun 08 16:00:00 2018 PDT'::timestamp with time zone), (ts_bucket < 'Sat Jun 09 16:00:00 2018 PDT'::timestamp with time zone), (subcategory = 'N/A'::text), ((room_name)::text = 'Room 1'::text)
 (23 rows)
 
 select timestamp, value
