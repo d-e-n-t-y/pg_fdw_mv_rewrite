@@ -15,6 +15,7 @@
 #include "extension.h"
 #include "join_is_legal.h"
 #include "build_joinrel_restrictlist.h"
+#include "release_rewrite_locks.h"
 
 #include "catalog/namespace.h"
 #include "commands/explain.h"
@@ -1690,6 +1691,8 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 									StringInfo mv_name,
 									Query **alternative_query)
 {
+	bool ok = false;
+	
     ListOf (Expr *) *transformed_clauses = NIL;
 	
     struct mv_rewrite_xform_todo_list transform_todo_list = {
@@ -1705,11 +1708,9 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	
 	// The query obtained which represents the MV is now locked.
 	
-	// FIXME: ... but when we decide the MV does not match, we don't release those locks.
-    
     // 1. Check the GROUP BY clause: it must match exactly.
 	if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
-    	return false;
+    	goto done;
     
     // FIXME: the above check only checks some selected clauses; the balance of
     // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
@@ -1719,7 +1720,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
     if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses, &transform_todo_list))
-        return false;
+        goto done;
     
     // 3. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
     //    evaluated as part of the WHERE clause procesing.)
@@ -1728,11 +1729,11 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
     if (!mv_rewrite_where_clauses_are_valid_for_mv (root, parsed_mv_query, additional_where_clauses, &transformed_clauses, &transform_todo_list))
-        return false;
+        goto done;
     
     // 5. Check the SELECT clauses: they must be a subset of the MV's tList
     if (!mv_rewrite_select_clauses_are_valid_for_mv (root, parsed_mv_query, selected_tlist, &transform_todo_list))
-        return false;
+        goto done;
     
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
     ListOf (TargetEntry *) *transformed_tlist = mv_rewrite_xform_todos (selected_tlist, &transform_todo_list);
@@ -1743,7 +1744,13 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 														 mv_rewrite_get_query_tlist_colnames (parsed_mv_query),
 														 quals, transformed_tlist);
 	
-    return true;
+    ok = true;
+	
+done:
+	if (parsed_mv_query != NULL && !ok)
+		ReleaseRewriteLocks (parsed_mv_query, true, false);
+	
+	return ok;
 }
 
 static CustomExecMethods mv_rewrite_exec_methods = {
