@@ -672,10 +672,11 @@ mv_rewrite_xform_todos (ListOf (TargetEntry *) *tlist,
 
 static bool
 mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
-                                     Query *parsed_mv_query,
-                                     Node *expr,
-                                     struct mv_rewrite_xform_todo_list *todo_list,
-                                     bool trace);
+										   Query *parsed_mv_query,
+										   Node *expr,
+										   struct mv_rewrite_xform_todo_list *todo_list,
+										   bool consider_sub_exprs,
+										   bool trace);
 
 struct mv_rewrite_expr_targets_equals_ctx
 {
@@ -716,6 +717,7 @@ struct mv_rewrite_expr_targets_in_mv_tlist_ctx
     bool trace; // enable trace logging
     bool match_found;
     bool did_search_anything;
+	bool consider_sub_exprs;
     struct mv_rewrite_xform_todo_list *todo_list;
     struct mv_rewrite_expr_targets_equals_ctx *col_names;
 };
@@ -787,8 +789,20 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
             i++;
         }
     }
-    
-    if (!done)
+	
+	if (!done)
+	{
+		if (!ctx->consider_sub_exprs)
+		{
+			elog_if (ctx->trace, INFO, "%s: no match yet, but will not consider sub-expressions", __func__);
+
+			local_match_found = false;
+			
+			done = true;
+		}
+	}
+
+	if (!done)
     {
         // Copy current context
         struct mv_rewrite_expr_targets_in_mv_tlist_ctx sub_ctx = *ctx;
@@ -831,12 +845,35 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
     return false;
 }
 
+/**
+ * mv_rewrite_check_expr_targets_in_mv_tlist
+ *
+ * Check the given expression (expr, in the planned query, root) is
+ * supported by one of the entries in parsed_mv_query's target list.
+ *
+ * For those expressions that are accepted, then add an entry for the expr
+ * to the todo_list (entry is added as a pointer) so that we can fix it up
+ * later to point at the parsed_mv_query tlist entry directly. The point is
+ * that a whole Expr, or sub-Expr thereof, might be supported by a target
+ * in the MV query. So we will need to replace that Expr (or sub-Expr) node
+ * with a Var that references the relevant tlist entry.
+ *
+ * Set trace to enable trace-level logging.
+ *
+ * Set consider_sub_exprs to allow a match only of a sub-Expr: this is
+ * appropriate when searching for matches for SELECT expressions (since
+ * the outer elements of the Expr tree can still be used, even though only
+ * the sub-Expr is directly provided by the MV); however it is not
+ * appropriate when searching for matching GROUP BY clauses since the
+ * whole Expr tree must match exactly.
+ */
 static bool
 mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
-                                     Query *parsed_mv_query,
-                                     Node *expr,
-                                     struct mv_rewrite_xform_todo_list *todo_list,
-                                     bool trace)
+										   Query *parsed_mv_query,
+										   Node *expr,
+										   struct mv_rewrite_xform_todo_list *todo_list,
+										   bool consider_sub_exprs,
+										   bool trace)
 {
     if (expr == NULL)
         return true;
@@ -845,12 +882,14 @@ mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
         root, parsed_mv_query->rtable
     };
     struct mv_rewrite_expr_targets_in_mv_tlist_ctx ctx = {
-        parsed_mv_query->targetList, trace
+        .tList = parsed_mv_query->targetList,
+		.match_found = true, // walker will set to false if not matched
+		.trace = trace,
+		.todo_list = todo_list,
+		.col_names = &col_names,
+		.consider_sub_exprs = consider_sub_exprs
     };
-    ctx.match_found = true; // walker will set to false if not matched
-    ctx.todo_list = todo_list;
-    ctx.col_names = &col_names;
-    
+	
     mv_rewrite_expr_targets_in_mv_tlist_walker ((Node *) expr, &ctx);
     
     return ctx.match_found;
@@ -910,10 +949,8 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
         //
         // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
         // MV TLE directly.
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_group_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, false, g_trace_group_clause_source_check))
         {
-			// FIXME: the above check looks wrong — it will claim a match where (for example)
-			// the GROUP BY is for a * 2 when the MV only GROUPs BY a.
             elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
 					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
 			
@@ -1183,7 +1220,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		// FIXME: we should check that none of the Expr's Vars references a levelsup > 0
 		
-		if (!mv_rewrite_check_expr_targets_in_mv_tlist (subroot, subroot->parse, (Node *) rel_ri_expr, &xform_todo_list, false))
+		if (!mv_rewrite_check_expr_targets_in_mv_tlist (subroot, subroot->parse, (Node *) rel_ri_expr, &xform_todo_list, true, false))
 		{
 			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%s: discounting pushed down clause due to no match in above subquery target list: %s", __func__,
 					  mv_rewrite_deparse_expression (subroot->parse->rtable, rel_ri_expr));
@@ -1576,7 +1613,7 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
             expr = ((RestrictInfo *) expr)->clause;
         }
         
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, g_trace_where_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, true, g_trace_where_clause_source_check))
         {
             elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
             
@@ -1613,7 +1650,7 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
     {
         TargetEntry *tle = lfirst(lc);
         
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, g_trace_select_clause_source_check))
+        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, true, g_trace_select_clause_source_check))
         {
             elog_if (g_log_match_progress, INFO, "%s: expr (%s) not found in MV tlist", __func__, mv_rewrite_deparse_expression (root->parse->rtable, tle->expr));
             
