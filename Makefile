@@ -1,7 +1,7 @@
 # mv_rewrite
 
 MODULE_big = mv_rewrite.0.6.1
-OBJS = mv_rewrite.o equalwalker.o extension.o join_is_legal.o build_joinrel_restrictlist.o $(WIN32RES)
+OBJS = mv_rewrite.o equalwalker.o extension.o join_is_legal.o build_joinrel_restrictlist.o release_rewrite_locks.o $(WIN32RES)
 PGFILEDESC = "mv_rewrite - MV rewrite extension for PostgreSQL"
 TESTS = $(wildcard sql/*.sql)
 
