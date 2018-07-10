@@ -19,9 +19,9 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
@@ -29,15 +29,15 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_join_clauses_are_valid: MV expression ((hidden = 'hidden2'::text)) not found in clauses in the query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
@@ -89,9 +89,9 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
@@ -99,15 +99,15 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_join_clauses_are_valid: MV expression ((hidden = 'hidden2'::text)) not found in clauses in the query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan: the query does not involve all relations joined by the MV
+INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2

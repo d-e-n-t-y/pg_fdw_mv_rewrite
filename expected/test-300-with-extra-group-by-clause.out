@@ -1,17 +1,11 @@
-explain (VERBOSE, COSTS OFF) select key, hidden, COUNT (value) from test group by key, hidden order by key;
-                 QUERY PLAN                  
----------------------------------------------
- Sort
-   Output: key, hidden, (count(value))
-   Sort Key: test.key
-   ->  Custom Scan (MVRewriteScan)
-         Output: key, hidden, (count(value))
-         Rewritten: scan of public.test_mv2
-(6 rows)
-
+-- Anticipate no rewrite (because the WHERE clause does not match the MV)
+DO LANGUAGE plpgsql $$ DECLARE t text; BEGIN FOR t IN explain (VERBOSE, COSTS OFF)
+	select key, hidden, COUNT (value) from test group by key, hidden order by key
+LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
 select key, hidden, COUNT (value) from test group by key, hidden order by key;
  key  | hidden  |  count  
 ------+---------+---------
+ key1 | hidden1 |      10
  key2 | hidden2 | 1000000
-(1 row)
+(2 rows)
 

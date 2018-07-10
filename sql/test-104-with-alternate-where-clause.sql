@@ -1,3 +1,6 @@
-explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden3' group by key;
+-- Anticipate no rewrite (because the WHERE clause does not match the MV)
+DO LANGUAGE plpgsql $$ DECLARE t text; BEGIN FOR t IN explain (VERBOSE, COSTS OFF)
+	select key, COUNT (value) from test where hidden = 'hidden3' group by key
+LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
 
 select key, COUNT (value) from test where hidden = 'hidden3' group by key;

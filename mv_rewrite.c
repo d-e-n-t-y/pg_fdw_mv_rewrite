@@ -1061,11 +1061,18 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 	return true;
 }
 
+/**
+ * Check the FROM/JOIN clauses of the plan. The rel supplied (join_rel) must contain joins rels
+ * and join clauses that match those in the plan.
+ *
+ * We don't check WHERE clauses in this routine, and so any non-FROM/JOIN cluases we find may be
+ * returned in the list of additional_where_clauses.
+ */
 static bool
-mv_rewrite_join_node_is_valid_for_plan (PlannerInfo *root,
-						  Query *parsed_mv_query,
-					      RelOptInfo *join_rel,
-						  ListOf (RestrictInfo * or Expr *) **additional_where_clauses)
+mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
+											   Query *parsed_mv_query,
+											   RelOptInfo *join_rel,
+											   ListOf (RestrictInfo * or Expr *) **additional_where_clauses)
 {
 	elog_if (g_debug_join_clause_check, INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
 
@@ -1530,49 +1537,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 	return false;
 }
 
-/**
- * Check the FROM/JOIN clauses of the plan. The rel supplied (grouped_rel and its input, input_rel)
- * must contain joins rels and join clauses that are at least a subset of those in the plan.
- *
- * We don't check WHERE clauses in this routine, and so any non-FROM/JOIN cluases we find may be
- * returned in the list of additional_where_clauses.
- */
-static bool
-mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
-                                     Query *parsed_mv_query,
-									 RelOptInfo *input_rel,
-                                     ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
-                                     struct mv_rewrite_xform_todo_list *todo_list)
-{
-    elog_if (g_trace_join_clause_check, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-
-    elog_if (g_debug_join_clause_check, INFO, "%s: MV jointree: %s", __func__, nodeToString (parsed_mv_query->jointree));
-	
-	if (IS_SIMPLE_REL (input_rel))
-		*additional_where_clauses = list_copy (input_rel->baserestrictinfo);
-	
-	else if (IS_JOIN_REL (input_rel))
-	{
-		// Check all the baserel OIDs in the JOIN exatly match the OIDs in the MV, and
-		// that the every join in the MV is legal and correct according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan (root, parsed_mv_query, input_rel, additional_where_clauses))
-			return false;
-	}
-
-	else
-		return false;
-    
-    elog_if (g_debug_join_clause_check, INFO, "%s: searching against these clauses in the query: %s", __func__, nodeToString (*additional_where_clauses));
-	
-    // The balance of clauses must now be treated as if they were part of the
-    // WHERE clause list. Return them so the WHERE clause processing can handle
-    // them appropriately.
-
-    elog_if (g_debug_join_clause_check, INFO, "%s: balance of clauses: %s", __func__, nodeToString (*additional_where_clauses));
-    
-    return true;
-}
-
 static void
 mv_rewrite_process_having_clauses (PlannerInfo *root,
                         Query *parsed_mv_query,
@@ -1756,7 +1720,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
-    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses, &transform_todo_list))
+    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses))
         goto done;
     
     // 3. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
