@@ -1,12 +1,40 @@
+-- Anticipate no rewrite
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden2' group by key;
-              QUERY PLAN              
---------------------------------------
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Finalize GroupAggregate
+   Output: key, count(value)
+   Group Key: test.key
+   ->  Gather Merge
+         Output: key, (PARTIAL count(value))
+         Workers Planned: 2
+         ->  Partial GroupAggregate
+               Output: key, PARTIAL count(value)
+               Group Key: test.key
+               ->  Sort
+                     Output: key, value
+                     Sort Key: test.key
+                     ->  Parallel Seq Scan on public.test
+                           Output: key, value
+                           Filter: (test.hidden = 'hidden2'::text)
+(15 rows)
+
+select key, COUNT (value) from test where hidden = 'hidden2' group by key;
+ key  |  count  
+------+---------
+ key2 | 1000000
+(1 row)
+
+-- Anticipate rewrite
+explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 'hidden2' group by key, hidden;
+              QUERY PLAN               
+---------------------------------------
  Custom Scan (MVRewriteScan)
-   Output: key, (count(value))
+   Output: key, (count(value)), hidden
    Rewritten: scan of public.test_mv2
 (3 rows)
 
-select key, COUNT (value) from test where hidden = 'hidden2' group by key;
+select key, COUNT (value) from test where hidden = 'hidden2' group by key, hidden;
  key  |  count  
 ------+---------
  key2 | 1000000

@@ -685,28 +685,28 @@ struct mv_rewrite_expr_targets_equals_ctx
 };
 
 static bool
-mv_rewrite_expr_targets_equals_walker (Node *a,
-									   Node *b,
+mv_rewrite_expr_targets_equals_walker (Node *query_expr,
+									   Node *mv_expr,
 									   struct mv_rewrite_expr_targets_equals_ctx *ctx)
 {
-    if (a != NULL && b != NULL && nodeTag(a) == nodeTag(b) && nodeTag(a) == T_Var)
+    if (query_expr != NULL && mv_expr != NULL && nodeTag(query_expr) == nodeTag(mv_expr) && nodeTag(query_expr) == T_Var)
     {
 		// FIXME: and also compare levelsup, varno's oid
         
         Value *a_col_name = list_nth_node(Value,
-                                          planner_rt_fetch((int) ((Var *)a)->varno, ctx->root)->eref->colnames,
-                                          (int) ((Var *)a)->varattno - 1);
+                                          planner_rt_fetch((int) ((Var *)query_expr)->varno, ctx->root)->eref->colnames,
+                                          (int) ((Var *)query_expr)->varattno - 1);
         
         Value *b_col_name = list_nth_node(Value,
-                                          list_nth_node (RangeTblEntry, ctx->parsed_mv_query_rtable, (int) ((Var *)b)->varno - 1)->eref->colnames,
-                                          (int) ((Var *)b)->varattno - 1);
+                                          list_nth_node (RangeTblEntry, ctx->parsed_mv_query_rtable, (int) ((Var *)mv_expr)->varno - 1)->eref->colnames,
+                                          (int) ((Var *)mv_expr)->varattno - 1);
         
 		bool result = (0 == strcmp (a_col_name->val.str, b_col_name->val.str));
 
 		return result;
     }
     
-    bool result = equal_tree_walker(a, b, mv_rewrite_expr_targets_equals_walker, ctx);
+    bool result = equal_tree_walker(query_expr, mv_expr, mv_rewrite_expr_targets_equals_walker, ctx);
 
     return result;
 }
@@ -915,7 +915,7 @@ static bool
 mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
                                  Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
-                                 List *transformed_tlist,
+                                 List *selected_tlist,
                                  struct mv_rewrite_xform_todo_list *todo_list)
 {
 	// If we have an MV including GROUP BY clauses, check we are rewriting for a
@@ -937,22 +937,35 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 	if (grouped_rel == NULL)
 		return true;
 	
+	if (list_length (root->parse->groupClause) != list_length (parsed_mv_query->groupClause))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: GROUP BY list for MV and query differ in length.", __func__);
+		
+		return false;
+	}
+	
+	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
+		root, parsed_mv_query->rtable
+	};
+	
     // Check each GROUP BY clause (Expr) in turn...
-    ListCell   *lc;
-    foreach (lc, root->parse->groupClause)
+	ListCell *query_lc, *mv_lc;
+    forboth (query_lc, root->parse->groupClause, mv_lc, parsed_mv_query->groupClause)
     {
-        SortGroupClause *sgc = lfirst (lc);
-        Expr *expr = list_nth_node(TargetEntry, transformed_tlist, (int) sgc->tleSortGroupRef - 1)->expr;
+        SortGroupClause *query_sgc = lfirst (query_lc);
+        Expr *query_expr = get_sortgroupref_tle (query_sgc->tleSortGroupRef, selected_tlist)->expr;
         
-        // Check that the Expr either direclty matches an TLE Expr in the MV target list, or
-        // is an expression that builds upon one of them.
-        //
-        // Returns a to do list of Expr nodes that must be rewritten as a Var to reference the
-        // MV TLE directly.
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, false, g_trace_group_clause_source_check))
+		SortGroupClause *mv_sgc = lfirst (mv_lc);
+		Expr *mv_expr = get_sortgroupref_tle (mv_sgc->tleSortGroupRef, parsed_mv_query->targetList)->expr;
+		
+		elog_if (g_trace_group_clause_source_check, INFO, "%s: comparing query expression: %s", __func__, nodeToString (query_expr));
+		elog_if (g_trace_group_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
+
+		// Check that the query Expr direclty matches its partner in the MV.
+		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
         {
-            elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in MV SELECT list", __func__,
-					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
+            elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in query", __func__,
+					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
 			
             return false;
         }
@@ -1579,7 +1592,8 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
         
         if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, true, g_trace_where_clause_source_check))
         {
-            elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__, nodeToString(expr));
+            elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__,
+					 	mv_rewrite_deparse_expression (root->parse->rtable, expr));
             
             return false;
         }
