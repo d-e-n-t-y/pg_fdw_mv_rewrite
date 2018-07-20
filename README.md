@@ -96,8 +96,12 @@ postgres=# explain (verbose) select key, COUNT (value) from test group by key;
 
 Please heed the warning about this not being production ready!
 
-Query rewrite is only considered for queries involving simple GROUP BY aggregates. (Although a similar approach might speed
-complex joins and sort operations too, they are not yet considered for rewrite.)
+Query rewrite is only considered for:
+
+* queries involving simple GROUP BY aggregates;
+* queries that involve JOINs.
+
+Recursive queries, and queries with CTEs are not supported.
 
 ## Configurable parameters
 
@@ -141,6 +145,17 @@ the query targetting tables not enabled for rewrite is announced as follows:
 
 ```SQL
 INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
+```
+
+### Global disable/enable
+
+It can be useful to disable rewrite, especially during an MV refresh operation.
+
+For example:
+
+```SQL
+postgres=# set mv_rewrite.rewrite_enabled = false;
+SET
 ```
 
 ## History
