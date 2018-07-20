@@ -1962,6 +1962,10 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 						  p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
 	}
 	
+	elog_if (g_trace_match_progress, INFO, "%s: rewritten cost: cost=%.2f..%.2f rows=%.0f width=%d", __func__,
+			 	cp->path.startup_cost, cp->path.total_cost, cp->path.rows, cp->path.pathtarget->width);
+	elog_if (g_trace_match_progress, INFO, "%s: competing costs: %s", __func__, competing_cost->data);
+	
 	StringInfo alt_query_text = makeStringInfo();
 	appendStringInfo (alt_query_text, "scan of %s%s%s",
 			 mv_name->data,

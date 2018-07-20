@@ -170,10 +170,11 @@ as $$
          where
            ts_to_bucket (d.timestamp, unit, bucket_size) >= start_ts
            and ts_to_bucket (d.timestamp, unit, bucket_size) < end_ts
-           and d.room_name = my_room_name
-           and d.category = my_category and d.subcategory = my_subcategory
          group by
-           ts_to_bucket (d.timestamp, unit, bucket_size)
+           ts_to_bucket (d.timestamp, unit, bucket_size), d.category, d.subcategory, d.room_name
+		 having
+		   d.room_name = my_room_name
+           and d.category = my_category and d.subcategory = my_subcategory
        ) g
        on ts.ts_bucket = g.ts_bucket
      group by ts.ts_bucket
@@ -182,7 +183,13 @@ $$;
 insert into room values ('Room 1', '5', '7');
 insert into event (timestamp, hc1, hc2, category, subcategory, detail)
 select t.t, '5', '7', 'TEMPERATURE', 'N/A', row_number() over (order by t.t)/200
-	from generate_series ('2018-06-07 00:00:00+01'::timestamp with time zone, '2018-06-11 00:00:00+01'::timestamp with time zone, '1 minute'::interval) t;
+	from generate_series ('2018-01-01 00:00:00+00'::timestamp with time zone, '2018-12-25 00:00:00+00'::timestamp with time zone, '1 minute'::interval) t;
+insert into event (timestamp, hc1, hc2, category, subcategory, detail)
+select t.t, '5', '7', 'HUMIDITY', 'N/A', row_number() over (order by t.t)::float/count(1) over (rows between unbounded preceding and unbounded following)
+	from generate_series ('2018-01-01 00:00:00+00'::timestamp with time zone, '2018-12-25 00:00:00+00'::timestamp with time zone, '1 minute'::interval) t;
+insert into event (timestamp, hc1, hc2, category, subcategory, detail)
+select t.t, '5', '7', 'LUMINOSITY', 'N/A', row_number() over (order by t.t)::float/count(1) over (rows between unbounded preceding and unbounded following)
+	from generate_series ('2018-01-01 00:00:00+00'::timestamp with time zone, '2018-12-25 00:00:00+00'::timestamp with time zone, '1 minute'::interval) t;
 create materialized view test99 as
  SELECT ts_to_bucket(events_all_room."timestamp", 'minute'::text, 15) AS ts_bucket,
     avg(events_all_room.detail) AS avg_detail,
@@ -195,13 +202,13 @@ create materialized view test99 as
             WHEN events_all_room.detail = 1.0::double precision THEN 1
             ELSE 0
         END) AS count_events,
-    events_all_room.hc1,
-    events_all_room.hc2,
     events_all_room.category,
     events_all_room.subcategory,
     r.name AS room_name
    FROM events_all events_all_room,
     room r
   WHERE events_all_room.hc1 = r.hc1 AND events_all_room.hc2 = r.hc2 AND events_all_room.category = 'TEMPERATURE'::text
-  GROUP BY (ts_to_bucket(events_all_room."timestamp", 'minute'::text, 15)), events_all_room.hc1, events_all_room.hc2, events_all_room.category, events_all_room.subcategory, r.name;
+  GROUP BY (ts_to_bucket(events_all_room."timestamp", 'minute'::text, 15)), events_all_room.category, events_all_room.subcategory, r.name;
 insert into pgx_rewritable_matviews values ('public', 'test99', '{public.event,public.room,public.event_sdr_device,public.event_sdr_device_signal,public.events_all,public.events_all_room}');
+analyse event;
+analyse test99;
