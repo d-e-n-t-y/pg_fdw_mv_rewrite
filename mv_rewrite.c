@@ -99,7 +99,7 @@ mv_rewrite_dest_shutdown (DestReceiver *self)
 static void
 mv_rewrite_dest_destroy (DestReceiver *self)
 {
-	// FIXME: should we pfree() ourselves?
+	pfree (self);
 }
 
 static void
@@ -456,22 +456,16 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 	return tables_strlist;
 }
 
-static ListOf (StringInfo) *
+static ListOf (Value (String)) *
 mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
 {
-	StringInfoData find_mvs_query;
-	initStringInfo (&find_mvs_query);
-	
-	// FIXME: this query will fail if the pgx_ table is not present, we might
-	// instead catch the error and continue... or something else.
-	appendStringInfoString (&find_mvs_query,
-							"SELECT v.schemaname || '.' || v.matviewname"
+	const char *find_mvs_query = "SELECT v.schemaname || '.' || v.matviewname"
 							" FROM "
 							"   public.pgx_rewritable_matviews j, pg_matviews v"
 							" WHERE "
 							" j.matviewschemaname = v.schemaname"
 							" AND j.matviewname = v.matviewname"
-							" AND j.tables @> $1");
+							" AND j.tables @> $1";
 	
     ArrayType /* text */ *tables_arr = strlist_to_textarray (involved_rel_names);
     
@@ -493,12 +487,11 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
         goto done; // (an empty set of matviews)
     }
     
-    SPIPlanPtr plan = SPI_prepare (find_mvs_query.data, 1, argtypes);
+    SPIPlanPtr plan = SPI_prepare (find_mvs_query, 1, argtypes);
     
     if (plan == NULL) {
         elog(WARNING, "%s: SPI_connect() failed", __func__);
-		// FIXME: SPI_finish()?
-        goto done; // (an empty set of matviews)
+        goto finish_done; // (an empty set of matviews)
     }
     
     Portal port = SPI_cursor_open (NULL, plan, args, NULL, true);
@@ -508,9 +501,8 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
          SPI_cursor_fetch (port, true, 1))
     {
         MemoryContext spiCtx = MemoryContextSwitchTo (mainCtx);
-        
-        StringInfo name = makeStringInfo();
-        appendStringInfoString (name, SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
+		
+		Value *name = makeString (SPI_getvalue (SPI_tuptable->vals[0], SPI_tuptable->tupdesc, 1));
 
         mvs_name = lappend (mvs_name, name);
         
@@ -519,6 +511,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
 
     SPI_cursor_close (port);
 
+finish_done:
     SPI_finish();
 	
 done:
@@ -1646,7 +1639,7 @@ mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
 
 static Query *
 mv_rewrite_build_mv_scan_query (Oid matviewOid,
-								StringInfo mv_name,
+								const char *mv_name,
 								ListOf (Value *) *colnames,
 								List *mv_scan_quals,
 								List *transformed_tlist)
@@ -1664,7 +1657,7 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 	mvsqrte->selectedCols = 0; // FIXME: TODO
 	mvsqrte->relkind = RELKIND_MATVIEW;
 	mvsqrte->eref = makeNode (Alias);
-	mvsqrte->eref->aliasname = mv_name->data;
+	mvsqrte->eref->aliasname = (char *) mv_name;
 	mvsqrte->eref->colnames = colnames;
 
 	mv_scan_query->rtable = list_make1 (mvsqrte);
@@ -1704,7 +1697,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 									RelOptInfo *input_rel,
 									RelOptInfo *upper_rel,
 									List *selected_tlist,
-									StringInfo mv_name,
+									const char *mv_name,
 									Query **alternative_query)
 {
 	bool ok = false;
@@ -1720,7 +1713,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	Oid matviewOid;
 	
 	Query *parsed_mv_query;
-	mv_rewrite_get_mv_query ((const char *) mv_name->data, &parsed_mv_query, &matviewOid);
+	mv_rewrite_get_mv_query (mv_name, &parsed_mv_query, &matviewOid);
 	
 	// The query obtained which represents the MV is now locked.
 	
@@ -1908,7 +1901,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 								RelOptInfo *rel,
 								List *selected_tlist,
 								PathTarget *pathtarget,
-								StringInfo mv_name)
+								const char *mv_name)
 {
 	/* plan_params should not be in use in current query level */
 	elog_if (root->plan_params != NIL, ERROR, "%s: plan_params != NIL", __func__);
@@ -1969,7 +1962,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	
 	StringInfo alt_query_text = makeStringInfo();
 	appendStringInfo (alt_query_text, "scan of %s%s%s",
-			 mv_name->data,
+			 mv_name,
 			 alternative_query->jointree->quals != NULL ? " WHERE " : "",
 			 alternative_query->jointree->quals != NULL ?
 			 mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
@@ -2002,7 +1995,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	}
 
 	// See if there are any candidate MVs...
-	List *mvs_name = mv_rewrite_find_related_mvs_for_rel (involved_rel_names);
+	ListOf (Value(String)) *mvs_name = mv_rewrite_find_related_mvs_for_rel (involved_rel_names);
 	
 	if (mvs_name == NULL ||
 		list_length (mvs_name) == 0)
@@ -2027,9 +2020,9 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     ListCell   *nc;
     foreach (nc, mvs_name)
     {
-        StringInfo mv_name = lfirst(nc);
+		char *mv_name = strVal (lfirst(nc));
         
-        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s", __func__, mv_name->data);
+        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s", __func__, mv_name);
 
         Query *alternative_query;
         
@@ -2038,7 +2031,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
         
         // 8. Finally, create and add the path.
 		elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
-				 mv_name->data,
+				 mv_name,
 				 alternative_query->jointree->quals != NULL ? " WHERE " : "",
 				 alternative_query->jointree->quals != NULL ?
 					mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
