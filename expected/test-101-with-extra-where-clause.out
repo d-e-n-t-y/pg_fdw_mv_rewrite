@@ -4,7 +4,10 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where key = 'ke
  Custom Scan (MVRewriteScan)
    Output: key, (count(value))
    Rewritten: scan of public.test_mv1 WHERE (key = 'key2'::text)
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, count
+         Filter: (test_mv1.key = 'key2'::text)
+(6 rows)
 
 select key, COUNT (value) from test where key = 'key2' group by key;
  key  |  count  

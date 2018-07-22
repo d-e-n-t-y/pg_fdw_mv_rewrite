@@ -4,7 +4,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key;
  Custom Scan (MVRewriteScan)
    Output: key, (count(value))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, count
+(5 rows)
 
 select key, COUNT (value) from test group by key;
  key  |  count  

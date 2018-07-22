@@ -4,7 +4,9 @@ explain (VERBOSE, COSTS OFF) select key, 'key=' || key, COUNT (value) from test 
  Custom Scan (MVRewriteScan)
    Output: key, (('key='::text || key)), (count(value))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, ('key='::text || key), count
+(5 rows)
 
 select key, 'key=' || key, COUNT (value) from test group by key;
  key  | ?column? |  count  

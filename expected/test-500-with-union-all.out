@@ -6,8 +6,12 @@ explain (VERBOSE, COSTS OFF) select key, case when count(value) < 10 then 'sever
    ->  Custom Scan (MVRewriteScan)
          Output: test.key, (CASE WHEN (count(test.value) < 10) THEN 'several'::text WHEN (count(test.value) < 100) THEN 'tens'::text WHEN (count(test.value) < 1000) THEN 'hundreds'::text WHEN (count(test.value) < 10000) THEN 'thousands'::text WHEN (count(test.value) < 100000) THEN 'tens of thousands'::text WHEN (count(test.value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(test.value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
          Rewritten: scan of public.test_expr_mv1
+         ->  Seq Scan on public.test_expr_mv1
+               Output: key, quantity
    ->  Custom Scan (MVRewriteScan)
          Output: test_1.key, ((count(test_1.value))::text)
          Rewritten: scan of public.test_mv1
-(7 rows)
+         ->  Seq Scan on public.test_mv1
+               Output: key, (count)::text
+(11 rows)
 

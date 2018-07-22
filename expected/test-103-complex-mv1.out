@@ -32,7 +32,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test where hidden = 
  Custom Scan (MVRewriteScan)
    Output: key, (count(value)), hidden
    Rewritten: scan of public.test_mv2
-(3 rows)
+   ->  Seq Scan on public.test_mv2
+         Output: key, count, hidden
+(5 rows)
 
 select key, COUNT (value) from test where hidden = 'hidden2' group by key, hidden;
  key  |  count  

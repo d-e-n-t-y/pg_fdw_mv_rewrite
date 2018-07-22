@@ -12,7 +12,9 @@ explain (VERBOSE, COSTS OFF) select key, case when count(value) < 10 then 'sever
  Custom Scan (MVRewriteScan)
    Output: key, (CASE WHEN (count(value) < 10) THEN 'several'::text WHEN (count(value) < 100) THEN 'tens'::text WHEN (count(value) < 1000) THEN 'hundreds'::text WHEN (count(value) < 10000) THEN 'thousands'::text WHEN (count(value) < 100000) THEN 'tens of thousands'::text WHEN (count(value) < 1000000) THEN 'hundreds of thousands'::text WHEN (count(value) < 10000000) THEN 'millions'::text ELSE 'many'::text END)
    Rewritten: scan of public.test_expr_mv1
-(3 rows)
+   ->  Seq Scan on public.test_expr_mv1
+         Output: key, quantity
+(5 rows)
 
 select key, case when count(value) < 10 then 'several'
         when count(value) < 100 then 'tens'

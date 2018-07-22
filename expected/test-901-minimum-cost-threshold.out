@@ -8,7 +8,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key or
    ->  Custom Scan (MVRewriteScan)
          Output: key, (count(value))
          Rewritten: scan of public.test_mv1
-(6 rows)
+         ->  Seq Scan on public.test_mv1
+               Output: key, count
+(8 rows)
 
 -- Anticipate rewrite
 set mv_rewrite.rewrite_minimum_cost = '1.0';
@@ -21,7 +23,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key or
    ->  Custom Scan (MVRewriteScan)
          Output: key, (count(value))
          Rewritten: scan of public.test_mv1
-(6 rows)
+         ->  Seq Scan on public.test_mv1
+               Output: key, count
+(8 rows)
 
 -- Anticipate no rewrite
 set mv_rewrite.rewrite_minimum_cost = '1000000000';

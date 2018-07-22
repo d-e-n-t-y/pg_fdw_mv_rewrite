@@ -202,9 +202,10 @@ mv_rewrite_explain_scan (CustomScanState *node,
 	if (es->costs)
 		ExplainPropertyText("Original costs", strVal (sstate->competing_cost), es);
 	
-	// Add the subquery scan PS child to allow it to be EXPLAINed.
-	// FIXME: we don't do this right now because it results in rather confused output
-	// sstate->sstate.custom_ps = list_make1 (sstate->qdesc->planstate);
+	// Explain the MV scan.
+	ExplainState *inner_es = palloc (sizeof (ExplainState));
+	*inner_es = *es;
+	ExplainPrintPlan (inner_es, sstate->qdesc);
 }
 
 static Bitmapset *

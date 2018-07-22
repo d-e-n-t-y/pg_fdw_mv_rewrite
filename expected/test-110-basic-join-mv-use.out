@@ -8,7 +8,9 @@ GROUP BY n.name, n.class, v.additional;
  Custom Scan (MVRewriteScan)
    Output: n.name, n.class, v.additional, (count(v.value))
    Rewritten: scan of public.test_name_value_mv1
-(3 rows)
+   ->  Seq Scan on public.test_name_value_mv1
+         Output: name, class, additional, count
+(5 rows)
 
 --select n.name, n.class, v.additional, count(value) as count
 --FROM test_name n, test_value v

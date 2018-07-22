@@ -4,7 +4,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) * 19 from test group by k
  Custom Scan (MVRewriteScan)
    Output: key, ((count(value) * 19))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, (count * 19)
+(5 rows)
 
 select key, COUNT (value) * 19 from test group by key;
  key  | ?column? 
@@ -19,7 +21,9 @@ explain (VERBOSE, COSTS OFF) select key, COUNT (value) - 13 from test group by k
  Custom Scan (MVRewriteScan)
    Output: key, ((count(value) - 13))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, (count - 13)
+(5 rows)
 
 select key, COUNT (value) - 13 from test group by key;
  key  | ?column? 
@@ -34,7 +38,9 @@ explain (VERBOSE, COSTS OFF) select key, 'Numbering ' || COUNT (value) || '.' fr
  Custom Scan (MVRewriteScan)
    Output: key, ((('Numbering '::text || (count(value))::text) || '.'::text))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, (('Numbering '::text || (count)::text) || '.'::text)
+(5 rows)
 
 select key, 'Numbering ' || COUNT (value) || '.' from test group by key;
  key  |      ?column?      

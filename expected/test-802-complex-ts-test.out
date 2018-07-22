@@ -1,8 +1,8 @@
 explain (verbose, costs off)
 select timestamp, value
 	from ordered_ts ('2018-06-09 00:00:00+01', '2018-06-10 00:00:00+01', 'Room 1', 'TEMPERATURE', 'N/A', 'minute', 15);
-                                                                                                                                              QUERY PLAN                                                                                                                                               
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                                                  QUERY PLAN                                                                                                                                                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Subquery Scan on ordered_ts
    Output: ordered_ts."timestamp", ordered_ts.value
    ->  GroupAggregate
@@ -25,7 +25,10 @@ select timestamp, value
                                  ->  Custom Scan (MVRewriteScan)
                                        Output: (ts_to_bucket("timestamp", 'minute'::text, 15)), (avg(detail)), NULL::double precision, NULL::double precision, NULL::double precision, (count(detail)), NULL::bigint, category, subcategory, name
                                        Rewritten: scan of public.test99 WHERE (ts_bucket >= 'Fri Jun 08 16:00:00 2018 PDT'::timestamp with time zone), (ts_bucket < 'Sat Jun 09 16:00:00 2018 PDT'::timestamp with time zone), (subcategory = 'N/A'::text), ((room_name)::text = 'Room 1'::text)
-(22 rows)
+                                       ->  Seq Scan on public.test99
+                                             Output: ts_bucket, avg_detail, NULL::double precision, NULL::double precision, NULL::double precision, count_measurements, NULL::bigint, category, subcategory, room_name
+                                             Filter: ((test99.ts_bucket >= 'Fri Jun 08 16:00:00 2018 PDT'::timestamp with time zone) AND (test99.ts_bucket < 'Sat Jun 09 16:00:00 2018 PDT'::timestamp with time zone) AND (test99.subcategory = 'N/A'::text) AND ((test99.room_name)::text = 'Room 1'::text))
+(25 rows)
 
 select timestamp, value
 from ordered_ts ('2018-06-09 00:00:00+01', '2018-06-10 00:00:00+01', 'Room 1', 'TEMPERATURE', 'N/A', 'minute', 15);

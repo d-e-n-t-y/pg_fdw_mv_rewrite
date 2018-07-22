@@ -24,5 +24,7 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: 
  Custom Scan (MVRewriteScan)
    Output: e."timestamp", e.hc1, e.hc2, e.category, e.subcategory, e.advices, e.warnings, e.detail, r.name
    Rewritten: scan of public.events_all_room_mv
-(3 rows)
+   ->  Seq Scan on public.events_all_room_mv
+         Output: "timestamp", hc1, hc2, category, subcategory, advices, warnings, detail, room_name
+(5 rows)
 

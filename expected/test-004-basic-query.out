@@ -4,5 +4,7 @@ explain (VERBOSE, COSTS OFF) select * from (select key, COUNT (value) from test 
  Custom Scan (MVRewriteScan)
    Output: test.key, (count(test.value))
    Rewritten: scan of public.test_mv1
-(3 rows)
+   ->  Seq Scan on public.test_mv1
+         Output: key, count
+(5 rows)
 
