@@ -1340,9 +1340,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			}
 			else if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_SUBQUERY)
 			{
-				// FIXME: we presume that, if the subquery's Query matches the MV's subquery Query,
-				// then the subquery's plan must also match the MV's. However, is there a chance
-				// that some other rel and join info is pushed down?
 				if (equal_tree_walker (mv_rte, plan_rte, mv_rewrite_rte_equals_walker, NULL))
 				{
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
@@ -1720,10 +1717,6 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     // 1. Check the GROUP BY clause: it must match exactly.
 	if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
     	goto done;
-    
-    // FIXME: the above check only checks some selected clauses; the balance of
-    // non-GROUPed columns would need to be re-aggregated by the outer, hence the above
-    // check needs to be exact set equality.
     
     ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
     
