@@ -657,8 +657,8 @@ mv_rewrite_xform_todos_mutator (Node *node,
     return expression_tree_mutator (node, mv_rewrite_xform_todos_mutator, todo_list);
 }
 
-static ListOf (TargetEntry *) *
-mv_rewrite_xform_todos (ListOf (TargetEntry *) *tlist,
+static ListOf (Expr * or TargetEntry *) *
+mv_rewrite_xform_todos (ListOf (Expr * or TargetEntry *) *tlist,
 						struct mv_rewrite_xform_todo_list *todo_list)
 {
     return (List *) expression_tree_mutator ((Node *) tlist, mv_rewrite_xform_todos_mutator, todo_list);
@@ -990,9 +990,9 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 static bool
 mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *comparison_context,
 					ListOf (RestrictInfo * or Expr *) *mv_join_quals,
-					ListOf (RestrictInfo * or Expr *) **query_clauses)
+					ListOf (Expr *) **query_clauses)
 {
-	ListOf (RestrictInfo * or Expr *) *query_clauses_copy = list_copy (*query_clauses);
+	ListOf (Expr *) *query_clauses_copy = list_copy (*query_clauses);
 	
 	if (g_debug_join_clause_check)
 	{
@@ -1000,12 +1000,8 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		ListCell *lc;
 		foreach (lc, query_clauses_copy)
 		{
-			RestrictInfo *query_ri = lfirst (lc);
-			Expr *query_expr = (Expr *) query_ri;
+			Expr *query_expr = lfirst (lc);
 			
-			/* Extract clause from RestrictInfo, if required */
-			if (IsA (query_ri, RestrictInfo))
-				query_expr = query_ri->clause;
 			if (cl->len > 0)
 				appendStringInfoString (cl, ", ");
 			appendStringInfoString (cl, mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
@@ -1035,12 +1031,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		ListCell *lc3;
 		foreach (lc3, query_clauses_copy)
 		{
-			RestrictInfo *query_ri = lfirst (lc3);
-			Expr *query_expr = (Expr *) query_ri;
-			
-			/* Extract clause from RestrictInfo, if required */
-			if (IsA (query_ri, RestrictInfo))
-				query_expr = query_ri->clause;
+			Expr *query_expr = lfirst (lc3);
 			
 			elog_if (g_trace_join_clause_check, INFO, "%s: against expression: %s", __func__,
 					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
@@ -1049,7 +1040,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 			{
 				elog_if (g_debug_join_clause_check, INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
 				
-				*query_clauses = list_delete_ptr (*query_clauses, query_ri);
+				*query_clauses = list_delete_ptr (*query_clauses, query_expr);
 				
 				found = true;
 				break;
@@ -1079,7 +1070,7 @@ static bool
 mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 											   Query *parsed_mv_query,
 											   RelOptInfo *join_rel,
-											   ListOf (RestrictInfo * or Expr *) **additional_where_clauses)
+											   ListOf (Expr *) **additional_where_clauses)
 {
 	elog_if (g_debug_join_clause_check, INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
 
@@ -1096,7 +1087,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	
 	// As we walk the join tree, build up a list of quals. We will check each qual
 	// for presence in the query later.
-	ListOf (RestrictInfo *) *collated_query_quals = NIL;
+	ListOf (Expr *) *collated_query_quals = NIL;
 	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
 	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals))
@@ -1154,7 +1145,7 @@ mv_rewrite_rte_equals_walker (Node *a, Node *b, void *ctx)
 	return equal_tree_walker(a, b, mv_rewrite_rte_equals_walker, ctx);
 }
 
-ListOf (RestrictInfo *) *
+ListOf (Expr *) *
 mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 								  RelOptInfo *rel,
 								  Index relid)
@@ -1198,7 +1189,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		if (subrel != NULL && IS_SIMPLE_REL (subrel))
 		{
-			ListOf (RestrictInfo *) *subris = mv_rewrite_get_pushed_down_exprs (rel->subroot, subrel, (Index) i);
+			ListOf (Expr *) *subris = mv_rewrite_get_pushed_down_exprs (rel->subroot, subrel, (Index) i);
 
 			sub_ris = list_concat (sub_ris, subris);
 		}
@@ -1282,7 +1273,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 								  ListOf (Oid) **mv_oids_involved,
 								  Relids *query_relids_involved,
 								  RelOptInfo **query_found_rel,
-								  ListOf (RestrictInfo *) **collated_query_quals,
+								  ListOf (Epxr *) **collated_query_quals,
 								  ListOf (RestrictInfo *) **collated_mv_quals)
 {
 	elog_if (g_trace_join_clause_check, INFO, "%s: processing node: %s", __func__, nodeToString (node));
@@ -1328,7 +1319,15 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 
 					RelOptInfo *rel = find_base_rel (root, i);
 					if (rel->baserestrictinfo != NULL)
-						*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, rel->baserestrictinfo);
+					{
+						ListCell *lc;
+						foreach (lc, rel->baserestrictinfo)
+						{
+							RestrictInfo *ri = lfirst (lc);
+
+							*collated_query_quals = list_append_unique_ptr (*collated_query_quals, ri->clause);
+						}
+					}
 					
 					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
 
@@ -1351,7 +1350,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					
 					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
 
-					ListOf (RestrictInfo *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
+					ListOf (Expr *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
 					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, pushed_quals);
 
 					if (query_found_rel != NULL)
@@ -1444,10 +1443,21 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		RelOptInfo *joinrel = find_join_rel (root, joinrelids);
 		
 		// Get hold of the JOIN clauses that relate to this join in the query.
-		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, joinrel->joininfo);
+		ListCell *lc;
+		foreach (lc, joinrel->joininfo)
+		{
+			RestrictInfo *ri = lfirst (lc);
+			
+			*collated_query_quals = list_append_unique_ptr (*collated_query_quals, ri->clause);
+		}
 		// The list in joinrel doesn't include the implied ECs, nor those in the joined
 		// rel's joininfo lists, so add them too.
-		*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, build_joinrel_restrictlist (root, joinrel, rrel, lrel));
+		foreach (lc, build_joinrel_restrictlist (root, joinrel, rrel, lrel))
+		{
+			RestrictInfo *ri = lfirst (lc);
+			
+			*collated_query_quals = list_append_unique_ptr (*collated_query_quals, ri->clause);
+		}
 
 		// Similarly record the quals from the MV jointree.
 		if (je->quals != NULL)
@@ -1519,7 +1529,15 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			
 			// Get hold of the JOIN clauses that relate to this join in the query.
 			if (outerrel->joininfo != NIL)
-				*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, outerrel->joininfo);
+			{
+				ListCell *lc;
+				foreach (lc, outerrel->joininfo)
+				{
+					RestrictInfo *ri = lfirst (lc);
+					
+					*collated_query_quals = list_append_unique_ptr (*collated_query_quals, ri->clause);
+				}
+			}
 
 			*query_relids_involved = bms_union (*query_relids_involved, outrelids);
 
@@ -1545,7 +1563,7 @@ static void
 mv_rewrite_process_having_clauses (PlannerInfo *root,
                         Query *parsed_mv_query,
                         RelOptInfo *grouped_rel,
-                        ListOf (RestrictInfo * or Expr *) **additional_where_clauses,
+                        ListOf (Expr *) **additional_where_clauses,
                         struct mv_rewrite_xform_todo_list *todo_list)
 {
     ListOf (Expr *) *havingQual = list_copy ((List *) root->parse->havingQual);
@@ -1558,11 +1576,39 @@ mv_rewrite_process_having_clauses (PlannerInfo *root,
     *additional_where_clauses = list_concat (*additional_where_clauses, havingQual);
 }
 
+enum mv_rewrite_check_exprs_supported_action {
+	StopOnFailReturnFalse,
+	DeleteEntryButContinue
+};
+static bool
+mv_rewrite_check_exprs_supported_by_mv_tlist (PlannerInfo *root,
+											  Query *parsed_mv_query,
+											  ListOf (Expr *) *clause_list,
+											  struct mv_rewrite_xform_todo_list *todo_list,
+											  enum mv_rewrite_check_exprs_supported_action action	)
+{
+	ListCell   *lc;
+	foreach (lc, clause_list)
+	{
+		Expr *expr = lfirst (lc);
+		
+		if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, true, g_trace_where_clause_source_check))
+		{
+			elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__,
+					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
+
+			if (action == StopOnFailReturnFalse)
+				return false;
+		}
+	}
+	
+	return true;
+}
+
 static bool
 mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
                                                Query *parsed_mv_query,
-                                               ListOf (RestrictInfo * or Expr *) *query_where_clauses,
-                                               List **transformed_clist_p,
+                                               ListOf (Expr *) *query_where_clauses,
                                                struct mv_rewrite_xform_todo_list *todo_list)
 {
 	// All WHERE clauses fo a JOIN_REL will have been elicited during processing of
@@ -1570,29 +1616,7 @@ mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
 	
     elog_if (g_trace_where_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (query_where_clauses));
 	
-    ListCell   *lc;
-    foreach (lc, query_where_clauses)
-    {
-        Expr *expr = lfirst (lc);
-        
-        /* Extract clause from RestrictInfo, if required */
-        if (IsA(expr, RestrictInfo))
-        {
-            expr = ((RestrictInfo *) expr)->clause;
-        }
-        
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, true, g_trace_where_clause_source_check))
-        {
-            elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__,
-					 	mv_rewrite_deparse_expression (root->parse->rtable, expr));
-            
-            return false;
-        }
-        
-        *transformed_clist_p = lappend (*transformed_clist_p, expr);
-    }
-    
-    return true;
+	return mv_rewrite_check_exprs_supported_by_mv_tlist (root, parsed_mv_query, query_where_clauses, todo_list, StopOnFailReturnFalse);
 }
 
 /**
@@ -1638,8 +1662,8 @@ static Query *
 mv_rewrite_build_mv_scan_query (Oid matviewOid,
 								const char *mv_name,
 								ListOf (Value *) *colnames,
-								List *mv_scan_quals,
-								List *transformed_tlist)
+								ListOf (Expr *) *mv_scan_quals,
+								ListOf (TargetEntry *) *transformed_tlist)
 {
 	Query *mv_scan_query = makeNode (Query);
 
@@ -1699,8 +1723,6 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 {
 	bool ok = false;
 	
-    ListOf (Expr *) *transformed_clauses = NIL;
-	
     struct mv_rewrite_xform_todo_list transform_todo_list = {
 		.replaced_expr = NIL,
 		.replacement_var = NIL,
@@ -1718,7 +1740,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
     	goto done;
     
-    ListOf (RestrictInfo * or Expr *) *additional_where_clauses = NIL;
+    ListOf (Expr *) *additional_where_clauses = NIL;
     
     // 2. Check the FROM and WHERE clauses: they must match exactly.
     if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses))
@@ -1730,7 +1752,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	    mv_rewrite_process_having_clauses (root, parsed_mv_query, upper_rel, &additional_where_clauses, &transform_todo_list);
     
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
-    if (!mv_rewrite_where_clauses_are_valid_for_mv (root, parsed_mv_query, additional_where_clauses, &transformed_clauses, &transform_todo_list))
+    if (!mv_rewrite_where_clauses_are_valid_for_mv (root, parsed_mv_query, additional_where_clauses, &transform_todo_list))
         goto done;
     
     // 5. Check the SELECT clauses: they must be a subset of the MV's tList
@@ -1739,7 +1761,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
     ListOf (TargetEntry *) *transformed_tlist = mv_rewrite_xform_todos (selected_tlist, &transform_todo_list);
-	List *quals = mv_rewrite_xform_todos (transformed_clauses, &transform_todo_list);
+	ListOf (Expr *) *quals = mv_rewrite_xform_todos (additional_where_clauses, &transform_todo_list);
 	
     // 7. Build the alternative query.
 	*alternative_query = mv_rewrite_build_mv_scan_query (matviewOid, mv_name,
