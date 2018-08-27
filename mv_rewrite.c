@@ -1145,6 +1145,43 @@ mv_rewrite_rte_equals_walker (Node *a, Node *b, void *ctx)
 	return equal_tree_walker(a, b, mv_rewrite_rte_equals_walker, ctx);
 }
 
+enum mv_rewrite_check_exprs_supported_action {
+	StopOnFailReturnFalse,
+	DeleteEntryButContinue
+};
+static bool
+mv_rewrite_check_nodes_supported_by_mv_tlist (PlannerInfo *root,
+											  Query *parsed_mv_query,
+											  const char *clause_type,
+											  ListOf (Expr *) **clause_list,
+											  struct mv_rewrite_xform_todo_list *todo_list,
+											  enum mv_rewrite_check_exprs_supported_action action,
+											  bool log_progress,
+											  bool trace_progress)
+{
+	ListCell   *lc;
+	foreach (lc, *clause_list)
+	{
+		Node *node = lfirst (lc);
+		
+		// FIXME: we should check that none of the Expr's Vars references a levelsup > 0
+		
+		if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, node, todo_list, true, trace_progress))
+		{
+			elog_if (log_progress, INFO, "%s: %s clause (%s) not found in MV SELECT list", __func__, clause_type,
+					 mv_rewrite_deparse_expression (root->parse->rtable,
+													IsA (node, TargetEntry) ? ((TargetEntry *) node)->expr : (Expr *) node));
+			
+			if (action == StopOnFailReturnFalse)
+				return false;
+			else if (action == DeleteEntryButContinue)
+				*clause_list = list_delete (*clause_list, node);
+		}
+	}
+	
+	return true;
+}
+
 ListOf (Expr *) *
 mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 								  RelOptInfo *rel,
@@ -1218,21 +1255,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		.replacement_varno = relid
 	};
 	
-	ListCell *lc2;
-	foreach (lc2, sub_ris)
-	{
-		Expr *rel_ri_expr = (Expr *) lfirst (lc2);
-		
-		// FIXME: we should check that none of the Expr's Vars references a levelsup > 0
-		
-		if (!mv_rewrite_check_expr_targets_in_mv_tlist (subroot, subroot->parse, (Node *) rel_ri_expr, &xform_todo_list, true, false))
-		{
-			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%s: discounting pushed down clause due to no match in above subquery target list: %s", __func__,
-					  mv_rewrite_deparse_expression (subroot->parse->rtable, rel_ri_expr));
-			
-			sub_ris = list_delete (sub_ris, rel_ri_expr);
-		}
-	}
+	(void) mv_rewrite_check_nodes_supported_by_mv_tlist (subroot, subroot->parse, "pushed down", &sub_ris, &xform_todo_list, DeleteEntryButContinue, g_trace_pushed_down_clauses_collation, false);
 	
 	// Rewrite RIs from the subquery, such that their Vars reference the subquery's target list,
 	// which has the effect of pulling them up a level.
@@ -1559,105 +1582,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 	return false;
 }
 
-static void
-mv_rewrite_process_having_clauses (PlannerInfo *root,
-                        Query *parsed_mv_query,
-                        RelOptInfo *grouped_rel,
-                        ListOf (Expr *) **additional_where_clauses,
-                        struct mv_rewrite_xform_todo_list *todo_list)
-{
-    ListOf (Expr *) *havingQual = list_copy ((List *) root->parse->havingQual);
-
-    elog_if (g_trace_having_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (havingQual));
-    
-    // Having qualifiers may simply be appended to our working set of additional WHERE clauses:
-    // they will be checked for validity against the MV tList later.
-    
-    *additional_where_clauses = list_concat (*additional_where_clauses, havingQual);
-}
-
-enum mv_rewrite_check_exprs_supported_action {
-	StopOnFailReturnFalse,
-	DeleteEntryButContinue
-};
-static bool
-mv_rewrite_check_exprs_supported_by_mv_tlist (PlannerInfo *root,
-											  Query *parsed_mv_query,
-											  ListOf (Expr *) *clause_list,
-											  struct mv_rewrite_xform_todo_list *todo_list,
-											  enum mv_rewrite_check_exprs_supported_action action	)
-{
-	ListCell   *lc;
-	foreach (lc, clause_list)
-	{
-		Expr *expr = lfirst (lc);
-		
-		if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) expr, todo_list, true, g_trace_where_clause_source_check))
-		{
-			elog_if (g_log_match_progress, INFO, "%s: WHERE clause (%s) not found in MV SELECT list", __func__,
-					 mv_rewrite_deparse_expression (root->parse->rtable, expr));
-
-			if (action == StopOnFailReturnFalse)
-				return false;
-		}
-	}
-	
-	return true;
-}
-
-static bool
-mv_rewrite_where_clauses_are_valid_for_mv (PlannerInfo *root,
-                                               Query *parsed_mv_query,
-                                               ListOf (Expr *) *query_where_clauses,
-                                               struct mv_rewrite_xform_todo_list *todo_list)
-{
-	// All WHERE clauses fo a JOIN_REL will have been elicited during processing of
-	// the FROM/JOIN clauses of the input_rel.
-	
-    elog_if (g_trace_where_clause_source_check, INFO, "%s: clauses: %s", __func__, nodeToString (query_where_clauses));
-	
-	return mv_rewrite_check_exprs_supported_by_mv_tlist (root, parsed_mv_query, query_where_clauses, todo_list, StopOnFailReturnFalse);
-}
-
-/**
- * Determine whether all the expressions selected in the supplied target list
- * are su supported by clauses in the MV's target list.
- *
- * Returns true if they are; false otherwise.
- *
- * If a match is found, the todo_list is updated in order to (later) transform
- * the relevant part of the expression in the seleted target list into a VAR
- * node that references a column in the replacement MV SELECT list.
- */
-static bool
-mv_rewrite_select_clauses_are_valid_for_mv (PlannerInfo *root,
-                                                Query *parsed_mv_query,
-                                                ListOf (TargetEntry *) *selected_tlist,
-                                                struct mv_rewrite_xform_todo_list *todo_list)
-{
-	// One by one, check each target in the supplied target list. Each target
-	// must be supported by a matching cluase in the MV's target list.
-	
-    ListCell   *lc;
-    foreach (lc, selected_tlist)
-    {
-        TargetEntry *tle = lfirst(lc);
-        
-        if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, (Node *) tle, todo_list, true, g_trace_select_clause_source_check))
-        {
-            elog_if (g_log_match_progress, INFO, "%s: expr (%s) not found in MV tlist", __func__, mv_rewrite_deparse_expression (root->parse->rtable, tle->expr));
-            
-            return false;
-        }
-    }
-	
-	// It is acceptable for the MV to contain other entries in its target list:
-	// its just that we won't pull them in the replacement scan.
-    
-    // Complete match found!
-    return true;
-}
-
 static Query *
 mv_rewrite_build_mv_scan_query (Oid matviewOid,
 								const char *mv_name,
@@ -1742,23 +1666,24 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     
     ListOf (Expr *) *additional_where_clauses = NIL;
     
-    // 2. Check the FROM and WHERE clauses: they must match exactly.
+	// 2. Check the FROM and JOIN-related WHERE clauses: they must match exactly; any non-
+	//    JOIN-related WHERE clauses are returned and validated in step 4.
     if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses))
         goto done;
     
-    // 3. Stage he HAVING clauses in the additional WHERE clause list. (They will actually be
+    // 3. Append the HAVING clauses in the additional WHERE clause list. (They will actually be
     //    evaluated as part of the WHERE clause procesing.)
 	if (upper_rel != NULL)
-	    mv_rewrite_process_having_clauses (root, parsed_mv_query, upper_rel, &additional_where_clauses, &transform_todo_list);
-    
+		additional_where_clauses = list_concat (additional_where_clauses, list_copy ((List *) root->parse->havingQual));
+	
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
-    if (!mv_rewrite_where_clauses_are_valid_for_mv (root, parsed_mv_query, additional_where_clauses, &transform_todo_list))
+    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "WHERE", &additional_where_clauses, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_where_clause_source_check))
         goto done;
     
     // 5. Check the SELECT clauses: they must be a subset of the MV's tList
-    if (!mv_rewrite_select_clauses_are_valid_for_mv (root, parsed_mv_query, selected_tlist, &transform_todo_list))
+    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "SELECT", &selected_tlist, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_select_clause_source_check))
         goto done;
-    
+
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries
     ListOf (TargetEntry *) *transformed_tlist = mv_rewrite_xform_todos (selected_tlist, &transform_todo_list);
 	ListOf (Expr *) *quals = mv_rewrite_xform_todos (additional_where_clauses, &transform_todo_list);

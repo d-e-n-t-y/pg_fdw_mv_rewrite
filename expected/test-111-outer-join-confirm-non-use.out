@@ -9,7 +9,7 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv2
 INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv3
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (v.value) not found in MV tlist
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (v.value) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv4
 INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv1
@@ -17,7 +17,7 @@ INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite JOIN, but MV is
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv2
 INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv3
-INFO:  mv_rewrite_select_clauses_are_valid_for_mv: expr (v.value) not found in MV tlist
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (v.value) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv4
 INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv1
