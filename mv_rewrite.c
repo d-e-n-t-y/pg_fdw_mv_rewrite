@@ -17,6 +17,9 @@
 #include "build_joinrel_restrictlist.h"
 #include "release_rewrite_locks.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/table.h"
+#endif
 #include "catalog/namespace.h"
 #include "commands/explain.h"
 #include "commands/vacuum.h"
@@ -33,7 +36,11 @@
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/subselect.h"
+#if PG_VERSION_NUM < 120000
 #include "optimizer/var.h"
+#else
+#include "optimizer/optimizer.h"
+#endif
 #include "optimizer/tlist.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"

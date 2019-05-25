@@ -13,7 +13,11 @@
 #include "pg_config.h"
 
 #include "lib/stringinfo.h"
+#if PG_VERSION_NUM < 120000
 #include "nodes/relation.h"
+#else
+#include "nodes/pathnodes.h"
+#endif
 #include "utils/relcache.h"
 #include "optimizer/planner.h"
 

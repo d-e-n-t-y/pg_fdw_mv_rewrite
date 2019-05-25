@@ -8,6 +8,9 @@
 
 #include "postgres.h"
 
+#if PG_VERSION_NUM >= 120000
+#include "access/table.h"
+#endif
 #include "access/sysattr.h"
 #include "catalog/dependency.h"
 #include "catalog/pg_type.h"
