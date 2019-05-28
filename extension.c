@@ -32,6 +32,7 @@ bool g_rewrite_enabled;
 bool g_log_match_progress;
 bool g_trace_match_progress;
 bool g_trace_parse_select_query;
+bool g_trace_distinct_clause_source_check;
 bool g_trace_group_clause_source_check;
 bool g_trace_having_clause_source_check;
 bool g_trace_where_clause_source_check;
@@ -84,6 +85,14 @@ _PG_init (void)
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
 
+	DefineCustomBoolVariable("mv_rewrite.trace_distinct_clause_source_check",
+							 gettext_noop("Trace the matching of DISTINCT clauses."),
+							 NULL,
+							 &g_trace_distinct_clause_source_check,
+							 false,
+							 PGC_SUSET, 0,
+							 NULL, NULL, NULL);
+
 	DefineCustomBoolVariable("mv_rewrite.trace_group_clause_source_check",
 							 gettext_noop("Trace the matching of GROUP BY clauses."),
 							 NULL,
@@ -91,7 +100,7 @@ _PG_init (void)
 							 false,
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
-
+	
 	DefineCustomBoolVariable("mv_rewrite.trace_having_clause_source_check",
 							 gettext_noop("Trace the matching of HAVING clauses."),
 							 NULL,

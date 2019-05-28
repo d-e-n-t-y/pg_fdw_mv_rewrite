@@ -16,6 +16,7 @@ extern bool g_rewrite_enabled;
 extern bool g_log_match_progress;
 extern bool g_trace_match_progress;
 extern bool g_trace_parse_select_query;
+extern bool g_trace_distinct_clause_source_check;
 extern bool g_trace_group_clause_source_check;
 extern bool g_trace_having_clause_source_check;
 extern bool g_trace_where_clause_source_check;

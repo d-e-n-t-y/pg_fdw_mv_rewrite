@@ -256,8 +256,7 @@ mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 	if (root->hasLateralRTEs)
 		return false;
 	
-	if (root->distinct_pathkeys != NULL &&
-		list_length (root->distinct_pathkeys) > 0)
+	if (root->parse->hasDistinctOn)
 		return false;
 
 	if (root->cte_plan_ids != NULL &&
@@ -270,6 +269,7 @@ mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
+								   UpperRelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *grouped_rel,
 								   PathTarget *grouping_target);
@@ -282,6 +282,14 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 								   JoinType jointype,
 								   JoinPathExtraData *extra)
 {
+	// Delegate first to any other extensions if they are already hooked.
+	if (next_set_join_pathlist_hook)
+		(*next_set_join_pathlist_hook) (root, join_rel, outerrel, innerrel, jointype
+#if PG_VERSION_NUM >= 110000
+										 , extra
+#endif
+										 );
+
 	// Evaluate the query being planned for any unsupported features.
 	if (!mv_rewrite_eval_query_for_rewrite_support (root))
 	{
@@ -309,7 +317,7 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (join_rel));
 	
 	// If we can rewrite, add those alternate paths...
-	mv_rewrite_add_rewritten_mv_paths (root, join_rel, NULL, join_rel->reltarget);
+	mv_rewrite_add_rewritten_mv_paths (root, 0, join_rel, NULL, join_rel->reltarget);
 }
 
 /*
@@ -338,7 +346,8 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 						 );
 
 	// Ignore stages we don't support; and skip any duplicate calls.
-	if (stage != UPPERREL_GROUP_AGG)
+	if (!(stage == UPPERREL_GROUP_AGG ||
+		  stage == UPPERREL_DISTINCT))
 	{
 		elog_if (g_trace_match_progress, INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
 		
@@ -370,7 +379,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// If we can rewrite, add those alternate paths...
 	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
 
-	mv_rewrite_add_rewritten_mv_paths (root, input_rel, upper_rel, grouping_target);
+	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, grouping_target);
 }
 
 static void
@@ -393,6 +402,10 @@ recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **
 					recurse_relation_relids_from_rte (root, srte, out_relids);
 				}
 			}
+	}
+	else
+	{
+		elog_if (g_trace_match_progress, INFO, "%s: no handler to recurse into rtekind: %d", __func__, rte->rtekind);
 	}
 }
 
@@ -417,6 +430,10 @@ recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **ou
                 }
             }
     }
+	else
+	{
+		elog_if (g_trace_match_progress, INFO, "%s: no handler to recurse into rtekind: %d", __func__, rte->rtekind);
+	}
 }
 
 static void
@@ -436,7 +453,7 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 	List *rel_oids = NIL;
 
 	if (rel != NULL)
-		recurse_relation_oids (root, rel->relids, &rel_oids);
+		recurse_relation_oids (root, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids);
 	
 	ListOf (char *) *tables_strlist = NIL;
 	ListCell *lc;
@@ -458,6 +475,8 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 		appendStringInfo (table_name, "%s.%s",
 						  quote_identifier(nspname), quote_identifier(relname));
 		
+		elog_if (g_trace_match_progress, INFO, "%s: query involves: %s", __func__, table_name->data);
+
 		tables_strlist = lappend (tables_strlist, table_name->data);
 	}
 	return tables_strlist;
@@ -913,7 +932,79 @@ mv_rewrite_get_query_tlist_colnames (Query *mv_query)
 }
 
 static bool
+mv_rewrite_check_distinct_clauses_for_mv (PlannerInfo *root,
+									   UpperRelationKind stage,
+									   Query *parsed_mv_query,
+									   RelOptInfo *distinct_rel,
+									   List *selected_tlist,
+									   struct mv_rewrite_xform_todo_list *todo_list)
+{
+	// If we have an MV including DINSTINCT clauses, check we are rewriting for a
+	// distinct_rel...
+	if (list_length (parsed_mv_query->distinctClause) > 0 &&
+		(stage < UPPERREL_DISTINCT || list_length (root->parse->distinctClause) == 0))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite without DISTINCT, but MV is DISTINCT.", __func__);
+		
+		return false;
+	}
+	if (list_length (parsed_mv_query->distinctClause) == 0 &&
+		(stage >= UPPERREL_DISTINCT && list_length (root->parse->distinctClause) > 0))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite DISTINCT, but MV has no DISTINCT.", __func__);
+
+		return false;
+	}
+	
+	// If both MV and quey are not DISTINCT, then we are done here...
+	if (distinct_rel == NULL)
+		return true;
+	
+	// TODO: in the above checks, we might in future:
+	//   (a) tolerate an adequately sorted MV, then add an explicit Unique plan step around it
+	//      - Maybe the planner will do this for us anyway...
+	//   (b) tolerate instead of DISTINCT, a set of matching GROUP BY expressions
+	
+	if (list_length (root->parse->distinctClause) != list_length (parsed_mv_query->distinctClause))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: DISTINCT list for MV and query differ in length.", __func__);
+		
+		return false;
+	}
+	
+	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
+		root, parsed_mv_query->rtable
+	};
+	
+	// Check each DISTINCT clause (Expr) in turn...
+	ListCell *query_lc, *mv_lc;
+	forboth (query_lc, root->parse->distinctClause, mv_lc, parsed_mv_query->distinctClause)
+	{
+		SortGroupClause *query_sgc = lfirst (query_lc);
+		Expr *query_expr = get_sortgroupref_tle (query_sgc->tleSortGroupRef, selected_tlist)->expr;
+		
+		SortGroupClause *mv_sgc = lfirst (mv_lc);
+		Expr *mv_expr = get_sortgroupref_tle (mv_sgc->tleSortGroupRef, parsed_mv_query->targetList)->expr;
+		
+		elog_if (g_trace_distinct_clause_source_check, INFO, "%s: comparing query expression: %s", __func__, nodeToString (query_expr));
+		elog_if (g_trace_distinct_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
+		
+		// Check that the query Expr direclty matches its partner in the MV.
+		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
+		{
+			elog_if (g_log_match_progress, INFO, "%s: DISTINCT clause (%s) not found in query", __func__,
+					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
+			
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+static bool
 mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
+								 UpperRelationKind stage,
                                  Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
                                  List *selected_tlist,
@@ -921,16 +1012,17 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 {
 	// If we have an MV including GROUP BY clauses, check we are rewriting for a
 	// grouped_rel...
-	if ((parsed_mv_query->groupClause != NULL && grouped_rel == NULL))
+	if (list_length (parsed_mv_query->groupClause) > 0 &&
+		(stage < UPPERREL_GROUP_AGG || list_length (root->parse->groupClause) == 0))
 	{
-		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite JOIN, but MV is GROUP BY.", __func__);
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite without GROUP BY, but MV is GROUP BY.", __func__);
 
 		return false;
 	}
-	if ((parsed_mv_query->groupClause == NULL && grouped_rel != NULL))
+	if (list_length (parsed_mv_query->groupClause) == 0 &&
+		(stage >= UPPERREL_GROUP_AGG && list_length (root->parse->groupClause) > 0))
 	{
 		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite GROUP BY, but MV has no GROUP BY.", __func__);
-		
 		return false;
 	}
 
@@ -1646,6 +1738,7 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 
 static bool
 mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
+									UpperRelationKind stage,
 									RelOptInfo *input_rel,
 									RelOptInfo *upper_rel,
 									List *selected_tlist,
@@ -1665,11 +1758,22 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	Query *parsed_mv_query;
 	mv_rewrite_get_mv_query (mv_name, &parsed_mv_query, &matviewOid);
 	
+	// TODO: strategy:
+	// Check GROUP BY clauses, but only if stage >= GB
+	// check ORDER BY but onyl if stage >= OB
+	// check DISTINCT byt only if stage >= D
+	// etc.
+	// Obviously always check WHERE/FROM/JOIN
+	
 	// The query obtained which represents the MV is now locked.
 	
-    // 1. Check the GROUP BY clause: it must match exactly.
-	if (!mv_rewrite_check_group_clauses_for_mv (root, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+    // 1a. Check the GROUP BY clause: it must match exactly.
+	if (!mv_rewrite_check_group_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
     	goto done;
+	
+	// 1b. Check the DISTINCT clause: it must match exactly.
+	if (!mv_rewrite_check_distinct_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+		goto done;
     
     ListOf (Expr *) *additional_where_clauses = NIL;
     
@@ -1796,6 +1900,13 @@ static CustomPathMethods mv_rewrite_path_methods = {
 static bool
 mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 {
+	if (list_length (involved_rel_names) == 0)
+	{
+		elog (WARNING, "%s: no relations involved in query; no rewrite possible.", __func__);
+		
+		return false;
+	}
+	
 	// If no list is configured, default to enabling rewrite for any relation.
 	if (g_rewrite_enabled_for_tables == NULL)
 		return true;
@@ -1807,7 +1918,7 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 		// There could be a problem with the enabled table list. Default to caution.
 		return false;
 	}
-		
+	
 	// Attempt to locate every involved table in the configured list of enabled-for-rewrite tables.
 	ListCell *lc2;
 	foreach (lc2, involved_rel_names)
@@ -1923,6 +2034,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
+								   UpperRelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *upper_rel,
 								   PathTarget *pathtarget)
@@ -1973,7 +2085,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 
         Query *alternative_query;
         
-		if (!mv_rewrite_evaluate_mv_for_rewrite (root, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
+		if (!mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
             continue;
         
         // 8. Finally, create and add the path.

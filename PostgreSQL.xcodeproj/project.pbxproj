@@ -19,7 +19,6 @@
 		BF650D7F20CC1852009B5649 /* mv_rewrite.h in Headers */ = {isa = PBXBuildFile; fileRef = BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */; };
 		BF650D8020CC1852009B5649 /* equalwalker.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5A26901FD95A0600E3AD72 /* equalwalker.h */; };
 		BF8BEF151FD1EF73003A7AC9 /* mv_rewrite.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */; };
-		BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.1.so in Copy Files */ = {isa = PBXBuildFile; fileRef = BF8BEF0E1FD1EF5D003A7AC9 /* mv_rewrite.0.6.1.so */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXBuildRule section */
@@ -32,23 +31,9 @@
 			outputFiles = (
 				"$(PROJECT_DIR)/equalwalker.c",
 			);
-			script = "${PROJECT_DIR}/generate_equalswalker.sh > ${SCRIPT_OUTPUT_FILE_0}";
+			script = "${PROJECT_DIR}/generate_equalswalker.sh > ${SCRIPT_OUTPUT_FILE_0}\n";
 		};
 /* End PBXBuildRule section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		BF8BEFAD1FD2C2DF003A7AC9 /* Copy Files */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 12;
-			dstPath = "$(PG_HOME)/lib";
-			dstSubfolderSpec = 0;
-			files = (
-				BF8BEFB11FD2C346003A7AC9 /* mv_rewrite.0.6.1.so in Copy Files */,
-			);
-			name = "Copy Files";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		BF08E98D206649E3006F2FE9 /* build-and-test.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = "build-and-test.sh"; sourceTree = "<group>"; };
@@ -191,7 +176,6 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = BF8BEF0F1FD1EF5D003A7AC9 /* Build configuration list for PBXNativeTarget "mv_rewrite" */;
 			buildPhases = (
-				BF8BEFAD1FD2C2DF003A7AC9 /* Copy Files */,
 				BF8BEF0B1FD1EF5D003A7AC9 /* Frameworks */,
 				BF8BEF0A1FD1EF5D003A7AC9 /* Sources */,
 				BF8BEF0C1FD1EF5D003A7AC9 /* Headers */,
@@ -212,7 +196,7 @@
 		BF8BEEDE1FD1E500003A7AC9 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0940;
+				LastUpgradeCheck = 1020;
 				ORGANIZATIONNAME = "John Dent";
 				TargetAttributes = {
 					BF8BEF0D1FD1EF5D003A7AC9 = {
@@ -226,6 +210,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = BF8BEEDD1FD1E500003A7AC9;
@@ -377,7 +362,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OBJROOT = "";
 				OTHER_LDFLAGS = "-lpq";
-				PG_HOME = "/Users/denty/junk/postgresql-11beta2";
+				PG_HOME = "/Users/denty/junk/postgresql-12beta1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
 				SYMROOT = "";
@@ -407,7 +392,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
 				OBJROOT = "";
 				OTHER_LDFLAGS = "-lpq";
-				PG_HOME = "/Users/denty/junk/postgresql-11beta2";
+				PG_HOME = "/Users/denty/junk/postgresql-12beta1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
 				SDKROOT = macosx;
 				SYMROOT = "";

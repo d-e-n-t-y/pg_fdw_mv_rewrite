@@ -16,8 +16,8 @@ make clean && make CFLAGS='-g' && make install && make installcheck;\
 $PG_HOME/bin/pg_ctl --pgdata=/tmp/$PGPORT stop;\
 rm -r /tmp/$PGPORT'
 
-env PG_HOME=/usr/local/postgres12beta1 \
-    PATH=/usr/local/postgres12beta1/bin:$PATH \
+env PG_HOME=/Users/denty/junk/postgresql-12beta1 \
+    PATH=/Users/denty/junk/postgresql-12beta1/bin:$PATH \
     USE_PGXS=yes \
     bash -c "$PROGRAM"
 
