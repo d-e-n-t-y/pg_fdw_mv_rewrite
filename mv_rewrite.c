@@ -322,10 +322,8 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 
 /*
  * mv_rewrite_create_upper_paths_hook
- *        Add paths for post-join operations like aggregation, grouping etc. if
- *        corresponding operations are safe to push down.
+ *        Add paths for post-join operations like aggregation, grouping etc.
  *
- * Right now, we only support aggregate, grouping and having clause pushdown.
  */
 void
 mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
@@ -345,13 +343,17 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 #endif
 						 );
 
-	// Ignore stages we don't support; and skip any duplicate calls.
-	if (!(stage == UPPERREL_GROUP_AGG ||
-		  stage == UPPERREL_DISTINCT))
+	// Ignore stages we don't support.
+	switch (stage)
 	{
-		elog_if (g_trace_match_progress, INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
-		
-		return;
+		case UPPERREL_GROUP_AGG:
+		case UPPERREL_DISTINCT:
+		case UPPERREL_ORDERED:
+			break;
+			
+		default:
+			elog_if (g_trace_match_progress, INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
+			return;
 	}
 	
 	// Evaluate the query being planned for any unsupported features.
@@ -362,6 +364,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 		return;
 	}
 	
+	// FIXME: this is wrong to compare using input_rel...
 	if (input_rel->cheapest_total_path != NULL)
 		if (g_rewrite_minimum_cost > 0.0)
 			if (input_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
@@ -377,9 +380,9 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: upper_rel: %s", __func__, nodeToString (upper_rel));
 
 	// If we can rewrite, add those alternate paths...
-	PathTarget *grouping_target = root->upper_targets[UPPERREL_GROUP_AGG];
+	PathTarget *upper_target = root->upper_targets[stage];
 
-	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, grouping_target);
+	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, upper_target);
 }
 
 static void
@@ -932,6 +935,85 @@ mv_rewrite_get_query_tlist_colnames (Query *mv_query)
 }
 
 static bool
+mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
+									   UpperRelationKind stage,
+									   Query *parsed_mv_query,
+									   RelOptInfo *ordered_rel,
+									   List *selected_tlist,
+									   struct mv_rewrite_xform_todo_list *todo_list)
+{
+	// If we have an MV including ORDER BY clauses, check we are rewriting for a
+	// ordered_rel...
+	if (list_length (parsed_mv_query->sortClause) == 0 &&
+		(stage >= UPPERREL_ORDERED && list_length (root->sort_pathkeys) > 0))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite ORDER BY, but MV has no ORDER BY.", __func__);
+		
+		return false;
+	}
+	
+	// If both MV and quey are not ORDER BY, then we are done here...
+	if (ordered_rel == NULL)
+		return true;
+	
+	// We can tolerate a more-ordered MV.
+	if (stage >= UPPERREL_ORDERED &&
+		list_length (root->sort_pathkeys) > list_length (parsed_mv_query->sortClause))
+	{
+		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite ORDER BY, but MV has fewer sort keys.", __func__);
+		
+		return false;
+	}
+	
+	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
+		root, parsed_mv_query->rtable
+	};
+	
+	// Check each ORDER BY clause (Expr) in turn...
+	ListCell *query_lc, *mv_lc;
+	forboth (query_lc, root->sort_pathkeys, mv_lc, parsed_mv_query->sortClause)
+	{
+		PathKey *query_sgc = lfirst (query_lc);
+		EquivalenceMember *query_sgc_ecm = list_nth_node (EquivalenceMember, query_sgc->pk_eclass->ec_members, 0);
+		Expr *query_expr = query_sgc_ecm->em_expr;
+		
+		SortGroupClause *mv_sgc = lfirst (mv_lc);
+		Expr *mv_expr = get_sortgroupref_tle (mv_sgc->tleSortGroupRef, parsed_mv_query->targetList)->expr;
+		
+		elog_if (g_trace_order_clause_source_check, INFO, "%s: comparing query expression: %s", __func__, nodeToString (query_expr));
+		elog_if (g_trace_order_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
+		
+		// Check that the query Expr direclty matches its partner in the MV.
+		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
+		{
+			elog_if (g_log_match_progress, INFO, "%s: ORDER BY clause (%s) not found in query", __func__,
+					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
+			
+			return false;
+		}
+		
+		// Check the NULLs precedence, and sort direction.
+
+		/* Find the operator in pg_amop --- failure shouldn't happen */
+		Oid			opfamily, opcintype;
+		int16		mv_sgc_strategy;
+		if (!get_ordering_op_properties (mv_sgc->sortop, &opfamily, &opcintype, &mv_sgc_strategy))
+			elog(ERROR, "operator %u is not a valid ordering operator", mv_sgc->sortop);
+		
+		if (query_sgc->pk_nulls_first != mv_sgc->nulls_first ||
+			query_sgc->pk_strategy != mv_sgc_strategy)
+		{
+			elog_if (g_log_match_progress, INFO, "%s: ORDER BY clause (%s) NULLS precedence or strategy not does not match", __func__,
+					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
+			
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+static bool
 mv_rewrite_check_distinct_clauses_for_mv (PlannerInfo *root,
 									   UpperRelationKind stage,
 									   Query *parsed_mv_query,
@@ -1180,7 +1262,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	ListOf (Oid) *mv_oids_involved = NIL;
 	Relids query_relids_involved = NULL;
 	
-	Relids join_relids = join_rel->relids;
+	Relids join_relids = IS_UPPER_REL (join_rel) ? root->all_baserels : join_rel->relids;
 	
 	elog_if (g_trace_join_clause_check, INFO, "%s: join_relids: %s", __func__, bmsToString (join_relids));
 	
@@ -1759,9 +1841,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	mv_rewrite_get_mv_query (mv_name, &parsed_mv_query, &matviewOid);
 	
 	// TODO: strategy:
-	// Check GROUP BY clauses, but only if stage >= GB
 	// check ORDER BY but onyl if stage >= OB
-	// check DISTINCT byt only if stage >= D
 	// etc.
 	// Obviously always check WHERE/FROM/JOIN
 	
@@ -1776,7 +1856,14 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 		goto done;
     
     ListOf (Expr *) *additional_where_clauses = NIL;
+	
+	// 1c. We don't have to consider UPPERREL_WINDOW specially: either the aggregate
+	//     expressions match, or they don't.
     
+	// 1d. Check the ORDER BY clause: it must match exactly.
+	if (!mv_rewrite_check_order_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+		goto done;
+	
 	// 2. Check the FROM and JOIN-related WHERE clauses: they must match exactly; any non-
 	//    JOIN-related WHERE clauses are returned and validated in step 4.
     if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses))

@@ -1,31 +1,25 @@
 -- Anticipate rewrite
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
-                 QUERY PLAN                 
---------------------------------------------
- Sort
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Sort Key: test.key
-   ->  Custom Scan (MVRewriteScan)
-         Output: key, (count(value))
-         Rewritten: scan of public.test_mv1
-         ->  Seq Scan on public.test_mv1
-               Output: key, count
-(8 rows)
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
 
 -- Anticipate rewrite
 set mv_rewrite.rewrite_minimum_cost = '1.0';
 explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;
-                 QUERY PLAN                 
---------------------------------------------
- Sort
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
    Output: key, (count(value))
-   Sort Key: test.key
-   ->  Custom Scan (MVRewriteScan)
-         Output: key, (count(value))
-         Rewritten: scan of public.test_mv1
-         ->  Seq Scan on public.test_mv1
-               Output: key, count
-(8 rows)
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
 
 -- Anticipate no rewrite
 set mv_rewrite.rewrite_minimum_cost = '1000000000';
@@ -36,4 +30,5 @@ LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
 set mv_rewrite.log_match_progress = 'true';
 -- We don't actually care about the plan itself, only the log output.
 DO LANGUAGE plpgsql $$ BEGIN EXECUTE 'explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;'; END; $$;
+INFO:  mv_rewrite_create_upper_paths_hook: already have path with acceptable cost.
 INFO:  mv_rewrite_create_upper_paths_hook: already have path with acceptable cost.

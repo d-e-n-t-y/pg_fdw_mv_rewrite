@@ -12,6 +12,8 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
 select key, COUNT (key) from test group by key;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
@@ -23,6 +25,8 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
  key  |  count  
 ------+---------
  key1 |      10
