@@ -1,0 +1,154 @@
+-- Anticipate rewrite
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key;
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
+   Output: key, (count(value))
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
+
+-- Anticipate rewrite
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by 1;
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
+   Output: key, (count(value))
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
+
+-- Anticipate rewrite
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key asc;
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
+   Output: key, (count(value))
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
+
+-- Anticipate rewrite, but not using _mv5
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key desc;
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key DESC
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+         ->  Seq Scan on public.test_mv1
+               Output: key, count
+(8 rows)
+
+-- Anticipate rewrite
+set mv_rewrite.log_match_progress = true;
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key asc nulls last;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
+   Output: key, (count(value))
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
+
+-- Anticipate rewrite
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key asc nulls last;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
+              QUERY PLAN              
+--------------------------------------
+ Custom Scan (MVRewriteScan)
+   Output: key, (count(value))
+   Rewritten: scan of public.test_mv5
+   ->  Seq Scan on public.test_mv5
+         Output: key, count
+(5 rows)
+
+-- Anticipate rewrite, but not using _mv5
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by key, count (value);
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has fewer sort keys.
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: test.key, (count(test.value))
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+         ->  Seq Scan on public.test_mv1
+               Output: key, count
+(8 rows)
+
+-- Anticipate rewrite, but not using _mv5
+explain (verbose, costs off) select key, COUNT (value) from test group by key order by count (value), key;
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has fewer sort keys.
+                 QUERY PLAN                 
+--------------------------------------------
+ Sort
+   Output: key, (count(value))
+   Sort Key: (count(test.value)), test.key
+   ->  Custom Scan (MVRewriteScan)
+         Output: key, (count(value))
+         Rewritten: scan of public.test_mv1
+         ->  Seq Scan on public.test_mv1
+               Output: key, count
+(8 rows)
+
