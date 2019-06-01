@@ -364,15 +364,20 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 		return;
 	}
 	
-	// FIXME: this is wrong to compare using input_rel...
-	if (input_rel->cheapest_total_path != NULL)
-		if (g_rewrite_minimum_cost > 0.0)
-			if (input_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
+	if (g_rewrite_minimum_cost > 0.0)
+	{
+		// We need to first identify the cheapest cost paths from the set of possible paths.
+		// (The planner would normally call this a little later.)
+		set_cheapest (upper_rel);
+		
+		if (upper_rel->cheapest_total_path != NULL)
+			if (upper_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
 			{
 				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
 
 				return;
 			}
+	}
 	
 	elog_if (g_trace_match_progress, INFO, "%s: stage: %d", __func__, stage);
 	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
@@ -1780,7 +1785,13 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 	mvsqrte->inh = true;
 	mvsqrte->inFromCl = true;
 	mvsqrte->requiredPerms = ACL_SELECT;
-	mvsqrte->selectedCols = 0; // FIXME: TODO
+	mvsqrte->selectedCols = NULL;
+	ListCell *lc;
+	foreach (lc, mv_scan_query->targetList)
+	{
+		TargetEntry *te = lfirst (lc);
+		pull_varattnos ((Node *) te->expr, 1, &mvsqrte->selectedCols);
+	}
 	mvsqrte->relkind = RELKIND_MATVIEW;
 	mvsqrte->eref = makeNode (Alias);
 	mvsqrte->eref->aliasname = (char *) mv_name;
