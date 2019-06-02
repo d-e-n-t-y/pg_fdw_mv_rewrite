@@ -50,12 +50,25 @@ set mv_rewrite.log_match_progress = true;
 explain (verbose, costs off) select key, COUNT (value) from test group by key order by key asc nulls last;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv1}.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
@@ -75,12 +88,25 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: 
 explain (verbose, costs off) select key, COUNT (value) from test group by key order by key asc nulls last;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv1}.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
@@ -100,18 +126,33 @@ INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: 
 explain (verbose, costs off) select key, COUNT (value) from test group by key order by key, count (value);
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv1}.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has fewer sort keys.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv5}.
                  QUERY PLAN                 
 --------------------------------------------
  Sort
@@ -128,18 +169,34 @@ INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but M
 explain (verbose, costs off) select key, COUNT (value) from test group by key order by count (value), key;
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
+INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
+INFO:  mv_rewrite_check_order_clauses_for_mv: ORDER BY clause (key) not found in query
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv1
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv1}.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has no ORDER BY.
+INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(value)) not found in MV SELECT list
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
 INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
 INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
 INFO:  mv_rewrite_check_order_clauses_for_mv: looking to rewrite ORDER BY, but MV has fewer sort keys.
+INFO:  mv_rewrite_add_rewritten_mv_paths: creating and adding path for scan on: public.test_mv5
+INFO:  mv_rewrite_add_rewritten_mv_paths: no candidate MVs for query involving {public.test_mv5}.
                  QUERY PLAN                 
 --------------------------------------------
  Sort

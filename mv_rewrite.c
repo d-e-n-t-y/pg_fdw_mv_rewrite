@@ -42,6 +42,8 @@
 #include "optimizer/optimizer.h"
 #endif
 #include "optimizer/tlist.h"
+#include "parser/parse_clause.h"
+#include "parser/parse_oper.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -210,9 +212,7 @@ mv_rewrite_explain_scan (CustomScanState *node,
 		ExplainPropertyText("Original costs", strVal (sstate->competing_cost), es);
 	
 	// Explain the MV scan.
-	ExplainState *inner_es = palloc (sizeof (ExplainState));
-	*inner_es = *es;
-	ExplainPrintPlan (inner_es, sstate->qdesc);
+	ExplainPrintPlan (es, sstate->qdesc);
 }
 
 static Bitmapset *
@@ -939,13 +939,86 @@ mv_rewrite_get_query_tlist_colnames (Query *mv_query)
     return colnames;
 }
 
+static void
+mv_rewrite_extract_order_clauses (PlannerInfo *root,
+								  UpperRelationKind stage,
+								  RelOptInfo *ordered_rel,
+								  List *selected_tlist,
+								  List **additional_sort_clauses)
+{
+	ListCell *query_lc;
+	
+	if (stage < UPPERREL_ORDERED)
+		return;
+
+	elog_if (g_trace_order_clause_source_check, INFO, "ordered_rel: %s", nodeToString(ordered_rel));
+	elog_if (g_trace_order_clause_source_check, INFO, "selected_tlist: %s", nodeToString(selected_tlist));
+
+	foreach (query_lc, root->sort_pathkeys)
+	{
+		PathKey *query_pk = lfirst (query_lc);
+		
+		elog_if (g_trace_order_clause_source_check, INFO, "pathkey: %s", nodeToString(query_pk));
+		
+		EquivalenceClass *query_ec = query_pk->pk_eclass;
+		
+		TargetEntry *query_tle = NULL;
+		
+		ListCell *emc;
+		foreach (emc, query_ec->ec_members)
+		{
+			EquivalenceMember *em = lfirst_node (EquivalenceMember, emc);
+			Expr *em_expr = em->em_expr;
+			
+			query_tle = tlist_member (em_expr, selected_tlist);
+			
+			if (query_tle != NULL)
+				break;
+		}
+		
+		if (query_tle == NULL)
+			elog (ERROR, "could not find EM expression for sort pathkey");
+
+		elog_if (g_trace_order_clause_source_check, INFO, "expr: %s", nodeToString(query_tle));
+		
+		Oid restype = exprType ((Node *) query_tle->expr);
+		Oid sortop;
+		Oid eqop;
+		bool hashable;
+		
+		switch (query_pk->pk_strategy)
+		{
+			case BTLessStrategyNumber /* ASC */:
+				get_sort_group_operators (restype, true, true, false, &sortop, &eqop, NULL, &hashable);
+				break;
+			case BTGreaterStrategyNumber /* DESC */:
+				get_sort_group_operators (restype, false, true, true, NULL, &eqop, &sortop, &hashable);
+				break;
+			default:
+				elog (ERROR, "sort strategy not determined");
+				return;
+		}
+		
+		SortGroupClause *sortcl = makeNode (SortGroupClause);
+		
+		sortcl->tleSortGroupRef = assignSortGroupRef (query_tle, selected_tlist);
+		
+		sortcl->eqop = eqop;
+		sortcl->sortop = sortop;
+		sortcl->hashable = hashable;
+		sortcl->nulls_first = query_pk->pk_nulls_first;
+		
+		*additional_sort_clauses = lappend (*additional_sort_clauses, sortcl);
+	}
+
+	elog_if (g_trace_order_clause_source_check, INFO, "additional_sort_clauses: %s", nodeToString(*additional_sort_clauses));
+}
+
 static bool
 mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
 									   UpperRelationKind stage,
 									   Query *parsed_mv_query,
-									   RelOptInfo *ordered_rel,
-									   List *selected_tlist,
-									   struct mv_rewrite_xform_todo_list *todo_list)
+									   RelOptInfo *ordered_rel)
 {
 	// If we have an MV including ORDER BY clauses, check we are rewriting for a
 	// ordered_rel...
@@ -978,9 +1051,9 @@ mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
 	ListCell *query_lc, *mv_lc;
 	forboth (query_lc, root->sort_pathkeys, mv_lc, parsed_mv_query->sortClause)
 	{
-		PathKey *query_sgc = lfirst (query_lc);
-		EquivalenceMember *query_sgc_ecm = list_nth_node (EquivalenceMember, query_sgc->pk_eclass->ec_members, 0);
-		Expr *query_expr = query_sgc_ecm->em_expr;
+		PathKey *query_pk = lfirst (query_lc);
+		EquivalenceMember *query_pk_ecm = list_nth_node (EquivalenceMember, query_pk->pk_eclass->ec_members, 0);
+		Expr *query_expr = query_pk_ecm->em_expr;
 		
 		SortGroupClause *mv_sgc = lfirst (mv_lc);
 		Expr *mv_expr = get_sortgroupref_tle (mv_sgc->tleSortGroupRef, parsed_mv_query->targetList)->expr;
@@ -1005,8 +1078,8 @@ mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
 		if (!get_ordering_op_properties (mv_sgc->sortop, &opfamily, &opcintype, &mv_sgc_strategy))
 			elog(ERROR, "operator %u is not a valid ordering operator", mv_sgc->sortop);
 		
-		if (query_sgc->pk_nulls_first != mv_sgc->nulls_first ||
-			query_sgc->pk_strategy != mv_sgc_strategy)
+		if (query_pk->pk_nulls_first != mv_sgc->nulls_first ||
+			query_pk->pk_strategy != mv_sgc_strategy)
 		{
 			elog_if (g_log_match_progress, INFO, "%s: ORDER BY clause (%s) NULLS precedence or strategy not does not match", __func__,
 					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
@@ -1773,6 +1846,7 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 								const char *mv_name,
 								ListOf (Value *) *colnames,
 								ListOf (Expr *) *mv_scan_quals,
+								ListOf (SortGroupClause *) *mv_sgc_list,
 								ListOf (TargetEntry *) *transformed_tlist)
 {
 	Query *mv_scan_query = makeNode (Query);
@@ -1826,6 +1900,8 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 		mv_scan_query->jointree->quals = (Node *) quals_expr;
 	}
 	
+	mv_scan_query->sortClause = mv_sgc_list;
+	
 	return mv_scan_query;
 }
 
@@ -1865,15 +1941,21 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	// 1b. Check the DISTINCT clause: it must match exactly.
 	if (!mv_rewrite_check_distinct_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
 		goto done;
-    
+	
+	ListOf (Expr *) *additional_sort_clauses = NIL;
     ListOf (Expr *) *additional_where_clauses = NIL;
 	
 	// 1c. We don't have to consider UPPERREL_WINDOW specially: either the aggregate
 	//     expressions match, or they don't.
     
 	// 1d. Check the ORDER BY clause: it must match exactly.
-	if (!mv_rewrite_check_order_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
-		goto done;
+	if (!mv_rewrite_check_order_clauses_for_mv (root, stage, parsed_mv_query, upper_rel))
+	{
+		// 1e. But we have an alternative strategy for ORDER BY: if it is missing or incorrect,
+		//     we can wrap an ORDER BY around the MV scan query. This stratey gives the
+		//     planner benefit of any INDEXes that adorn the MV.
+		mv_rewrite_extract_order_clauses (root, stage, upper_rel, selected_tlist, &additional_sort_clauses);
+	}
 	
 	// 2. Check the FROM and JOIN-related WHERE clauses: they must match exactly; any non-
 	//    JOIN-related WHERE clauses are returned and validated in step 4.
@@ -1900,7 +1982,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
     // 7. Build the alternative query.
 	*alternative_query = mv_rewrite_build_mv_scan_query (matviewOid, mv_name,
 														 mv_rewrite_get_query_tlist_colnames (parsed_mv_query),
-														 quals, transformed_tlist);
+														 quals, additional_sort_clauses, transformed_tlist);
 	
     ok = true;
 	
@@ -2182,23 +2264,21 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
         elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s", __func__, mv_name);
 
         Query *alternative_query;
-        
-		if (!mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
-            continue;
-        
-        // 8. Finally, create and add the path.
-		elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
-				 mv_name,
-				 alternative_query->jointree->quals != NULL ? " WHERE " : "",
-				 alternative_query->jointree->quals != NULL ?
-					mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
-					: "");
 		
-		// Add generated path into the appropriate rel.
-		RelOptInfo *the_rel = upper_rel != NULL ? upper_rel : input_rel;
-		add_path (the_rel,
-				  mv_rewrite_create_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name));
-
-        return;
+		if (mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
+		{
+			// 8. Finally, create and add the path.
+			elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
+					 mv_name,
+					 alternative_query->jointree->quals != NULL ? " WHERE " : "",
+					 alternative_query->jointree->quals != NULL ?
+					 mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
+					 : "");
+			
+			// Add generated path into the appropriate rel.
+			RelOptInfo *the_rel = upper_rel != NULL ? upper_rel : input_rel;
+			add_path (the_rel,
+					  mv_rewrite_create_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name));
+		}
     }
 }
