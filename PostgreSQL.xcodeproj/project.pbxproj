@@ -101,7 +101,6 @@
 				BF5A268E1FD9531000E3AD72 /* equalwalker.c */,
 				BF8BEEEF1FD1E590003A7AC9 /* mv_rewrite.c */,
 				BF5F5C2420F3E2B200C82DBE /* release_rewrite_locks.c */,
-				BF5F5C2520F3E2B300C82DBE /* release_rewrite_locks.h */,
 				BF35BACB20949EFC00C29DCE /* extension.c */,
 				BF1F881720BAE52E00553FEB /* join_is_legal.c */,
 				BF5F5C1D20F1F37B00C82DBE /* build_joinrel_restrictlist.c */,
@@ -133,11 +132,12 @@
 		BF8BEF1F1FD1F23E003A7AC9 /* Headers */ = {
 			isa = PBXGroup;
 			children = (
+				BF5A26901FD95A0600E3AD72 /* equalwalker.h */,
+				BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */,
+				BF5F5C2520F3E2B300C82DBE /* release_rewrite_locks.h */,
+				BF35BACA20949EFC00C29DCE /* extension.h */,
 				BF1F881620BAE52E00553FEB /* join_is_legal.h */,
 				BF5F5C1C20F1F37B00C82DBE /* build_joinrel_restrictlist.h */,
-				BF35BACA20949EFC00C29DCE /* extension.h */,
-				BF8BEEF11FD1E590003A7AC9 /* mv_rewrite.h */,
-				BF5A26901FD95A0600E3AD72 /* equalwalker.h */,
 			);
 			name = Headers;
 			sourceTree = "<group>";
@@ -201,7 +201,7 @@
 				TargetAttributes = {
 					BF8BEF0D1FD1EF5D003A7AC9 = {
 						CreatedOnToolsVersion = 8.3;
-						ProvisioningStyle = Automatic;
+						ProvisioningStyle = Manual;
 					};
 				};
 			};
@@ -346,9 +346,11 @@
 				BUNDLE_LOADER = "$(PG_HOME)/bin/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
 				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
 				CURRENT_PROJECT_VERSION = 0.6.1;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_EXTENSION = so;
@@ -364,6 +366,7 @@
 				OTHER_LDFLAGS = "-lpq";
 				PG_HOME = "/Users/denty/junk/postgresql-12beta1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SYMROOT = "";
 				USER_HEADER_SEARCH_PATHS = "$(PG_HOME)/include $(PG_HOME)/include/server $(PG_HOME)/include/postgresql/server";
@@ -377,9 +380,11 @@
 				BUNDLE_LOADER = "$(PG_HOME)/bin/postgres";
 				CLANG_WARN_IMPLICIT_SIGN_CONVERSION = YES;
 				CODE_SIGN_IDENTITY = "";
+				CODE_SIGN_STYLE = Manual;
 				CONFIGURATION_BUILD_DIR = "$(BUILD_DIR)";
 				CONFIGURATION_TEMP_DIR = "$(BUILD_DIR)";
 				CURRENT_PROJECT_VERSION = 0.6.1;
+				DEVELOPMENT_TEAM = "";
 				DYLIB_COMPATIBILITY_VERSION = "";
 				DYLIB_CURRENT_VERSION = "";
 				EXECUTABLE_EXTENSION = so;
@@ -394,6 +399,7 @@
 				OTHER_LDFLAGS = "-lpq";
 				PG_HOME = "/Users/denty/junk/postgresql-12beta1";
 				PRODUCT_NAME = "$(TARGET_NAME).$(CURRENT_PROJECT_VERSION)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SYMROOT = "";
 				USER_HEADER_SEARCH_PATHS = "$(PG_HOME)/include $(PG_HOME)/include/server $(PG_HOME)/include/postgresql/server";

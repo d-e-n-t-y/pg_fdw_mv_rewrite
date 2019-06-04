@@ -211,8 +211,23 @@ mv_rewrite_explain_scan (CustomScanState *node,
 	if (es->costs)
 		ExplainPropertyText("Original costs", strVal (sstate->competing_cost), es);
 	
+	ExplainState *my_es = palloc (sizeof (ExplainState));
+	
+	// Copy the Explain setup in order that we don't disturb the outer state.
+	// (We do this because ExplainNode gets confused to
+	// see a fully formed query plan in a subquery. Nor really sure why...)
+	*my_es = *es;
+	
+	// Reset other state...
+	my_es->grouping_stack = NULL;
+	my_es->pstmt = NULL;
+	my_es->rtable = NULL;
+	my_es->rtable_names = NULL;
+	my_es->deparse_cxt = NULL;
+	my_es->printed_subplans = NULL;
+	
 	// Explain the MV scan.
-	ExplainPrintPlan (es, sstate->qdesc);
+	ExplainPrintPlan (my_es, sstate->qdesc);
 }
 
 static Bitmapset *
