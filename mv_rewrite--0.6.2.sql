@@ -64,7 +64,7 @@ AS $$
 		join pg_namespace rn on (mvr.relnamespace = rn.oid)
 	  where
 	    mvc.oid = (select objid from pg_catalog.pg_get_object_address ('materialized view', parse_ident($1), '{}'))
-		and mvr.relkind = 'r'::"char"
+		and mvr.relkind in ('r'::"char", 'v'::"char")
 	  group by
 	      mvn.nspname, mvc.relname
 	)
