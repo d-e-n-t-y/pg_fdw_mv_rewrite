@@ -1,5 +1,6 @@
 # mv_rewrite extension
 comment = 'MV rewrite extension'
-default_version = '0.6.1'
+default_version = '0.6.2'
 module_pathname = '$libdir/mv_rewrite'
-relocatable = true
+relocatable = false
+schema = mv_rewrite

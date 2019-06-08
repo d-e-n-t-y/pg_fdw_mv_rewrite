@@ -12,4 +12,4 @@ FROM test GROUP BY key;
 
 refresh materialized view test_expr_mv1;
 
-insert into pgx_rewritable_matviews values ('public', 'test_expr_mv1', array['public.test']);
+select mv_rewrite.enable_rewrite ('test_expr_mv1');

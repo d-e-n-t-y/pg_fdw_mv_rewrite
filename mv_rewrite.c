@@ -510,7 +510,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
 {
 	const char *find_mvs_query = "SELECT v.schemaname || '.' || v.matviewname"
 							" FROM "
-							"   public.pgx_rewritable_matviews j, pg_matviews v"
+							"   mv_rewrite.pgx_rewritable_matviews j, pg_matviews v"
 							" WHERE "
 							" j.matviewschemaname = v.schemaname"
 							" AND j.matviewname = v.matviewname"
@@ -2122,7 +2122,7 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 		
 		// Don't rewrite anything involving this because otherwise we'll recurse
 		// indefinitely.
-		if (strcmp (involved_rel_name, "public.pgx_rewritable_matviews") == 0)
+		if (strcmp (involved_rel_name, "mv_rewrite.pgx_rewritable_matviews") == 0)
 			return false;
 		
 		bool found = false;

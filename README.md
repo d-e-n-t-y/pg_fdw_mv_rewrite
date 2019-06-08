@@ -9,8 +9,7 @@ and with appropriate caution.*
 
 ## Setting up
 
-To get started, load the `mv_rewrite` extension and create a mapping table to allow the `mv_rewrite` extension to know 
-what TABLEs can be rewritten, and what MATERIALIZED VIEWs are available to rewrite against.
+To get started, load the `mv_rewrite` extension.
 
 First load the EXTENSION:
 
@@ -18,16 +17,6 @@ First load the EXTENSION:
 postgres=# create extension mv_rewrite;
 CREATE EXTENSION
 ```
-
-Then create the mapping table:
-
-```SQL
-postgres=# CREATE TABLE pgx_rewritable_matviews (matviewschemaname name, matviewname name, tables text[]);
-CREATE TABLE
-```
-
-Note: at present, it is necessary to create the mapping table even if there are no MATERIALIZED VIEWs to rewrite against. 
-(This is a limitation that should be removed at some point.)
 
 ## Enabling basic diagnostics
 
@@ -43,7 +32,7 @@ SET
 
 ## Basic use case
 
-Given a simple TALBE and data, for example:
+Given a simple TABLE and data, for example:
 
 ```SQL
 postgres=# create table test (key text, hidden text, value text);
@@ -75,8 +64,11 @@ postgres=# explain select key, COUNT (value) from test group by key;
 If `test` and its MATERIALIZED VIEW (`test_mv1`) are added for rewrite as follows:
 
 ```SQL
-postgres=# insert into pgx_rewritable_matviews values ('public', 'test_mv1', array['public.test']);
-INSERT 0 1
+postgres=# select mv_rewrite.enable_rewrite ('test_mv1');
+ enable_rewrite 
+----------------
+ 
+(1 row)
 ```
 
 Now aggregate queries targetting `test` will consider if they can be satisfied instead by `test_mv1`, 
@@ -98,10 +90,13 @@ Please heed the warning about this not being production ready!
 
 Query rewrite is only considered for:
 
-* queries involving simple GROUP BY aggregates;
-* queries that involve JOINs.
+* queries involving GROUP BY aggregates;
+* queries involving DISTINCT (but not DISTINCT ON);
+* queries that are ORDERed;
+* simple SELECTS and queries that involve JOINs;
+* queries with WHERE and/or HAVING clauses.
 
-Recursive queries, and queries with CTEs are not supported.
+RECURSIVE queries and CTEs generally are not supported, nor are LATERAL joins.
 
 ## Configurable parameters
 

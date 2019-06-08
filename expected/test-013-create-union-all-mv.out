@@ -18,5 +18,19 @@ FROM test GROUP BY key
 union all
 select key, count(value)::text FROM test GROUP BY key;
 refresh materialized view test_union_mv2;
-insert into pgx_rewritable_matviews values ('public', 'test_union_mv1', array['public.test','public.test']);
-insert into pgx_rewritable_matviews values ('public', 'test_union_mv2', array['public.test','public.test']);
+select mv_rewrite.enable_rewrite ('test_union_mv1');
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+ enable_rewrite 
+----------------
+ 
+(1 row)
+
+select mv_rewrite.enable_rewrite ('test_union_mv2');
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+ enable_rewrite 
+----------------
+ 
+(1 row)
+

@@ -2,4 +2,4 @@ create materialized view test_mv1 as select key, count(value) FROM test GROUP BY
 
 refresh materialized view test_mv1;
 
-insert into pgx_rewritable_matviews values ('public', 'test_mv1', array['public.test']);
+select mv_rewrite.enable_rewrite ('test_mv1');

@@ -1,3 +1,10 @@
 create materialized view test_mv5 as select key, count(value) FROM test GROUP BY key order by key;
 refresh materialized view test_mv5;
-insert into pgx_rewritable_matviews values ('public', 'test_mv5', array['public.test']);
+select mv_rewrite.enable_rewrite ('test_mv5');
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+ enable_rewrite 
+----------------
+ 
+(1 row)
+

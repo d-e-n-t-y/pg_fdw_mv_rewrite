@@ -1,6 +1,6 @@
 # mv_rewrite
 
-MODULE_big = mv_rewrite.0.6.1
+MODULE_big = mv_rewrite.0.6.2
 OBJS = mv_rewrite.o equalwalker.o extension.o join_is_legal.o build_joinrel_restrictlist.o release_rewrite_locks.o $(WIN32RES)
 PGFILEDESC = "mv_rewrite - MV rewrite extension for PostgreSQL"
 TESTS = $(wildcard sql/*.sql)
@@ -10,7 +10,8 @@ SHLIB_LINK = $(libpq)
 
 EXTENSION = mv_rewrite
 DATA = mv_rewrite--0.6.sql \
-    mv_rewrite--0.6--0.6.1.sql mv_rewrite--0.6.1.sql
+    mv_rewrite--0.6--0.6.1.sql mv_rewrite--0.6.1.sql \
+    mv_rewrite--0.6.2.sql
 
 REGRESS = $(patsubst sql/%.sql,%,$(TESTS))
 

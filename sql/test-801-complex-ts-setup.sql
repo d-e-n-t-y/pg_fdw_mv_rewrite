@@ -223,7 +223,7 @@ create materialized view test99 as
   WHERE events_all_room.hc1 = r.hc1 AND events_all_room.hc2 = r.hc2 AND events_all_room.category = 'TEMPERATURE'::text
   GROUP BY (ts_to_bucket(events_all_room."timestamp", 'minute'::text, 15)), events_all_room.category, events_all_room.subcategory, r.name;
 
-insert into pgx_rewritable_matviews values ('public', 'test99', '{public.event,public.room,public.event_sdr_device,public.event_sdr_device_signal,public.events_all,public.events_all_room}');
+select mv_rewrite.enable_rewrite ('test99');
 
 analyse event;
 analyse test99;

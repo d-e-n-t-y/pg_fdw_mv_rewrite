@@ -6,4 +6,4 @@ GROUP BY key, hidden;
 
 refresh materialized view test_mv2;
 
-insert into pgx_rewritable_matviews values ('public', 'test_mv2', array['public.test']);
+select mv_rewrite.enable_rewrite ('test_mv2');

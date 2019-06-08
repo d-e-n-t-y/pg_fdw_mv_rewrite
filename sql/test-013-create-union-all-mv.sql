@@ -22,5 +22,5 @@ select key, count(value)::text FROM test GROUP BY key;
 
 refresh materialized view test_union_mv2;
 
-insert into pgx_rewritable_matviews values ('public', 'test_union_mv1', array['public.test','public.test']);
-insert into pgx_rewritable_matviews values ('public', 'test_union_mv2', array['public.test','public.test']);
+select mv_rewrite.enable_rewrite ('test_union_mv1');
+select mv_rewrite.enable_rewrite ('test_union_mv2');

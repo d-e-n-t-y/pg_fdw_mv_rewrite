@@ -65,6 +65,7 @@
 		BF967C02206671A8001F9A45 /* libpgport.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libpgport.a; path = "../../../junk/postgresql-10.1/lib/libpgport.a"; sourceTree = "<group>"; };
 		BFAF94FD20750260006EA765 /* sql */ = {isa = PBXFileReference; lastKnownFileType = folder; path = sql; sourceTree = "<group>"; };
 		BFAF94FE20750AB1006EA765 /* expected */ = {isa = PBXFileReference; lastKnownFileType = folder; path = expected; sourceTree = "<group>"; };
+		BFCB313022A9A50D00354074 /* mv_rewrite--0.6.2.sql */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "mv_rewrite--0.6.2.sql"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,6 +150,7 @@
 				BF650D7E20CC16E7009B5649 /* mv_rewrite--0.6.sql */,
 				BF519BB920D6577A00CF8FA2 /* mv_rewrite--0.6--0.6.1.sql */,
 				BF519BBA20D6578400CF8FA2 /* mv_rewrite--0.6.1.sql */,
+				BFCB313022A9A50D00354074 /* mv_rewrite--0.6.2.sql */,
 			);
 			name = "Control files";
 			sourceTree = "<group>";

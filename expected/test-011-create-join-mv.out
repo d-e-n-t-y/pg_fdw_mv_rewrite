@@ -4,4 +4,11 @@ FROM test_name n, test_value v
 WHERE n.id1 = v.id1 and n.id2 = v.id2
 GROUP BY n.name, n.class, v.additional;
 refresh materialized view test_name_value_mv1;
-insert into pgx_rewritable_matviews values ('public', 'test_name_value_mv1', array['public.test_name', 'public.test_value']);
+select mv_rewrite.enable_rewrite ('test_name_value_mv1');
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
+ enable_rewrite 
+----------------
+ 
+(1 row)
+

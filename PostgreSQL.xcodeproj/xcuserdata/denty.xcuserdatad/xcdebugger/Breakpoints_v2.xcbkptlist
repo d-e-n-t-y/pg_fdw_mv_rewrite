@@ -223,12 +223,12 @@
                   symbolName = "elog_finish"
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
-                  urlString = "file:///Users/denty/junk/postgresql-11beta2/src/backend/utils/error/elog.c"
-                  timestampString = "556983990.545805"
+                  urlString = "file:///Users/denty/junk/postgresql-12beta1/src/backend/utils/error/elog.c"
+                  timestampString = "581454092.823356"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1350"
-                  endingLineNumber = "1350"
+                  startingLineNumber = "1337"
+                  endingLineNumber = "1337"
                   offsetFromSymbolStart = "128">
                </Location>
             </Locations>

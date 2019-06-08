@@ -10,4 +10,4 @@ create materialized view events_all_room_mv as
   WHERE
 	e.hc1 = r.hc1 AND e.hc2 = r.hc2;
 
-insert into pgx_rewritable_matviews values ('public', 'events_all_room_mv', '{public.event,public.room,public.event_sdr_device,public.event_sdr_device_signal,public.events_all,public.events_all_room}');
+select mv_rewrite.enable_rewrite ('events_all_room_mv');
