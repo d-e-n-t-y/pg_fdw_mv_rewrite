@@ -299,11 +299,7 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 {
 	// Delegate first to any other extensions if they are already hooked.
 	if (next_set_join_pathlist_hook)
-		(*next_set_join_pathlist_hook) (root, join_rel, outerrel, innerrel, jointype
-#if PG_VERSION_NUM >= 110000
-										 , extra
-#endif
-										 );
+		(*next_set_join_pathlist_hook) (root, join_rel, outerrel, innerrel, jointype, extra);
 
 	// Evaluate the query being planned for any unsupported features.
 	if (!mv_rewrite_eval_query_for_rewrite_support (root))
@@ -401,6 +397,20 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 
 	// If we can rewrite, add those alternate paths...
 	PathTarget *upper_target = root->upper_targets[stage];
+	
+#if PG_VERSION_NUM < 110000
+	// Prior to PG11, the upper_target for an UPPERREL_ORDERED and
+	// UPPERREL_DISTINCT was not stored.
+	if (upper_target == NULL)
+	{
+		if (stage == UPPERREL_ORDERED)
+			upper_target = root->upper_targets[UPPERREL_FINAL];
+		else if (stage == UPPERREL_DISTINCT)
+			upper_target = root->upper_targets[UPPERREL_WINDOW];
+		else
+			elog (ERROR, "UPPERREL path taget not found.");
+	}
+#endif
 
 	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, upper_target);
 }
