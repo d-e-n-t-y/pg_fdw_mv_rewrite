@@ -35,8 +35,8 @@ AS $$
 	       rw.oid rewrite_oid,
 	       mv_rewrite.first (dc.oid) ref_obj_oid
   	from
-	    (select oid, * from pg_catalog.pg_class where relkind in ('m'::"char", 'v'::"char")) m
-	    join (select oid, * from pg_catalog.pg_rewrite where ev_type = '1'::char) rw on (m.oid = rw.ev_class)
+		(select oid, relname, relnamespace from pg_catalog.pg_class where relkind in ('m'::"char", 'v'::"char")) m
+		join (select oid, ev_class from pg_catalog.pg_rewrite where ev_type = '1'::char) rw on (m.oid = rw.ev_class)
 	    join pg_catalog.pg_depend rd on (rw.oid = rd.objid)
 	    join pg_catalog.pg_class dc on (rd.refobjid = dc.oid)
   	where

@@ -398,7 +398,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// If we can rewrite, add those alternate paths...
 	PathTarget *upper_target = root->upper_targets[stage];
 	
-#if PG_VERSION_NUM < 110000
+#if PG_VERSION_NUM < 120000
 	// Prior to PG11, the upper_target for an UPPERREL_ORDERED and
 	// UPPERREL_DISTINCT was not stored.
 	if (upper_target == NULL)

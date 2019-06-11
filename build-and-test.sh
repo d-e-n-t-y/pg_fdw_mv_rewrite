@@ -26,20 +26,15 @@ env PG_HOME=/Users/denty/junk/postgresql-11.0 \
     USE_PGXS=yes \
     bash -c "$PROGRAM"
 
-env PG_HOME=/Users/denty/junk/postgresql-11beta4 \
-    PATH=/Users/denty/junk/postgresql-11beta4/bin:$PATH \
-    USE_PGXS=yes \
-    bash -c "$PROGRAM"
+#env PG_HOME=/Users/denty/junk/postgresql-11beta4 \
+#   PATH=/Users/denty/junk/postgresql-11beta4/bin:$PATH \
+#   USE_PGXS=yes \
+#   bash -c "$PROGRAM"
 
-env PG_HOME=/Users/denty/junk/postgresql-11beta3 \
-    PATH=/Users/denty/junk/postgresql-11beta3/bin:$PATH \
-    USE_PGXS=yes \
-    bash -c "$PROGRAM"
-
-#env PG_HOME=/Users/denty/junk/postgresql-11.0 \
-#    PATH=/Users/denty/junk/postgresql-11.0/bin:$PATH \
-#    USE_PGXS=yes \
-#    bash -c "$PROGRAM"
+#env PG_HOME=/Users/denty/junk/postgresql-11beta3 \
+#   PATH=/Users/denty/junk/postgresql-11beta3/bin:$PATH \
+#   USE_PGXS=yes \
+#   bash -c "$PROGRAM"
 
 env PG_HOME=/Users/denty/junk/postgresql-10.3 \
     PATH=/Users/denty/junk/postgresql-10.3/bin:$PATH \
