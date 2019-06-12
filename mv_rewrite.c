@@ -257,6 +257,29 @@ mv_rewrite_deparse_expression (ListOf (RangeTblEntry *) *rtable,
 							   true, false);
 }
 
+static bool
+mv_rewrite_check_ctes_inlined (PlannerInfo *root)
+{
+	ListCell *sr_lc;
+	foreach (sr_lc, root->glob->subroots)
+	{
+		PlannerInfo *subroot = (PlannerInfo *) lfirst (sr_lc);
+		
+		ListCell *q_lc;
+		foreach (q_lc, subroot->cte_plan_ids)
+		{
+			int plan_id = lfirst_int (q_lc);
+			
+			// A plan ID of -1 indicates that the CTE has been inlined, and is now
+			// a SUBQUERY in the main query.
+			if (plan_id != -1)
+				return false;
+		}
+	}
+	
+	return true;
+}
+
 /*
  * evaluate_query_for_rewrite_support
  *        Check that the query being planned does not involve any features
@@ -274,8 +297,7 @@ mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 	if (root->parse->hasDistinctOn)
 		return false;
 
-	if (root->cte_plan_ids != NULL &&
-		list_length (root->cte_plan_ids) > 0)
+	if (!mv_rewrite_check_ctes_inlined (root))
 		return false;
 
 	// Default is that we _do_ support rewrite.
@@ -415,34 +437,8 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, upper_target);
 }
 
-static void
-recurse_relation_relids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **out_relids)
-{
-	if (rte->rtekind == RTE_RELATION)
-	{
-		*out_relids = list_append_unique_oid (*out_relids, rte->relid);
-	}
-	else if (rte->rtekind == RTE_SUBQUERY)
-	{
-		if (rte->subquery != NULL)
-			if (rte->subquery->rtable != NULL)
-			{
-				ListCell *lc;
-				foreach (lc, rte->subquery->rtable)
-				{
-					RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
-					
-					recurse_relation_relids_from_rte (root, srte, out_relids);
-				}
-			}
-	}
-	else
-	{
-		elog_if (g_trace_match_progress, INFO, "%s: no handler to recurse into rtekind: %d", __func__, rte->rtekind);
-	}
-}
 
-static void
+static bool
 recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **out_relids)
 {
     if (rte->rtekind == RTE_RELATION)
@@ -459,34 +455,39 @@ recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **ou
                 {
                     RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
 					
-                    recurse_relation_relids_from_rte (root, srte, out_relids);
+					if (!recurse_relation_oids_from_rte (root, srte, out_relids))
+						return false;
                 }
             }
     }
 	else
-	{
-		elog_if (g_trace_match_progress, INFO, "%s: no handler to recurse into rtekind: %d", __func__, rte->rtekind);
-	}
+		return false;
+	
+	return true;
 }
 
-static void
+static bool
 recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, List **out_relids)
 {
 	for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
 	{
 		RangeTblEntry *rte = planner_rt_fetch(x, root);
-		recurse_relation_oids_from_rte (root, rte, out_relids);
+		if (!recurse_relation_oids_from_rte (root, rte, out_relids))
+			return false;
 	}
+	
+	return true;
 }
 
-static ListOf (char *) *
+static bool
 mv_rewrite_get_involved_rel_names (PlannerInfo *root,
-								   RelOptInfo *rel)
+								   RelOptInfo *rel,
+								   ListOf (char *) **involved_rel_names)
 {
 	List *rel_oids = NIL;
 
-	if (rel != NULL)
-		recurse_relation_oids (root, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids);
+	if (!recurse_relation_oids (root, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids))
+		return false;
 	
 	ListOf (char *) *tables_strlist = NIL;
 	ListCell *lc;
@@ -512,7 +513,10 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 
 		tables_strlist = lappend (tables_strlist, table_name->data);
 	}
-	return tables_strlist;
+
+	*involved_rel_names = tables_strlist;
+
+	return true;
 }
 
 static ListOf (Value (String)) *
@@ -2248,7 +2252,10 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 		return;
 	
     // Find the set of rels involved in the query being planned...
-	ListOf (char *) *involved_rel_names = mv_rewrite_get_involved_rel_names (root, input_rel);
+	ListOf (char *) *involved_rel_names = NIL;
+	
+	if (!mv_rewrite_get_involved_rel_names (root, input_rel, &involved_rel_names))
+		return;
 
 	// Check first that all of those rels are enabled for query rewrite...
 	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))

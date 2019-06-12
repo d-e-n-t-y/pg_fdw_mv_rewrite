@@ -5,8 +5,6 @@ where hidden = 'hidden2'
 GROUP BY key, hidden;
 refresh materialized view test_mv2;
 select mv_rewrite.enable_rewrite ('test_mv2');
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
  enable_rewrite 
 ----------------
  

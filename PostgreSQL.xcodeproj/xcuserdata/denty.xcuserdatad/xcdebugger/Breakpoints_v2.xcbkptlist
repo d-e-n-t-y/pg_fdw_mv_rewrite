@@ -211,7 +211,7 @@
          <BreakpointContent
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
-            condition = "(int) strcmp (fmt, &quot;invalid attnum %d for relation \&quot;%s\&quot;&quot;) == 0"
+            condition = "(int) strcmp (fmt, &quot;%s: no relations involved in query; no rewrite possible.&quot;) == 0"
             continueAfterRunningActions = "No"
             symbolName = "elog_finish"
             moduleName = "">
@@ -224,7 +224,7 @@
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
                   urlString = "file:///Users/denty/junk/postgresql-12beta1/src/backend/utils/error/elog.c"
-                  timestampString = "581454092.823356"
+                  timestampString = "582023346.087747"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "1337"
@@ -237,7 +237,7 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "Yes"
+            shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "join_is_legal.c"
@@ -248,6 +248,22 @@
             endingLineNumber = "11"
             landmarkName = "unknown"
             landmarkType = "0">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "582023346.077769"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "550"
+            endingLineNumber = "550"
+            landmarkName = "mv_rewrite_find_related_mvs_for_rel()"
+            landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>

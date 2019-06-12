@@ -10,8 +10,6 @@ create materialized view events_all_room_mv as
   WHERE
 	e.hc1 = r.hc1 AND e.hc2 = r.hc2;
 select mv_rewrite.enable_rewrite ('events_all_room_mv');
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
  enable_rewrite 
 ----------------
  

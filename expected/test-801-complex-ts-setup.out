@@ -210,8 +210,6 @@ create materialized view test99 as
   WHERE events_all_room.hc1 = r.hc1 AND events_all_room.hc2 = r.hc2 AND events_all_room.category = 'TEMPERATURE'::text
   GROUP BY (ts_to_bucket(events_all_room."timestamp", 'minute'::text, 15)), events_all_room.category, events_all_room.subcategory, r.name;
 select mv_rewrite.enable_rewrite ('test99');
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
-WARNING:  mv_rewrite_involved_rels_enabled_for_rewrite: no relations involved in query; no rewrite possible.
  enable_rewrite 
 ----------------
  
