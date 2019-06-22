@@ -66,6 +66,10 @@ PG_MODULE_MAGIC;
 
 #define ListOf(type) List /* type */
 
+typedef signed int RelationKind;
+#define REL_JOIN (-1)
+
+
 typedef struct {
 	CustomScanState sstate;
 	Value /* String */ *query;
@@ -306,7 +310,7 @@ mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
-								   UpperRelationKind stage,
+								   RelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *grouped_rel,
 								   PathTarget *grouping_target);
@@ -350,7 +354,7 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (join_rel));
 	
 	// If we can rewrite, add those alternate paths...
-	mv_rewrite_add_rewritten_mv_paths (root, 0, join_rel, NULL, join_rel->reltarget);
+	mv_rewrite_add_rewritten_mv_paths (root, REL_JOIN, join_rel, NULL, join_rel->reltarget);
 }
 
 /*
@@ -434,60 +438,173 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	}
 #endif
 
-	mv_rewrite_add_rewritten_mv_paths (root, stage, input_rel, upper_rel, upper_target);
+	mv_rewrite_add_rewritten_mv_paths (root, (RelationKind) stage, input_rel, upper_rel, upper_target);
 }
 
-
-static bool
-recurse_relation_oids_from_rte (PlannerInfo *root, RangeTblEntry *rte, List **out_relids)
+/*
+ * Construct the all_baserels Relids set.
+ *
+ * This is sometimes needed when root->all_baserels is either not yet set, or will never
+ * become set.
+ */
+static Relids
+mv_rewrite_find_all_baserels (PlannerInfo *root)
 {
-    if (rte->rtekind == RTE_RELATION)
-    {
-		*out_relids = list_append_unique_oid (*out_relids, rte->relid);
-    }
-    else if (rte->rtekind == RTE_SUBQUERY)
-    {
-        if (rte->subquery != NULL)
-            if (rte->subquery->rtable != NULL)
-            {
-                ListCell *lc;
-                foreach (lc, rte->subquery->rtable)
-                {
-                    RangeTblEntry *srte = (RangeTblEntry *) lfirst (lc);
-					
-					if (!recurse_relation_oids_from_rte (root, srte, out_relids))
-						return false;
-                }
-            }
-    }
-	else
-		return false;
-	
-	return true;
-}
-
-static bool
-recurse_relation_oids (PlannerInfo *root, Bitmapset *initial_relids, List **out_relids)
-{
-	for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
+	/*
+	 * Construct the all_baserels Relids set.
+	 */
+	Relids all_baserels = NULL;
+	for (Index rti = 1; rti < root->simple_rel_array_size; rti++)
 	{
-		RangeTblEntry *rte = planner_rt_fetch(x, root);
-		if (!recurse_relation_oids_from_rte (root, rte, out_relids))
-			return false;
+		RelOptInfo *brel = root->simple_rel_array[rti];
+		
+		/* there may be empty slots corresponding to non-baserel RTEs */
+		if (brel == NULL)
+			continue;
+		
+		Assert(brel->relid == rti); /* sanity check on array */
+		
+		/* ignore RTEs that are "other rels" */
+		if (brel->reloptkind != RELOPT_BASEREL)
+			continue;
+		
+		all_baserels = bms_add_member(all_baserels, (int) brel->relid);
+	}
+
+	return all_baserels;
+}
+
+CommonTableExpr *
+mv_rewrite_get_cte_for_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo **cteroot, Index *ndx)
+{
+	Index levelsup = rte->ctelevelsup;
+	*cteroot = root;
+	while (levelsup-- > 0)
+	{
+		*cteroot = (*cteroot)->parent_root;
+		if (!*cteroot)			/* shouldn't happen */
+			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
 	}
 	
-	return true;
+	/*
+	 * Note: cte_plan_ids can be shorter than cteList, if we are still working
+	 * on planning the CTEs (ie, this is a side-reference from another CTE).
+	 * So we mustn't use forboth here.
+	 */
+	ListCell *lc;
+	CommonTableExpr *cte = NULL;
+	*ndx = 0;
+	foreach(lc, (*cteroot)->parse->cteList)
+	{
+		cte = (CommonTableExpr *) lfirst(lc);
+		
+		if (strcmp(cte->ctename, rte->ctename) == 0)
+			break;
+
+		(*ndx)++;
+	}
+	
+	if (lc == NULL)				/* shouldn't happen */
+		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
+	if (*ndx >= list_length((*cteroot)->cte_plan_ids))
+		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
+
+	return cte;
+}
+
+static bool
+mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, Bitmapset *initial_relids, List **out_relids, ListOf (RangeTblEntry *) **seen_rtes);
+
+static bool
+mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
+									 RelationKind stage,
+									 RelOptInfo *ri,
+									 List **out_relids, ListOf (RelOptInfo *) **seen_ris)
+{
+	if (list_member_ptr (*seen_ris, ri))
+		return true;
+	
+	*seen_ris = list_append_unique_ptr (*seen_ris, ri);
+	
+    if (ri->rtekind == RTE_RELATION)
+    {
+		*out_relids = list_append_unique_oid (*out_relids, planner_rt_fetch ((int) ri->relid, root)->relid);
+		return true;
+    }
+	else if (stage >= UPPERREL_SETOP)
+	{
+		if (ri->rtekind == RTE_SUBQUERY)
+    	{
+			PlannerInfo *subroot = ri->subroot;
+			
+			if (subroot == NULL)
+			{
+				elog_if (g_trace_involved_rels_search, WARNING, "%s: subquery rel with no subroot: %s", __func__, nodeToString (ri));
+				return false;
+			}
+
+			// New strategy idea...
+			// Crawling over the PlannerInfo and RelOpt fields finds that they haven't finished
+			// being constructed yet.
+			// So how about crawling instead over the parsed Query structures (basically RTEs).
+			if (!mv_rewrite_find_oids_for_relids_recurse (subroot, stage, subroot->all_baserels, out_relids, seen_ris))
+				return false;
+
+			return true;
+		}
+		else if (ri->rtekind == RTE_CTE)
+		{
+			Index ctendx;
+			PlannerInfo *cteroot;
+
+			(void) mv_rewrite_get_cte_for_rte (root, planner_rt_fetch ((int) ri->relid, root), &cteroot, &ctendx);
+
+			PlannerInfo *cte_subroot = list_nth (cteroot->glob->subroots, (int) ctendx);
+
+			if (!mv_rewrite_find_oids_for_relids_recurse (cte_subroot, stage,
+										cte_subroot->all_baserels != NULL ? cte_subroot->all_baserels : mv_rewrite_find_all_baserels (cte_subroot),
+										out_relids, seen_ris))
+				return false;
+			
+			return true;
+		}
+	}
+	
+	elog_if (g_trace_involved_rels_search, INFO, "%s: unsupported rtekind (%d) or stage (%d): %s", __func__, ri->rtekind, stage, nodeToString (ri));
+	return false;
+}
+
+static bool
+mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, Bitmapset *initial_relids, List **out_relids, ListOf (RangeTblEntry *) **seen_rtes)
+{
+	bool rc = false;
+	
+	for (int x = bms_next_member (initial_relids, -1); x >= 0; x = bms_next_member (initial_relids, x))
+	{
+		RelOptInfo *ri = find_base_rel (root, x);
+		
+		if (!mv_rewrite_find_oids_for_ri_recurse (root, stage, ri, out_relids, seen_rtes))
+			break;
+		
+		rc = true;
+	}
+	
+	return rc;
 }
 
 static bool
 mv_rewrite_get_involved_rel_names (PlannerInfo *root,
+								   RelationKind stage,
 								   RelOptInfo *rel,
 								   ListOf (char *) **involved_rel_names)
 {
 	List *rel_oids = NIL;
 
-	if (!recurse_relation_oids (root, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids))
+	ListOf (RangeTblEntry *) *seen_rtes = NIL;
+	if (!mv_rewrite_find_oids_for_relids_recurse (root, stage, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids, &seen_rtes))
 		return false;
+	
+	elog_if (g_trace_involved_rels_search, INFO, "%s: involved OIDs: %s", __func__, nodeToString (rel_oids));
 	
 	ListOf (char *) *tables_strlist = NIL;
 	ListCell *lc;
@@ -970,7 +1087,7 @@ mv_rewrite_get_query_tlist_colnames (Query *mv_query)
 
 static void
 mv_rewrite_extract_order_clauses (PlannerInfo *root,
-								  UpperRelationKind stage,
+								  RelationKind stage,
 								  RelOptInfo *ordered_rel,
 								  List *selected_tlist,
 								  List **additional_sort_clauses)
@@ -1045,7 +1162,7 @@ mv_rewrite_extract_order_clauses (PlannerInfo *root,
 
 static bool
 mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
-									   UpperRelationKind stage,
+									   RelationKind stage,
 									   Query *parsed_mv_query,
 									   RelOptInfo *ordered_rel)
 {
@@ -1122,7 +1239,7 @@ mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
 
 static bool
 mv_rewrite_check_distinct_clauses_for_mv (PlannerInfo *root,
-									   UpperRelationKind stage,
+									   RelationKind stage,
 									   Query *parsed_mv_query,
 									   RelOptInfo *distinct_rel,
 									   List *selected_tlist,
@@ -1193,7 +1310,7 @@ mv_rewrite_check_distinct_clauses_for_mv (PlannerInfo *root,
 
 static bool
 mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
-								 UpperRelationKind stage,
+								 RelationKind stage,
                                  Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
                                  List *selected_tlist,
@@ -1936,7 +2053,7 @@ mv_rewrite_build_mv_scan_query (Oid matviewOid,
 
 static bool
 mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
-									UpperRelationKind stage,
+									RelationKind stage,
 									RelOptInfo *input_rel,
 									RelOptInfo *upper_rel,
 									List *selected_tlist,
@@ -2243,7 +2360,7 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 
 static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
-								   UpperRelationKind stage,
+								   RelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *upper_rel,
 								   PathTarget *pathtarget)
@@ -2254,7 +2371,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     // Find the set of rels involved in the query being planned...
 	ListOf (char *) *involved_rel_names = NIL;
 	
-	if (!mv_rewrite_get_involved_rel_names (root, input_rel, &involved_rel_names))
+	if (!mv_rewrite_get_involved_rel_names (root, stage, input_rel, &involved_rel_names))
 		return;
 
 	// Check first that all of those rels are enabled for query rewrite...
@@ -2262,6 +2379,8 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	{
 		elog_if (g_log_match_progress, INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
 
+		(void) mv_rewrite_get_involved_rel_names (root, stage, input_rel, &involved_rel_names);
+		
 		return;
 	}
 

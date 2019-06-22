@@ -224,7 +224,7 @@
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
                   urlString = "file:///Users/denty/junk/postgresql-12beta1/src/backend/utils/error/elog.c"
-                  timestampString = "582023346.087747"
+                  timestampString = "582887868.552309"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "1337"
@@ -257,12 +257,92 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "582023346.077769"
+            timestampString = "582887868.53329"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "550"
-            endingLineNumber = "550"
-            landmarkName = "mv_rewrite_find_related_mvs_for_rel()"
+            startingLineNumber = "598"
+            endingLineNumber = "598"
+            landmarkName = "mv_rewrite_get_involved_rel_names()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "582887868.534236"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "486"
+            endingLineNumber = "486"
+            landmarkName = "mv_rewrite_get_cte_for_rte()"
+            landmarkType = "9">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_get_cte_for_rte"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "582887868.658694"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "486"
+                  endingLineNumber = "486"
+                  offsetFromSymbolStart = "97">
+               </Location>
+               <Location
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_get_cte_for_rte"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "582887868.661247"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "486"
+                  endingLineNumber = "486"
+                  offsetFromSymbolStart = "102">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "582887868.534711"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "565"
+            endingLineNumber = "565"
+            landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "582887868.535094"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2374"
+            endingLineNumber = "2374"
+            landmarkName = "mv_rewrite_add_rewritten_mv_paths()"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>

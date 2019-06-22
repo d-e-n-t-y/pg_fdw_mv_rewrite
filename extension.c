@@ -31,6 +31,7 @@ set_join_pathlist_hook_type next_set_join_pathlist_hook = NULL;
 bool g_rewrite_enabled;
 bool g_log_match_progress;
 bool g_trace_match_progress;
+bool g_trace_involved_rels_search;
 bool g_trace_parse_select_query;
 bool g_trace_order_clause_source_check;
 bool g_trace_distinct_clause_source_check;
@@ -78,6 +79,14 @@ _PG_init (void)
 							 PGC_SUSET, 0,
 							 NULL, NULL, NULL);
 
+	DefineCustomBoolVariable("mv_rewrite.trace_involved_rels_search",
+							 gettext_noop("Trace progress the search for relations involved in the query being exectued."),
+							 NULL,
+							 &g_trace_involved_rels_search,
+							 false,
+							 PGC_SUSET, 0,
+							 NULL, NULL, NULL);
+	
 	DefineCustomBoolVariable("mv_rewrite.trace_parse_select_query",
 							 gettext_noop("Trace the parsing of the subquery that scans the materialized view."),
 							 NULL,
