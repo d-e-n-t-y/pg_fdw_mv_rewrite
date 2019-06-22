@@ -482,8 +482,13 @@ mv_rewrite_get_cte_for_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo *
 	while (levelsup-- > 0)
 	{
 		*cteroot = (*cteroot)->parent_root;
+		// We must be cautious: we are crawling widely over planner data
+		// structures, but the plan may not yet be complete.
 		if (!*cteroot)			/* shouldn't happen */
-			elog(ERROR, "bad levelsup for CTE \"%s\"", rte->ctename);
+		{
+			elog_if (g_trace_involved_rels_search, WARNING, "bad levelsup for CTE \"%s\"", rte->ctename);
+			return NULL;
+		}
 	}
 	
 	/*
@@ -504,10 +509,20 @@ mv_rewrite_get_cte_for_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo *
 		(*ndx)++;
 	}
 	
+	// We must be cautious: we are crawling widely over planner data
+	// structures, but the plan may not yet be complete.
 	if (lc == NULL)				/* shouldn't happen */
-		elog(ERROR, "could not find CTE \"%s\"", rte->ctename);
+	{
+		elog_if (g_trace_involved_rels_search, WARNING, "could not find CTE \"%s\"", rte->ctename);
+		return NULL;
+	}
+	// We must be cautious: we are crawling widely over planner data
+	// structures, but the plan may not yet be complete.
 	if (*ndx >= list_length((*cteroot)->cte_plan_ids))
-		elog(ERROR, "could not find plan for CTE \"%s\"", rte->ctename);
+	{
+		elog_if (g_trace_involved_rels_search, WARNING, "could not find plan for CTE \"%s\"", rte->ctename);
+		return NULL;
+	}
 
 	return cte;
 }
@@ -531,43 +546,45 @@ mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
 		*out_relids = list_append_unique_oid (*out_relids, planner_rt_fetch ((int) ri->relid, root)->relid);
 		return true;
     }
-	else if (stage >= UPPERREL_SETOP)
+	else if (ri->rtekind == RTE_SUBQUERY)
 	{
-		if (ri->rtekind == RTE_SUBQUERY)
-    	{
-			PlannerInfo *subroot = ri->subroot;
-			
-			if (subroot == NULL)
-			{
-				elog_if (g_trace_involved_rels_search, WARNING, "%s: subquery rel with no subroot: %s", __func__, nodeToString (ri));
-				return false;
-			}
-
-			// New strategy idea...
-			// Crawling over the PlannerInfo and RelOpt fields finds that they haven't finished
-			// being constructed yet.
-			// So how about crawling instead over the parsed Query structures (basically RTEs).
-			if (!mv_rewrite_find_oids_for_relids_recurse (subroot, stage, subroot->all_baserels, out_relids, seen_ris))
-				return false;
-
-			return true;
-		}
-		else if (ri->rtekind == RTE_CTE)
+		PlannerInfo *subroot = ri->subroot;
+		
+		// We must be cautious: we are crawling widely over planner data
+		// structures, but the plan may not yet be complete.
+		if (subroot == NULL)
 		{
-			Index ctendx;
-			PlannerInfo *cteroot;
-
-			(void) mv_rewrite_get_cte_for_rte (root, planner_rt_fetch ((int) ri->relid, root), &cteroot, &ctendx);
-
-			PlannerInfo *cte_subroot = list_nth (cteroot->glob->subroots, (int) ctendx);
-
-			if (!mv_rewrite_find_oids_for_relids_recurse (cte_subroot, stage,
-										cte_subroot->all_baserels != NULL ? cte_subroot->all_baserels : mv_rewrite_find_all_baserels (cte_subroot),
-										out_relids, seen_ris))
-				return false;
-			
-			return true;
+			elog_if (g_trace_involved_rels_search, WARNING, "%s: subquery rel with no subroot: %s", __func__, nodeToString (ri));
+			return false;
 		}
+		
+		if (!mv_rewrite_find_oids_for_relids_recurse (subroot, stage,
+													  subroot->all_baserels != NULL ? subroot->all_baserels : mv_rewrite_find_all_baserels (subroot),
+													  out_relids, seen_ris))
+			return false;
+		
+		return true;
+	}
+	else if (ri->rtekind == RTE_CTE)
+	{
+		Index ctendx;
+		PlannerInfo *cteroot;
+
+		CommonTableExpr *cte = mv_rewrite_get_cte_for_rte (root, planner_rt_fetch ((int) ri->relid, root), &cteroot, &ctendx);
+		
+		// We must be cautious: we are crawling widely over planner data
+		// structures, but the plan may not yet be complete.
+		if (cte == NULL)
+			return false;
+
+		PlannerInfo *cte_subroot = list_nth (cteroot->glob->subroots, (int) ctendx);
+
+		if (!mv_rewrite_find_oids_for_relids_recurse (cte_subroot, stage,
+									cte_subroot->all_baserels != NULL ? cte_subroot->all_baserels : mv_rewrite_find_all_baserels (cte_subroot),
+									out_relids, seen_ris))
+			return false;
+		
+		return true;
 	}
 	
 	elog_if (g_trace_involved_rels_search, INFO, "%s: unsupported rtekind (%d) or stage (%d): %s", __func__, ri->rtekind, stage, nodeToString (ri));
@@ -584,7 +601,7 @@ mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, 
 		RelOptInfo *ri = find_base_rel (root, x);
 		
 		if (!mv_rewrite_find_oids_for_ri_recurse (root, stage, ri, out_relids, seen_rtes))
-			break;
+			return false;
 		
 		rc = true;
 	}
@@ -2379,8 +2396,6 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	{
 		elog_if (g_log_match_progress, INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
 
-		(void) mv_rewrite_get_involved_rel_names (root, stage, input_rel, &involved_rel_names);
-		
 		return;
 	}
 
