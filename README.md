@@ -1,6 +1,8 @@
-# pg_fdw_mv_rewrite: a short introduction
+# mv_rewrite: a short introduction
 
-This is a query rewriting extension for PostgreSQL.
+This is a query rewriting extension for PostgreSQL that transparently rewrites queries to access
+MATERIALIZED VIEWs, where use of that MATERIALIZED VIEW would result in a lower cost
+plan.
 
 ## DISCLAIMER
 
@@ -96,7 +98,7 @@ Query rewrite is only considered for:
 * simple SELECTS and queries that involve JOINs;
 * queries with WHERE and/or HAVING clauses.
 
-RECURSIVE queries and CTEs generally are not supported, nor are LATERAL joins.
+RECURSIVE queries are not supported, nor are LATERAL joins.
 
 ## Configurable parameters
 
