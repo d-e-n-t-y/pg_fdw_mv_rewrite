@@ -528,11 +528,10 @@ mv_rewrite_get_cte_for_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo *
 }
 
 static bool
-mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, Bitmapset *initial_relids, List **out_relids, ListOf (RangeTblEntry *) **seen_rtes);
+mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, Bitmapset *initial_relids, List **out_relids, ListOf (RelOptInfo *) **seen_ris);
 
 static bool
 mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
-									 RelationKind stage,
 									 RelOptInfo *ri,
 									 List **out_relids, ListOf (RelOptInfo *) **seen_ris)
 {
@@ -558,7 +557,7 @@ mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
 			return false;
 		}
 		
-		if (!mv_rewrite_find_oids_for_relids_recurse (subroot, stage,
+		if (!mv_rewrite_find_oids_for_relids_recurse (subroot,
 													  subroot->all_baserels != NULL ? subroot->all_baserels : mv_rewrite_find_all_baserels (subroot),
 													  out_relids, seen_ris))
 			return false;
@@ -579,7 +578,7 @@ mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
 
 		PlannerInfo *cte_subroot = list_nth (cteroot->glob->subroots, (int) ctendx);
 
-		if (!mv_rewrite_find_oids_for_relids_recurse (cte_subroot, stage,
+		if (!mv_rewrite_find_oids_for_relids_recurse (cte_subroot,
 									cte_subroot->all_baserels != NULL ? cte_subroot->all_baserels : mv_rewrite_find_all_baserels (cte_subroot),
 									out_relids, seen_ris))
 			return false;
@@ -587,12 +586,12 @@ mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
 		return true;
 	}
 	
-	elog_if (g_trace_involved_rels_search, INFO, "%s: unsupported rtekind (%d) or stage (%d): %s", __func__, ri->rtekind, stage, nodeToString (ri));
+	elog_if (g_trace_involved_rels_search, INFO, "%s: unsupported rtekind (%d): %s", __func__, ri->rtekind, nodeToString (ri));
 	return false;
 }
 
 static bool
-mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, Bitmapset *initial_relids, List **out_relids, ListOf (RangeTblEntry *) **seen_rtes)
+mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, Bitmapset *initial_relids, List **out_relids, ListOf (RelOptInfo *) **seen_ris)
 {
 	bool rc = false;
 	
@@ -600,7 +599,7 @@ mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, RelationKind stage, 
 	{
 		RelOptInfo *ri = find_base_rel (root, x);
 		
-		if (!mv_rewrite_find_oids_for_ri_recurse (root, stage, ri, out_relids, seen_rtes))
+		if (!mv_rewrite_find_oids_for_ri_recurse (root, ri, out_relids, seen_ris))
 			return false;
 		
 		rc = true;
@@ -617,8 +616,8 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 {
 	List *rel_oids = NIL;
 
-	ListOf (RangeTblEntry *) *seen_rtes = NIL;
-	if (!mv_rewrite_find_oids_for_relids_recurse (root, stage, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids, &seen_rtes))
+	ListOf (RelOptInfo *) *seen_ris = NIL;
+	if (!mv_rewrite_find_oids_for_relids_recurse (root, IS_UPPER_REL (rel) ? root->all_baserels : rel->relids, &rel_oids, &seen_ris))
 		return false;
 	
 	elog_if (g_trace_involved_rels_search, INFO, "%s: involved OIDs: %s", __func__, nodeToString (rel_oids));
@@ -658,7 +657,7 @@ mv_rewrite_find_related_mvs_for_rel (ListOf (char *) *involved_rel_names)
 {
 	const char *find_mvs_query = "SELECT v.schemaname || '.' || v.matviewname"
 							" FROM "
-							"   mv_rewrite.pgx_rewritable_matviews j, pg_matviews v"
+							"   mv_rewrite.pgx_rewritable_matviews j, pg_catalog.pg_matviews v"
 							" WHERE "
 							" j.matviewschemaname = v.schemaname"
 							" AND j.matviewname = v.matviewname"
@@ -869,6 +868,12 @@ mv_rewrite_check_expr_targets_in_mv_tlist (PlannerInfo *root,
 										   bool consider_sub_exprs,
 										   bool trace);
 
+struct mv_rewrite_expr_targets_equals_ctx_internal
+{
+	struct mv_rewrite_expr_targets_equals_ctx *com;
+	bool attempt_communte_opex;
+};
+
 struct mv_rewrite_expr_targets_equals_ctx
 {
     PlannerInfo *root;
@@ -878,28 +883,117 @@ struct mv_rewrite_expr_targets_equals_ctx
 static bool
 mv_rewrite_expr_targets_equals_walker (Node *query_expr,
 									   Node *mv_expr,
-									   struct mv_rewrite_expr_targets_equals_ctx *ctx)
+									   struct mv_rewrite_expr_targets_equals_ctx_internal *ctx)
 {
-    if (query_expr != NULL && mv_expr != NULL && nodeTag(query_expr) == nodeTag(mv_expr) && nodeTag(query_expr) == T_Var)
-    {
-		// FIXME: and also compare levelsup, varno's oid
-        
-        Value *a_col_name = list_nth_node(Value,
-                                          planner_rt_fetch((int) ((Var *)query_expr)->varno, ctx->root)->eref->colnames,
-                                          (int) ((Var *)query_expr)->varattno - 1);
-        
-        Value *b_col_name = list_nth_node(Value,
-                                          list_nth_node (RangeTblEntry, ctx->parsed_mv_query_rtable, (int) ((Var *)mv_expr)->varno - 1)->eref->colnames,
-                                          (int) ((Var *)mv_expr)->varattno - 1);
-        
-		bool result = (0 == strcmp (a_col_name->val.str, b_col_name->val.str));
+	if (query_expr != NULL &&  mv_expr != NULL)
+	{
+		if (nodeTag(query_expr) == T_Var && nodeTag(mv_expr) == T_Var)
+		{
+			// Check they reference the same query level...
+			if (((Var *)query_expr)->varlevelsup != ((Var *)mv_expr)->varlevelsup)
+				return false;
+			
+			// Check they have the same type...
+			if (((Var *)query_expr)->vartype != ((Var *)mv_expr)->vartype)
+				return false;
 
-		return result;
-    }
-    
-    bool result = equal_tree_walker(query_expr, mv_expr, mv_rewrite_expr_targets_equals_walker, ctx);
+			// Check they reference the same typemod...
+			if (((Var *)query_expr)->vartypmod != ((Var *)mv_expr)->vartypmod)
+				return false;
+
+			// Check they reference the same collation...
+			if (((Var *)query_expr)->varcollid != ((Var *)mv_expr)->varcollid)
+				return false;
+			
+			// Check neither is special...
+			if (IS_SPECIAL_VARNO (((Var *)query_expr)->varno) ||
+				IS_SPECIAL_VARNO (((Var *)mv_expr)->varno))
+				return false;
+
+			// Check they reference the same relation...
+			if (planner_rt_fetch((int) ((Var *)query_expr)->varno, ctx->com->root)->relid !=
+				list_nth_node (RangeTblEntry, ctx->com->parsed_mv_query_rtable, (int) ((Var *)mv_expr)->varno - 1)->relid)
+				return false;
+
+			// Check they are normal attribute references...
+			if (((Var *)query_expr)->varattno <= 0 || ((Var *)mv_expr)->varattno <= 0)
+				return false;
+
+			Value *a_col_name = list_nth_node(Value,
+											  planner_rt_fetch((int) ((Var *)query_expr)->varno, ctx->com->root)->eref->colnames,
+											  (int) ((Var *)query_expr)->varattno - 1);
+			
+			Value *b_col_name = list_nth_node(Value,
+											  list_nth_node (RangeTblEntry, ctx->com->parsed_mv_query_rtable, (int) ((Var *)mv_expr)->varno - 1)->eref->colnames,
+											  (int) ((Var *)mv_expr)->varattno - 1);
+
+			if (0 != strcmp (a_col_name->val.str, b_col_name->val.str))
+				return false;
+			
+			return true;
+		}
+		else if (nodeTag(query_expr) == T_OpExpr && nodeTag(mv_expr) == T_OpExpr && ctx->attempt_communte_opex)
+		{
+			// We will attempt both to compare the expression commuted both ways ourselves, so
+			// indicate to subordinate code that it shouldn't do so...
+			ctx->attempt_communte_opex = false;
+			
+			//elog (INFO, "%s: comparing MV expression: %s", __func__, nodeToString (mv_expr));
+			//elog (INFO, "%s: with planned query expression: %s", __func__, nodeToString (query_expr));
+
+			// First, try it the natural way...
+			if (equal_tree_walker (query_expr, mv_expr, mv_rewrite_expr_targets_equals_walker, ctx))
+			{
+				//elog (INFO, "%s: match.", __func__);
+
+				return true;
+			}
+			else
+			{
+				if (!OidIsValid (get_commutator (((OpExpr *) query_expr)->opno)))
+				{
+					//elog (INFO, "%s: no commuted operator found.", __func__);
+					
+					return false;
+				}
+				
+				OpExpr my_query_expr = *((OpExpr *) query_expr);
+				my_query_expr.args = list_copy (((OpExpr *) query_expr)->args);
+				
+				// Commute the expression...
+				CommuteOpExpr (&my_query_expr);
+				
+				//elog (INFO, "%s: trying with commuted version: %s", __func__, nodeToString (&my_query_expr));
+
+				// Try the commuted way...
+				bool result = equal_tree_walker ((Node *) &my_query_expr, mv_expr, mv_rewrite_expr_targets_equals_walker, ctx);
+				
+				//elog (INFO, "%s: %s.", __func__, result ? "match" : "no match");
+
+				return result;
+			}
+		}
+	}
+	
+	struct mv_rewrite_expr_targets_equals_ctx_internal inner_ctx = {
+		ctx->com,
+		true // re-enable commuting again
+	};
+	
+    bool result = equal_tree_walker(query_expr, mv_expr, mv_rewrite_expr_targets_equals_walker, &inner_ctx);
 
     return result;
+}
+
+static bool
+mv_rewrite_expr_targets_equal (Node *query_expr,
+							   Node *mv_expr,
+							   struct mv_rewrite_expr_targets_equals_ctx *ctx)
+{
+	struct mv_rewrite_expr_targets_equals_ctx_internal int_ctx = {
+		ctx, true
+	};
+	return mv_rewrite_expr_targets_equals_walker (query_expr, mv_expr, &int_ctx);
 }
 
 struct mv_rewrite_expr_targets_in_mv_tlist_ctx
@@ -965,7 +1059,7 @@ mv_rewrite_expr_targets_in_mv_tlist_walker (Node *node, struct mv_rewrite_expr_t
             
             elog_if (ctx->trace, INFO, "%s: against expr: %s", __func__, nodeToString (te->expr));
             
-            local_match_found = mv_rewrite_expr_targets_equals_walker ((Node *) node, (Node *) te->expr, ctx->col_names);
+            local_match_found = mv_rewrite_expr_targets_equal ((Node *) node, (Node *) te->expr, ctx->col_names);
             
             if (local_match_found)
             {
@@ -1225,7 +1319,7 @@ mv_rewrite_check_order_clauses_for_mv (PlannerInfo *root,
 		elog_if (g_trace_order_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
 		
 		// Check that the query Expr direclty matches its partner in the MV.
-		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
+		if (!mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
 		{
 			elog_if (g_log_match_progress, INFO, "%s: ORDER BY clause (%s) not found in query", __func__,
 					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
@@ -1313,7 +1407,7 @@ mv_rewrite_check_distinct_clauses_for_mv (PlannerInfo *root,
 		elog_if (g_trace_distinct_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
 		
 		// Check that the query Expr direclty matches its partner in the MV.
-		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
+		if (!mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
 		{
 			elog_if (g_log_match_progress, INFO, "%s: DISTINCT clause (%s) not found in query", __func__,
 					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
@@ -1378,7 +1472,7 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 		elog_if (g_trace_group_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
 
 		// Check that the query Expr direclty matches its partner in the MV.
-		if (!mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
+		if (!mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
         {
             elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in query", __func__,
 					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
@@ -1458,7 +1552,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 			elog_if (g_trace_join_clause_check, INFO, "%s: against expression: %s", __func__,
 					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
 			
-			if (mv_rewrite_expr_targets_equals_walker ((Node *) query_expr, (Node *) mv_jq, comparison_context))
+			if (mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_jq, comparison_context))
 			{
 				elog_if (g_debug_join_clause_check, INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
 				

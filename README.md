@@ -154,9 +154,3 @@ For example:
 postgres=# set mv_rewrite.rewrite_enabled = false;
 SET
 ```
-
-## History
-
-This extension was originally written as an extension to the Foreign Data Wrapper for accessing remote Postgres 
-databases, but has since morphed into a regular Postgres EXTENSION, allowing any queries targetting any regular 
-TABLE to be rewritten to instead read from a MATERIALIZED VIEW. At some point, I'll probably rename it.
