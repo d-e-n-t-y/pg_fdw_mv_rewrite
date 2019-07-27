@@ -69,6 +69,8 @@ PG_MODULE_MAGIC;
 typedef signed int RelationKind;
 #define REL_JOIN (-1)
 
+static const unsigned int indent = 2;
+static const char *log_prefix = "";
 
 typedef struct {
 	CustomScanState sstate;
@@ -292,16 +294,10 @@ mv_rewrite_check_ctes_inlined (PlannerInfo *root)
 static bool
 mv_rewrite_eval_query_for_rewrite_support (PlannerInfo *root)
 {
-	if (root->hasRecursion)
-		return false;
-
 	if (root->hasLateralRTEs)
 		return false;
 	
 	if (root->parse->hasDistinctOn)
-		return false;
-
-	if (!mv_rewrite_check_ctes_inlined (root))
 		return false;
 
 	// Default is that we _do_ support rewrite.
@@ -354,7 +350,7 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (join_rel));
 	
 	// If we can rewrite, add those alternate paths...
-	mv_rewrite_add_rewritten_mv_paths (root, REL_JOIN, join_rel, NULL, join_rel->reltarget);
+	mv_rewrite_add_rewritten_mv_paths (root, REL_JOIN, NULL, join_rel, join_rel->reltarget);
 }
 
 /*
@@ -383,9 +379,11 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	// Ignore stages we don't support.
 	switch (stage)
 	{
+		case UPPERREL_SETOP:
 		case UPPERREL_GROUP_AGG:
 		case UPPERREL_DISTINCT:
 		case UPPERREL_ORDERED:
+		case UPPERREL_FINAL:
 			break;
 			
 		default:
@@ -422,8 +420,11 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	elog_if (g_trace_match_progress, INFO, "%s: upper_rel: %s", __func__, nodeToString (upper_rel));
 
 	// If we can rewrite, add those alternate paths...
-	PathTarget *upper_target = root->upper_targets[stage];
 	
+	PathTarget *upper_target = root->upper_targets[stage];
+	if (upper_target == NULL)
+		upper_target = upper_rel->reltarget;
+
 #if PG_VERSION_NUM < 120000
 	// Prior to PG11, the upper_target for an UPPERREL_ORDERED and
 	// UPPERREL_DISTINCT was not stored.
@@ -475,7 +476,7 @@ mv_rewrite_find_all_baserels (PlannerInfo *root)
 }
 
 CommonTableExpr *
-mv_rewrite_get_cte_for_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo **cteroot, Index *ndx)
+mv_rewrite_get_cte_for_plan_rte (PlannerInfo *root, RangeTblEntry *rte, PlannerInfo **cteroot, Index *ndx)
 {
 	Index levelsup = rte->ctelevelsup;
 	*cteroot = root;
@@ -569,7 +570,7 @@ mv_rewrite_find_oids_for_ri_recurse (PlannerInfo *root,
 		Index ctendx;
 		PlannerInfo *cteroot;
 
-		CommonTableExpr *cte = mv_rewrite_get_cte_for_rte (root, planner_rt_fetch ((int) ri->relid, root), &cteroot, &ctendx);
+		CommonTableExpr *cte = mv_rewrite_get_cte_for_plan_rte (root, planner_rt_fetch ((int) ri->relid, root), &cteroot, &ctendx);
 		
 		// We must be cautious: we are crawling widely over planner data
 		// structures, but the plan may not yet be complete.
@@ -608,6 +609,24 @@ mv_rewrite_find_oids_for_relids_recurse (PlannerInfo *root, Bitmapset *initial_r
 	return rc;
 }
 
+static void
+mv_rewrite_append_relname_for_oid (Oid oid, StringInfo out)
+{
+	/*
+	 * Core code already has some lock on each rel being planned, so we
+	 * can use NoLock here.
+	 */
+	Relation	rel = heap_open (oid, NoLock);
+	
+	heap_close (rel, NoLock);
+	
+	const char *nspname = get_namespace_name (RelationGetNamespace(rel));
+	const char *relname = RelationGetRelationName(rel);
+	
+	appendStringInfo (out, "%s.%s",
+					  quote_identifier(nspname), quote_identifier(relname));
+}
+
 static bool
 mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 								   RelationKind stage,
@@ -628,19 +647,7 @@ mv_rewrite_get_involved_rel_names (PlannerInfo *root,
 	{
 		StringInfo table_name = makeStringInfo();
 		
-		/*
-		 * Core code already has some lock on each rel being planned, so we
-		 * can use NoLock here.
-		 */
-		Relation	rel = heap_open (lfirst_oid (lc), NoLock);
-		
-		heap_close (rel, NoLock);
-		
-		const char *nspname = get_namespace_name (RelationGetNamespace(rel));
-		const char *relname = RelationGetRelationName(rel);
-		
-		appendStringInfo (table_name, "%s.%s",
-						  quote_identifier(nspname), quote_identifier(relname));
+		mv_rewrite_append_relname_for_oid (lfirst_oid(lc), table_name);
 		
 		elog_if (g_trace_match_progress, INFO, "%s: query involves: %s", __func__, table_name->data);
 
@@ -716,6 +723,44 @@ done:
 	return mvs_name;
 }
 
+static Node *
+mv_rewrite_eval_const_expressions_etm (Node *node, void *context)
+{
+	return eval_const_expressions (NULL, node);
+}
+
+static void
+mv_rewrite_eval_const_expressions (Query *mv_query)
+{
+	ListCell *lc;
+	
+	mv_query->targetList = (List *) expression_tree_mutator ((Node *) mv_query->targetList, mv_rewrite_eval_const_expressions_etm, NULL);
+	mv_query->limitCount = eval_const_expressions (NULL, mv_query->limitCount); //FIXME: should check it during eval
+	mv_query->limitOffset = eval_const_expressions (NULL, mv_query->limitOffset); //FIXME: should check it during eval
+	//elog(INFO, "simplifyied: %s", nodeToString (mv_query->jointree));
+	mv_query->jointree = (FromExpr *) expression_tree_mutator ((Node *) mv_query->jointree, mv_rewrite_eval_const_expressions_etm, NULL);
+	mv_query->jointree->quals = (Node *) make_ands_implicit ((Expr *) mv_query->jointree->quals);
+	//FIXME: recurse into jointree, a la preprocess_qual_conditions()
+	//elog(INFO, "... to: %s", nodeToString (mv_query->jointree));
+
+	foreach (lc, mv_query->cteList)
+	{
+		CommonTableExpr *mv_cte = lfirst (lc);
+		mv_rewrite_eval_const_expressions ((Query *) mv_cte->ctequery);
+	}
+
+	// mv_query->groupingSets
+	// mv_query->havingQual;
+	// mv_query->windowClause;
+
+	foreach (lc, mv_query->rtable)
+	{
+		RangeTblEntry *rte = lfirst (lc);
+		if (rte->rtekind == RTE_SUBQUERY)
+			mv_rewrite_eval_const_expressions (rte->subquery);
+	}
+}
+
 static Query *
 mv_rewrite_rewrite_mv_query (Query *query)
 {
@@ -732,19 +777,7 @@ mv_rewrite_rewrite_mv_query (Query *query)
 
 	// Simplify constants in the target list because the raw rewrittten parse trees won't otherwise
 	// match the expression trees that the planner shows us to match against.
-	ListCell *e;
-	foreach (e, query->targetList)
-	{
-		TargetEntry *tle = lfirst_node (TargetEntry, e);
-		
-		elog_if (g_trace_parse_select_query, INFO, "%s: simplifying: %s", __func__, nodeToString (tle));
-		
-		Expr *new_expr = (Expr *) eval_const_expressions (NULL, (Node *) tle->expr);
-		
-		tle->expr = new_expr;
-		
-		elog_if (g_trace_parse_select_query, INFO, "%s: revised: %s", __func__, nodeToString (tle));
-	}
+	mv_rewrite_eval_const_expressions (query);
 	
 	elog_if (g_trace_parse_select_query, INFO, "%s: query: %s", __func__, nodeToString (query));
 	
@@ -1493,7 +1526,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 								  Relids *query_relids_involved,
 								  RelOptInfo **query_found_rel,
 								  ListOf (RestrictInfo *) **query_clauses,
-								  ListOf (RestrictInfo *) **collated_mv_quals);
+								  ListOf (RestrictInfo *) **collated_mv_quals,
+								  unsigned int log_indent);
 
 /**
  * Check for the presence of every join clause from the MV in the query plan.
@@ -1588,7 +1622,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 											   RelOptInfo *join_rel,
 											   ListOf (Expr *) **additional_where_clauses)
 {
-	elog_if (g_debug_join_clause_check, INFO, "%s: checking join MV's join tree is valid for the query plan...", __func__);
+	elog_if (g_debug_join_clause_check, INFO, "%s: checking MV's join tree is valid for the query plan...", __func__);
 
 	elog_if (g_trace_join_clause_check, INFO, "%s: join_rel: %s", __func__, nodeToString (join_rel));
 
@@ -1606,7 +1640,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	ListOf (Expr *) *collated_query_quals = NIL;
 	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
-	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals))
+	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals, indent))
 		return false;
 
 	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
@@ -1644,6 +1678,8 @@ mv_rewrite_rte_equals_walker (Node *a, Node *b, void *ctx)
 		my_a.checkAsUser = my_b.checkAsUser = (Oid) 0;
 		// ...same for selectedCols...
 		my_a.selectedCols = my_b.selectedCols = NULL;
+		// ...same for inh...
+		my_a.inh = my_b.inh = false;
 
 		return equal_tree_walker (&my_a, &my_b, mv_rewrite_rte_equals_walker, ctx);
 	}
@@ -1796,6 +1832,109 @@ done:
 	return out_ris;
 }
 
+
+static CommonTableExpr *
+mv_rewrite_get_cte_for_query_rte (Query *parsed_mv_query, RangeTblEntry *mv_rte, Index *parsed_ctendx)
+{
+	if (mv_rte->ctelevelsup != 0)
+		return NULL;
+
+	*parsed_ctendx = 0;
+	ListCell *lc;
+	foreach (lc, parsed_mv_query->cteList)
+	{
+		CommonTableExpr *mv_cte = lfirst_node (CommonTableExpr, lc);
+		
+		if (strcmp (mv_cte->ctename, mv_rte->ctename) == 0)
+			return mv_cte;
+
+		(*parsed_ctendx)++;
+	}
+	
+	return NULL;
+}
+
+static void
+mv_rewrite_explain_rte (Query *query, Node *node, StringInfo out)
+{
+	if (IsA (node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+		switch (rte->rtekind)
+		{
+			case RTE_RELATION:
+				mv_rewrite_append_relname_for_oid (rte->relid, out);
+				break;
+			case RTE_SUBQUERY:
+			{
+				appendStringInfoString (out, "(subquery involving: ");
+				ListCell *lc;
+				bool first = true;
+				foreach (lc, rte->subquery->rtable)
+				{
+					RangeTblEntry *rte = lfirst (lc);
+					if (!first)
+						appendStringInfoString (out, ", ");
+					mv_rewrite_explain_rte (rte->subquery, (Node *) rte, out);
+					first = false;
+				}
+				appendStringInfoString (out, ")");
+				break;
+			}
+			case RTE_JOIN:
+			{
+				appendStringInfoString (out, "(join)"); // FIXME: of what?
+				break;
+			}
+			case RTE_CTE:
+				appendStringInfo (out, "CTE: %s", rte->ctename);
+				break;
+				
+			case RTE_FUNCTION:
+			case RTE_TABLEFUNC:
+			case RTE_VALUES:
+			case RTE_NAMEDTUPLESTORE:
+			case RTE_RESULT:
+			default:
+				appendStringInfo (out, "(other: type %d)", rte->rtekind);
+				break;
+		}
+	}
+	else if (IsA (node, RangeTblRef))
+	{
+		RangeTblRef *rtr = (RangeTblRef *) node;
+		RangeTblEntry *mv_rte = rt_fetch (rtr->rtindex, query->rtable);
+		mv_rewrite_explain_rte (query, (Node *) mv_rte, out);
+	}
+	else if (IsA (node, JoinExpr))
+	{
+		JoinExpr *je = castNode (JoinExpr, node);
+		appendStringInfoString (out, "(");
+		mv_rewrite_explain_rte (query, je->larg, out);
+		appendStringInfo (out, " JOIN (type=%d) ", je->jointype);
+		mv_rewrite_explain_rte (query, je->rarg, out);
+		appendStringInfoString (out, ")");
+	}
+	else if (IsA (node, FromExpr))
+	{
+		FromExpr *fe = (FromExpr *) node;
+		ListCell *lc;
+		bool first = true;
+		foreach (lc, fe->fromlist)
+		{
+			Node *child = lfirst (lc);
+			if (!first)
+				appendStringInfoString (out, ", ");
+			mv_rewrite_explain_rte (query, (Node *) child, out);
+			first = false;
+		}
+	}
+	else
+	{
+		elog (WARNING, "%s: unknown node type: %d", __func__, node->type);
+	}
+}
+
 /**
  * Recursively descend into the MV's jointree, and do two things:
  *
@@ -1813,10 +1952,18 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 								  Relids *query_relids_involved,
 								  RelOptInfo **query_found_rel,
 								  ListOf (Epxr *) **collated_query_quals,
-								  ListOf (RestrictInfo *) **collated_mv_quals)
+								  ListOf (RestrictInfo *) **collated_mv_quals,
+								  unsigned int log_indent)
 {
-	elog_if (g_trace_join_clause_check, INFO, "%s: processing node: %s", __func__, nodeToString (node));
-	
+	// elog_if (g_trace_join_clause_check, INFO, "%s: processing node: %s", __func__, nodeToString (node));
+	if (g_debug_join_clause_check)
+	{
+		StringInfo mv_query_join_str = makeStringInfo();
+		mv_rewrite_explain_rte (parsed_mv_query, node, mv_query_join_str);
+		elog_if (g_debug_join_clause_check, INFO, "%*schecking MV FROM/JOIN sub-tree (%s) is valid for the query plan...", log_indent, log_prefix, mv_query_join_str->data);
+	}
+	log_indent += indent;
+
 	if (IsA (node, RangeTblRef))
 	{
 		RangeTblRef *rtr = (RangeTblRef *) node;
@@ -1828,13 +1975,11 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (mv_rte->rtekind == RTE_RELATION)
 			if (list_member_oid (*mv_oids_involved, mv_oid))
 			{
-				elog_if (g_log_match_progress, INFO, "%s: MV with multiple mentions of same OID not supported.", __func__);
+				elog_if (g_log_match_progress, INFO, "%*sMV with multiple mentions of same OID not supported.", log_indent, log_prefix);
 
 				return false;
 			}
 		
-		elog_if (g_trace_join_clause_check, INFO, "%s: MV RTE: %s", __func__, nodeToString (mv_rte));
-
 		// Locate the same OID the query plan.
 		for (int i = bms_next_member (join_relids, -1);
 			 i >= 0;
@@ -1842,7 +1987,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		{
 			RangeTblEntry *plan_rte = planner_rt_fetch (i, root);
 			
-			elog_if (g_trace_join_clause_check, INFO, "%s: plan RTE: %s", __func__, nodeToString (plan_rte));
+			elog_if (g_trace_join_clause_check, INFO, "%splan RTE: %s", log_prefix, nodeToString (plan_rte));
 			
 			if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_RELATION)
 			{
@@ -1854,7 +1999,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 
-					elog_if (g_trace_join_clause_check, INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+					elog_if (g_trace_join_clause_check, INFO, "%*smatch found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", log_indent, log_prefix, rtr->rtindex, (int) mv_oid, i);
 
 					RelOptInfo *rel = find_base_rel (root, i);
 					if (rel->baserestrictinfo != NULL)
@@ -1868,11 +2013,13 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 						}
 					}
 					
-					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
+					elog_if (g_trace_join_clause_check, INFO, "%*srel: %s", log_indent, log_prefix, nodeToString (rel));
 
 					if (query_found_rel != NULL)
 						*query_found_rel = rel;
 					
+					elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
+
 					return true;
 				}
 			}
@@ -1883,11 +2030,11 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 					
-					elog_if (g_trace_join_clause_check, INFO, "%s: match found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", __func__, rtr->rtindex, (int) mv_oid, i);
+					elog_if (g_trace_join_clause_check, INFO, "%*smatch found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", log_indent, log_prefix, rtr->rtindex, (int) mv_oid, i);
 					
 					RelOptInfo *rel = find_base_rel (root, i);
 					
-					elog_if (g_trace_join_clause_check, INFO, "%s: rel: %s", __func__, nodeToString (rel));
+					elog_if (g_trace_join_clause_check, INFO, "%*srel: %s", log_indent, log_prefix, nodeToString (rel));
 
 					ListOf (Expr *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
 					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, pushed_quals);
@@ -1895,15 +2042,62 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					if (query_found_rel != NULL)
 						*query_found_rel = rel;
 
+					elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
+
 					return true;
 				}
 			}
+			else if (mv_rte->rtekind == plan_rte->rtekind && plan_rte->rtekind == RTE_CTE)
+			{
+				Index plan_ctendx;
+				PlannerInfo *plan_cteroot;
+				
+				CommonTableExpr *plan_cte = mv_rewrite_get_cte_for_plan_rte (root, plan_rte, &plan_cteroot, &plan_ctendx);
+				
+				// We must be cautious: we are crawling widely over planner data
+				// structures, but the plan may not yet be complete.
+				if (plan_cte == NULL)
+				{
+					elog_if (g_debug_join_clause_check, INFO, "%*sCTE not found in plan.", log_indent, log_prefix);
+					continue;
+				}
+				
+				PlannerInfo *plan_cte_subroot = list_nth (plan_cteroot->glob->subroots, (int) plan_ctendx);
+				if (plan_cte_subroot == NULL)
+				{
+					elog_if (g_debug_join_clause_check, INFO, "%*ssubroot for CTE not found.", log_indent, log_prefix);
+					continue;
+				}
+				
+				Index parsed_ctendx;
+				CommonTableExpr *mv_cte = mv_rewrite_get_cte_for_query_rte (parsed_mv_query, mv_rte, &parsed_ctendx);
+				if (mv_cte == NULL)
+				{
+					elog (ERROR, "CTE referenced from MV was not found in MV definition");
+
+					continue;
+				}
+				
+				if (equal_tree_walker (mv_cte->ctequery, plan_cte_subroot->parse, mv_rewrite_rte_equals_walker, NULL))
+				{
+					elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
+
+					return true;
+				}
+				else
+				{
+					elog_if (g_debug_join_clause_check, INFO, "%*sCTE definitions don't smatch.", log_indent, log_prefix);
+
+					continue;
+				}
+			}
+			
 			// FIXME: other rtekinds?
 		}
 
 		// Otherwise, since we can't find a match, that means the MV doesn't match the query.
 
-		elog_if (g_log_match_progress, INFO, "%s: no match found in plan for MV rtindex: %d; MV Oid: %d", __func__, rtr->rtindex, (int) mv_oid);
+		elog_if (g_log_match_progress, INFO, "%*sno match found in plan for MV rtindex: %d; MV Oid: %d", log_indent, log_prefix, rtr->rtindex, (int) mv_oid);
 		
 		return false;
 	}
@@ -1920,9 +2114,9 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		RelOptInfo *lrel, *rrel;
 
 		// Check the left side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
-			elog_if (g_log_match_progress, INFO, "%s: left side of join is not valid for plan: %s", __func__, nodeToString (larg));
+			elog_if (g_log_match_progress, INFO, "%*sleft side of join is not valid for plan", log_indent, log_prefix);
 
 			return false;
 		}
@@ -1930,14 +2124,14 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		Relids rarg_query_relids = NULL;
 		
 		// Check the right side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
-			elog_if (g_log_match_progress, INFO, "%s: right side of join is not valid for plan: %s", __func__, nodeToString (rarg));
+			elog_if (g_log_match_progress, INFO, "%*sright side of join is not valid for plan", log_indent, log_prefix);
 			
 			return false;
 		}
 		
-		elog_if (g_trace_join_clause_check, INFO, "%s: checking if join between %s and %s is legal...", __func__, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
+		elog_if (g_trace_join_clause_check, INFO, "%*schecking if join between %s and %s is legal...", log_indent, log_prefix, bmsToString (larg_query_relids), bmsToString (rarg_query_relids));
 
 		Relids joinrelids = bms_union (larg_query_relids, rarg_query_relids);
 		
@@ -1949,7 +2143,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		
 		if (!join_is_legal (root, lrel, rrel, joinrelids, &sjinfo, &reversed))
 		{
-			elog_if (g_log_match_progress, INFO, "%s: MV contains a join not matched in query: %s", __func__, nodeToString (node));
+			elog_if (g_log_match_progress, INFO, "%*sMV contains a join not matched in query.", log_indent, log_prefix);
 			
 			return false;
 		}
@@ -1974,7 +2168,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 	
 		if (legal_jt != je->jointype)
 		{
-			elog_if (g_log_match_progress, INFO, "%s: MV contains a join of type not matched in query.", __func__);
+			elog_if (g_log_match_progress, INFO, "%*sMV contains a join of type not matched in query.", log_indent, log_prefix);
 				
 			return false;
 		}
@@ -2002,12 +2196,14 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (je->quals != NULL)
 			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, je->quals);
 		
-		elog_if (g_trace_join_clause_check, INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+		elog_if (g_trace_join_clause_check, INFO, "%*sjoin for relids found: %s", log_indent, log_prefix, bmsToString (*query_relids_involved));
 		
 		*query_relids_involved = bms_union (*query_relids_involved, joinrelids);
 		
 		if (query_found_rel != NULL)
 			*query_found_rel = joinrel;
+
+		elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
 
 		return true;
 	}
@@ -2024,7 +2220,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			if (fe->quals != NULL)
 				*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 
-			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals);
+			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals, log_indent);
 		}
 		
 		// Note that it is possible that there are /no/ items in the FROM list (e.g.,
@@ -2053,7 +2249,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					
 					if (!first)
 					{
-						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals))
+						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals, log_indent))
 							// Since we can't find a match, the MV doesn't match
 							return false;
 						
@@ -2088,12 +2284,14 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		if (fe->quals != NULL)
 			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 		
-		elog_if (g_trace_join_clause_check, INFO, "%s: join for relids found: %s", __func__, bmsToString (*query_relids_involved));
+		elog_if (g_trace_join_clause_check, INFO, "%*sjoin for relids found: %s", log_indent, log_prefix, bmsToString (*query_relids_involved));
+		
+		elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
 		
 		return true;
 	}
-
-	elog (ERROR, "unrecognized node type: %d", (int) nodeTag (node));
+	else
+		elog (ERROR, "unrecognized node type: %d", (int) nodeTag (node));
 	
 	return false;
 }
@@ -2166,7 +2364,7 @@ static bool
 mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 									RelationKind stage,
 									RelOptInfo *input_rel,
-									RelOptInfo *upper_rel,
+									RelOptInfo *output_rel,
 									List *selected_tlist,
 									const char *mv_name,
 									Query **alternative_query)
@@ -2192,11 +2390,11 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	// The query obtained which represents the MV is now locked.
 	
     // 1a. Check the GROUP BY clause: it must match exactly.
-	if (!mv_rewrite_check_group_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+	if (!mv_rewrite_check_group_clauses_for_mv (root, stage, parsed_mv_query, output_rel, selected_tlist, &transform_todo_list))
     	goto done;
 	
 	// 1b. Check the DISTINCT clause: it must match exactly.
-	if (!mv_rewrite_check_distinct_clauses_for_mv (root, stage, parsed_mv_query, upper_rel, selected_tlist, &transform_todo_list))
+	if (!mv_rewrite_check_distinct_clauses_for_mv (root, stage, parsed_mv_query, output_rel, selected_tlist, &transform_todo_list))
 		goto done;
 	
 	ListOf (Expr *) *additional_sort_clauses = NIL;
@@ -2206,22 +2404,22 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	//     expressions match, or they don't.
     
 	// 1d. Check the ORDER BY clause: it must match exactly.
-	if (!mv_rewrite_check_order_clauses_for_mv (root, stage, parsed_mv_query, upper_rel))
+	if (!mv_rewrite_check_order_clauses_for_mv (root, stage, parsed_mv_query, output_rel))
 	{
 		// 1e. But we have an alternative strategy for ORDER BY: if it is missing or incorrect,
 		//     we can wrap an ORDER BY around the MV scan query. This stratey gives the
 		//     planner benefit of any INDEXes that adorn the MV.
-		mv_rewrite_extract_order_clauses (root, stage, upper_rel, selected_tlist, &additional_sort_clauses);
+		mv_rewrite_extract_order_clauses (root, stage, output_rel, selected_tlist, &additional_sort_clauses);
 	}
 	
 	// 2. Check the FROM and JOIN-related WHERE clauses: they must match exactly; any non-
 	//    JOIN-related WHERE clauses are returned and validated in step 4.
-    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, input_rel, &additional_where_clauses))
+    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, output_rel, &additional_where_clauses))
         goto done;
     
     // 3. Append the HAVING clauses in the additional WHERE clause list. (They will actually be
     //    evaluated as part of the WHERE clause procesing.)
-	if (upper_rel != NULL)
+	if (output_rel != NULL)
 		additional_where_clauses = list_concat (additional_where_clauses, list_copy ((List *) root->parse->havingQual));
 	
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
@@ -2473,7 +2671,7 @@ static void
 mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 								   RelationKind stage,
 								   RelOptInfo *input_rel,
-								   RelOptInfo *upper_rel,
+								   RelOptInfo *output_rel,
 								   PathTarget *pathtarget)
 {
 	if (!g_rewrite_enabled)
@@ -2482,7 +2680,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     // Find the set of rels involved in the query being planned...
 	ListOf (char *) *involved_rel_names = NIL;
 	
-	if (!mv_rewrite_get_involved_rel_names (root, stage, input_rel, &involved_rel_names))
+	if (!mv_rewrite_get_involved_rel_names (root, stage, output_rel, &involved_rel_names))
 		return;
 
 	// Check first that all of those rels are enabled for query rewrite...
@@ -2525,7 +2723,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 
         Query *alternative_query;
 		
-		if (mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, upper_rel, selected_tlist, mv_name, &alternative_query))
+		if (mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, output_rel, selected_tlist, mv_name, &alternative_query))
 		{
 			// 8. Finally, create and add the path.
 			elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
@@ -2536,7 +2734,28 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 					 : "");
 			
 			// Add generated path into the appropriate rel.
-			RelOptInfo *the_rel = upper_rel != NULL ? upper_rel : input_rel;
+			RelOptInfo *the_rel = output_rel != NULL ? output_rel : input_rel;
+			
+			// But if root has init_paths...
+			//		1. Morph this root into Custom Append-like Subquery
+//			PlannerInfo *current_root = makeNode (PlannerInfo);
+//			*current_root = *root;
+//
+//			root->init_plans = NULL;
+//			root->cte_plan_ids = NULL;
+//			root->upper_rels = { 0 };
+//			the_rel = fetch_upper_rel (root, UPPERREL_FINAL, NULL);
+//
+//			create_append_path (current_root, the_rel, fetch_upper_rel (current_root, UPPERREL_FINAL, NULL)->pathlist, NIL, current_root->query_pathkeys, NULL, 0, false, NIL, 1)
+//			add_path (<#RelOptInfo *parent_rel#>, <#Path *new_path#>)
+			
+			//		2. Hang current root off it as alternate #1
+			//				- Under CustomPath #1
+			//				- Cost Path as normal ::== cost of copied root's UPPERREL_FINAL
+			//				- I guess we have to adjust all depth references += 1
+			// 		3. Hang our new path off it as alternate #2
+			//				- Under CustomPath #2
+			// 		4. Pick Path as normal — based on least cost
 			add_path (the_rel,
 					  mv_rewrite_create_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name));
 		}
