@@ -9,13 +9,15 @@ DO LANGUAGE plpgsql $$ DECLARE t text; BEGIN FOR t IN
   		from test
   		group by key, hidden
 LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
 select distinct key, hidden, count (value)
   from test
   group by key, hidden;
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
  key  | hidden  |  count  
 ------+---------+---------
  key1 | hidden1 |      10

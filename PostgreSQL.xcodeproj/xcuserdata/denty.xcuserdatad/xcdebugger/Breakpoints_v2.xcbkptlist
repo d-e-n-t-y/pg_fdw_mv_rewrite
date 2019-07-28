@@ -326,7 +326,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "596"
             endingLineNumber = "596"
-            landmarkName = "mv_rewrite_find_oids_for_relids_recurse()"
+            landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
             landmarkType = "9">
             <Locations>
                <Location
@@ -390,7 +390,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "633"
             endingLineNumber = "633"
-            landmarkName = "mv_rewrite_get_involved_rel_names()"
+            landmarkName = "mv_rewrite_append_relname_for_oid()"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -518,7 +518,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "597"
             endingLineNumber = "597"
-            landmarkName = "mv_rewrite_find_oids_for_relids_recurse()"
+            landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>

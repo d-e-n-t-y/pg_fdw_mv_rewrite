@@ -310,7 +310,8 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 								   RelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *grouped_rel,
-								   PathTarget *grouping_target);
+								   PathTarget *grouping_target,
+								   unsigned int log_indent);
 
 void
 mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
@@ -320,6 +321,8 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 								   JoinType jointype,
 								   JoinPathExtraData *extra)
 {
+	const unsigned int log_indent = 0;
+	
 	// Delegate first to any other extensions if they are already hooked.
 	if (next_set_join_pathlist_hook)
 		(*next_set_join_pathlist_hook) (root, join_rel, outerrel, innerrel, jointype, extra);
@@ -327,7 +330,7 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 	// Evaluate the query being planned for any unsupported features.
 	if (!mv_rewrite_eval_query_for_rewrite_support (root))
 	{
-		elog_if (g_log_match_progress, INFO, "%s: query requires unsupported features.", __func__);
+		elog_if (g_log_match_progress, INFO, "%*squery requires unsupported features.", log_indent, log_prefix);
 		
 		return;
 	}
@@ -341,17 +344,17 @@ mv_rewrite_set_join_pathlist_hook (PlannerInfo *root,
 		if (join_rel->cheapest_total_path != NULL)
 			if (join_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
 			{
-				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
+				elog_if (g_log_match_progress, INFO, "%*salready have path with acceptable cost.", log_indent, log_prefix);
 				
 				return;
 			}
 	}
 	
-	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
-	elog_if (g_trace_match_progress, INFO, "%s: joinrel: %s", __func__, nodeToString (join_rel));
+	elog_if (g_trace_match_progress, INFO, "%*sroot: %s", log_indent, log_prefix, nodeToString (root));
+	elog_if (g_trace_match_progress, INFO, "%*sjoinrel: %s", log_indent, log_prefix, nodeToString (join_rel));
 	
 	// If we can rewrite, add those alternate paths...
-	mv_rewrite_add_rewritten_mv_paths (root, REL_JOIN, NULL, join_rel, join_rel->reltarget);
+	mv_rewrite_add_rewritten_mv_paths (root, REL_JOIN, NULL, join_rel, join_rel->reltarget, log_indent);
 }
 
 /*
@@ -369,6 +372,8 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 #endif
 )
 {
+	const unsigned int log_indent = 0;
+	
 	// Delegate first to any other extensions if they are already hooked.
 	if (next_create_upper_paths_hook)
 		(*next_create_upper_paths_hook) (root, stage, input_rel, upper_rel
@@ -388,14 +393,14 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 			break;
 			
 		default:
-			elog_if (g_trace_match_progress, INFO, "%s: upper path stage (%d) not supported.", __func__, stage);
+			elog_if (g_trace_match_progress, INFO, "%*supper path stage (%d) not supported.", log_indent, log_prefix, stage);
 			return;
 	}
 	
 	// Evaluate the query being planned for any unsupported features.
 	if (!mv_rewrite_eval_query_for_rewrite_support (root))
 	{
-		elog_if (g_log_match_progress, INFO, "%s: query requires unsupported features.", __func__);
+		elog_if (g_log_match_progress, INFO, "%*squery requires unsupported features.", log_indent, log_prefix);
 		
 		return;
 	}
@@ -409,16 +414,16 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 		if (upper_rel->cheapest_total_path != NULL)
 			if (upper_rel->cheapest_total_path->total_cost < g_rewrite_minimum_cost)
 			{
-				elog_if (g_log_match_progress, INFO, "%s: already have path with acceptable cost.", __func__);
+				elog_if (g_log_match_progress, INFO, "%*salready have path with acceptable cost.", log_indent, log_prefix);
 
 				return;
 			}
 	}
 	
-	elog_if (g_trace_match_progress, INFO, "%s: stage: %d", __func__, stage);
-	elog_if (g_trace_match_progress, INFO, "%s: root: %s", __func__, nodeToString (root));
-	elog_if (g_trace_match_progress, INFO, "%s: input_rel: %s", __func__, nodeToString (input_rel));
-	elog_if (g_trace_match_progress, INFO, "%s: upper_rel: %s", __func__, nodeToString (upper_rel));
+	elog_if (g_trace_match_progress, INFO, "%*sstage: %d", log_indent, log_prefix, stage);
+	elog_if (g_trace_match_progress, INFO, "%*sroot: %s", log_indent, log_prefix, nodeToString (root));
+	elog_if (g_trace_match_progress, INFO, "%*sinput_rel: %s", log_indent, log_prefix, nodeToString (input_rel));
+	elog_if (g_trace_match_progress, INFO, "%*supper_rel: %s", log_indent, log_prefix, nodeToString (upper_rel));
 
 	// If we can rewrite, add those alternate paths...
 	
@@ -440,7 +445,7 @@ mv_rewrite_create_upper_paths_hook(PlannerInfo *root,
 	}
 #endif
 
-	mv_rewrite_add_rewritten_mv_paths (root, (RelationKind) stage, input_rel, upper_rel, upper_target);
+	mv_rewrite_add_rewritten_mv_paths (root, (RelationKind) stage, input_rel, upper_rel, upper_target, log_indent);
 }
 
 /*
@@ -1542,24 +1547,14 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 static bool
 mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *comparison_context,
 					ListOf (RestrictInfo * or Expr *) *mv_join_quals,
-					ListOf (Expr *) **query_clauses)
+					ListOf (Expr *) **query_clauses,
+					const unsigned int log_indent)
 {
+	elog_if (g_debug_join_clause_check, INFO, "%*schecking FROM/JOIN clauses from MV are present in the query plan...", log_indent, log_prefix);
+
 	ListOf (Expr *) *query_clauses_copy = list_copy (*query_clauses);
 	
-	if (g_debug_join_clause_check)
-	{
-		StringInfo cl = makeStringInfo();
-		ListCell *lc;
-		foreach (lc, query_clauses_copy)
-		{
-			Expr *query_expr = lfirst (lc);
-			
-			if (cl->len > 0)
-				appendStringInfoString (cl, ", ");
-			appendStringInfoString (cl, mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
-		}
-		elog (INFO, "%s: clause list to check: %s", __func__, cl->data);
-	}
+	const unsigned int inner_log_indent = log_indent + indent;
 
 	ListCell *lc2;
 	foreach (lc2, mv_join_quals)
@@ -1576,7 +1571,9 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 			continue;
 		}
 		
-		elog_if (g_debug_join_clause_check, INFO, "%s: evaluating JOIN expression: %s", __func__, nodeToString (mv_jq));
+		elog_if (g_debug_join_clause_check, INFO, "%*schecking FROM/JOIN expression: %s", inner_log_indent, log_prefix, mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
+		
+		const unsigned int inner2_log_indent = inner_log_indent + indent;
 		
 		bool found = false;
 		
@@ -1585,12 +1582,12 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		{
 			Expr *query_expr = lfirst (lc3);
 			
-			elog_if (g_trace_join_clause_check, INFO, "%s: against expression: %s", __func__,
+			elog_if (g_trace_join_clause_check, INFO, "%*sagainst expression: %s", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
 			
 			if (mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_jq, comparison_context))
 			{
-				elog_if (g_debug_join_clause_check, INFO, "%s: matched expression: %s", __func__, nodeToString (query_expr));
+				elog_if (g_debug_join_clause_check, INFO, "%*smatched expression: %s", inner2_log_indent, log_prefix, nodeToString (query_expr));
 				
 				*query_clauses = list_delete_ptr (*query_clauses, query_expr);
 				
@@ -1601,7 +1598,7 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 		
 		if (!found)
 		{
-			elog_if (g_log_match_progress, INFO, "%s: MV expression (%s) not found in clauses in the query.", __func__,
+			elog_if (g_log_match_progress, INFO, "%*sMV expression (%s) not found in clauses in the query.", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
 			
 			return false;
@@ -1622,11 +1619,14 @@ static bool
 mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 											   Query *parsed_mv_query,
 											   RelOptInfo *join_rel,
-											   ListOf (Expr *) **additional_where_clauses)
+											   ListOf (Expr *) **additional_where_clauses,
+											   const unsigned int log_indent)
 {
-	elog_if (g_debug_join_clause_check, INFO, "%s: checking MV's join tree is valid for the query plan...", __func__);
+	elog_if (g_debug_join_clause_check, INFO, "%*schecking MV's join tree is valid for the query plan...", log_indent, log_prefix);
+	
+	const unsigned int inner_log_indent = log_indent + indent;
 
-	elog_if (g_trace_join_clause_check, INFO, "%s: join_rel: %s", __func__, nodeToString (join_rel));
+	elog_if (g_trace_join_clause_check, INFO, "%*sjoin_rel: %s", inner_log_indent, log_prefix, nodeToString (join_rel));
 
 	// Attempt to find a legal join in the plan for each of the joins in the MV's jointree.
 	
@@ -1635,14 +1635,14 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	
 	Relids join_relids = IS_UPPER_REL (join_rel) ? root->all_baserels : join_rel->relids;
 	
-	elog_if (g_trace_join_clause_check, INFO, "%s: join_relids: %s", __func__, bmsToString (join_relids));
+	elog_if (g_trace_join_clause_check, INFO, "%*sjoin_relids: %s", inner_log_indent, log_prefix, bmsToString (join_relids));
 	
 	// As we walk the join tree, build up a list of quals. We will check each qual
 	// for presence in the query later.
 	ListOf (Expr *) *collated_query_quals = NIL;
 	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
-	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (NULL, root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals, indent))
+	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (NULL, root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals, inner_log_indent))
 		return false;
 
 	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
@@ -1650,7 +1650,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	};
 	
 	// Check each MV join clauses is present in the query plan.
-	if (!mv_rewrite_join_clauses_are_valid (&comparison_context, collated_mv_quals, &collated_query_quals))
+	if (!mv_rewrite_join_clauses_are_valid (&comparison_context, collated_mv_quals, &collated_query_quals, inner_log_indent))
 		return false;
 	
 	// Any query plan clauses not found will have to be folded as quals against the rewritten query.
@@ -1677,7 +1677,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 
 	if (list_length (query_oids) != 0)
 	{
-		elog_if (g_log_match_progress, INFO, "%s: the query does not involve all relations joined by the MV", __func__);
+		elog_if (g_log_match_progress, INFO, "%*sthe query does not involve all relations joined by the MV", inner_log_indent, log_prefix);
 
 		return false;
 	}
@@ -2438,7 +2438,8 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 									RelOptInfo *output_rel,
 									List *selected_tlist,
 									const char *mv_name,
-									Query **alternative_query)
+									Query **alternative_query,
+									const unsigned int log_indent)
 {
 	bool ok = false;
 	
@@ -2485,7 +2486,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	
 	// 2. Check the FROM and JOIN-related WHERE clauses: they must match exactly; any non-
 	//    JOIN-related WHERE clauses are returned and validated in step 4.
-    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, output_rel, &additional_where_clauses))
+    if (!mv_rewrite_from_join_clauses_are_valid_for_mv (root, parsed_mv_query, output_rel, &additional_where_clauses, log_indent))
         goto done;
     
     // 3. Append the HAVING clauses in the additional WHERE clause list. (They will actually be
@@ -2743,7 +2744,8 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 								   RelationKind stage,
 								   RelOptInfo *input_rel,
 								   RelOptInfo *output_rel,
-								   PathTarget *pathtarget)
+								   PathTarget *pathtarget,
+								   const unsigned int log_indent)
 {
 	if (!g_rewrite_enabled)
 		return;
@@ -2757,7 +2759,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 	// Check first that all of those rels are enabled for query rewrite...
 	if (!mv_rewrite_involved_rels_enabled_for_rewrite (involved_rel_names))
 	{
-		elog_if (g_log_match_progress, INFO, "%s: MV rewrite not enabled for one or more table in the query.", __func__);
+		elog_if (g_log_match_progress, INFO, "%*sMV rewrite not enabled for one or more table in the query.", log_indent, log_prefix);
 
 		return;
 	}
@@ -2773,7 +2775,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 			FmgrInfo	a2t_proc;
 			fmgr_info (F_ARRAY_TO_TEXT, &a2t_proc);
 
-			elog(INFO, "%s: no candidate MVs for query involving {%s}.", __func__,
+			elog(INFO, "%*sno candidate MVs for query involving {%s}.", log_indent, log_prefix,
 				 TextDatumGetCString (FunctionCall2Coll (&a2t_proc, InvalidOid,
 														 PointerGetDatum (strlist_to_textarray (involved_rel_names)),
 														 PointerGetDatum (cstring_to_text (",")))));
@@ -2790,14 +2792,16 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
     {
 		char *mv_name = strVal (lfirst(nc));
         
-        elog_if (g_log_match_progress, INFO, "%s: evaluating MV: %s", __func__, mv_name);
+        elog_if (g_log_match_progress, INFO, "%*sevaluating MV: %s", log_indent, log_prefix, mv_name);
+		
+		const unsigned int inner_log_indent = log_indent + indent;
 
         Query *alternative_query;
 		
-		if (mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, output_rel, selected_tlist, mv_name, &alternative_query))
+		if (mv_rewrite_evaluate_mv_for_rewrite (root, stage, input_rel, output_rel, selected_tlist, mv_name, &alternative_query, inner_log_indent))
 		{
 			// 8. Finally, create and add the path.
-			elog_if (g_log_match_progress, INFO, "%s: creating and adding path for scan on: %s%s%s", __func__,
+			elog_if (g_log_match_progress, INFO, "%*screating and adding path for scan on: %s%s%s", inner_log_indent, log_prefix,
 					 mv_name,
 					 alternative_query->jointree->quals != NULL ? " WHERE " : "",
 					 alternative_query->jointree->quals != NULL ?

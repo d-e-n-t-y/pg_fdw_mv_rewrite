@@ -16,3 +16,17 @@ with recursive data as (
   )
   select key, value
     from data;
+ key  | value 
+------+-------
+ key1 | 1
+ key1 | 2
+ key1 | 3
+ key1 | 4
+ key1 | 5
+ key1 | 6
+ key1 | 7
+ key1 | 8
+ key1 | 9
+ key1 | 10
+(10 rows)
+
