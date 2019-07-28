@@ -1441,31 +1441,52 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
                                  Query *parsed_mv_query,
                                  RelOptInfo *grouped_rel,
                                  List *selected_tlist,
-                                 struct mv_rewrite_xform_todo_list *todo_list)
+                                 struct mv_rewrite_xform_todo_list *todo_list,
+								 const unsigned int log_indent)
 {
-	// If we have an MV including GROUP BY clauses, check we are rewriting for a
-	// grouped_rel...
-	if (list_length (parsed_mv_query->groupClause) > 0 &&
-		(stage < UPPERREL_GROUP_AGG || list_length (root->parse->groupClause) == 0))
-	{
-		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite without GROUP BY, but MV is GROUP BY.", __func__);
+	elog_if (g_trace_match_progress, INFO, "%*schecking for GROUP BY clause match...", log_indent, log_prefix);
 
-		return false;
-	}
-	if (list_length (parsed_mv_query->groupClause) == 0 &&
-		(stage >= UPPERREL_GROUP_AGG && list_length (root->parse->groupClause) > 0))
-	{
-		elog_if (g_log_match_progress, INFO, "%s: looking to rewrite GROUP BY, but MV has no GROUP BY.", __func__);
-		return false;
-	}
-
-	// If both MV and quey are not GROUP BY, then we are done here...
-	if (grouped_rel == NULL)
-		return true;
+	// 1. If the MV has no GROUP BY clause, then, either:
+	//		a. we aren't at a stage where the output_rel needs one
+	//			--> so, return OK
+	//		b. we are at a stage when we need one, and:
+	//			1. the GROUP BY lists match in length;
+	//			2. and in content.
+	// 2. However, if the MV /does/ have a GROUP BY clause, then, either:
+	//		a. (Same as 1.b.), or;
+	//		b. we aren't at a stage that needs one
+	//			--> so return NO_MATCH
 	
+	const unsigned int inner_log_indent = log_indent + indent;
+	
+	if (list_length (parsed_mv_query->groupClause) == 0) // 1.
+	{
+		if (stage < UPPERREL_GROUP_AGG) // 1.a.
+			return true;
+		// Else check 1.b in code below.
+	}
+	else // 2.
+	{
+		if (stage < UPPERREL_GROUP_AGG) // 2.b.
+		{
+			elog_if (g_log_match_progress, INFO, "%*slooking to rewrite without GROUP BY, but MV is GROUP BY.", inner_log_indent, log_prefix);
+
+			return false;
+		}
+		// Else check 2.a (== 1.b) in code below.
+	}
+	
+	// 2.a.
 	if (list_length (root->parse->groupClause) != list_length (parsed_mv_query->groupClause))
 	{
-		elog_if (g_log_match_progress, INFO, "%s: GROUP BY list for MV and query differ in length.", __func__);
+		if (parsed_mv_query->groupClause == NIL)
+		{
+			elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY, but MV has no GROUP BY.", inner_log_indent, log_prefix);
+		}
+		else
+		{
+			elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY but clause list for MV and query differ in length.", inner_log_indent, log_prefix);
+		}
 		
 		return false;
 	}
@@ -1474,7 +1495,9 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 		root, parsed_mv_query->rtable
 	};
 	
-    // Check each GROUP BY clause (Expr) in turn...
+	const unsigned int inner2_log_indent = inner_log_indent + indent;
+	
+    // 2.b.
 	ListCell *query_lc, *mv_lc;
     forboth (query_lc, root->parse->groupClause, mv_lc, parsed_mv_query->groupClause)
     {
@@ -1484,13 +1507,13 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 		SortGroupClause *mv_sgc = lfirst (mv_lc);
 		Expr *mv_expr = get_sortgroupref_tle (mv_sgc->tleSortGroupRef, parsed_mv_query->targetList)->expr;
 		
-		elog_if (g_trace_group_clause_source_check, INFO, "%s: comparing query expression: %s", __func__, nodeToString (query_expr));
-		elog_if (g_trace_group_clause_source_check, INFO, "%s: with MV expression: %s", __func__, nodeToString (mv_expr));
+		elog_if (g_trace_group_clause_source_check, INFO, "%*scomparing query expression: %s", inner2_log_indent, log_prefix, nodeToString (query_expr));
+		elog_if (g_trace_group_clause_source_check, INFO, "%*swith MV expression: %s", inner2_log_indent, log_prefix, nodeToString (mv_expr));
 
 		// Check that the query Expr direclty matches its partner in the MV.
 		if (!mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_expr, &comparison_context))
         {
-            elog_if (g_log_match_progress, INFO, "%s: GROUP BY clause (%s) not found in query", __func__,
+            elog_if (g_log_match_progress, INFO, "%*sGROUP BY clause (%s) not found in query", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (parsed_mv_query->rtable, mv_expr));
 			
             return false;
@@ -1498,6 +1521,39 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
     }
 
     return true;
+}
+
+static ListOf (Expr *) *
+mv_rewrite_list_append_and_flatten_bool_exprs (ListOf (Expr *) *list,
+											   Node *node)
+{
+	if (IsA (node, List))
+	{
+		ListOf (Expr *) *flat_list = NIL;
+		ListCell *lc;
+		foreach (lc, (List *) node)
+		{
+			Node *expr = lfirst (lc);
+			
+			flat_list = mv_rewrite_list_append_and_flatten_bool_exprs (flat_list, expr);
+		}
+		return list_concat (list, flat_list);
+	}
+	else if (IsA (node, RestrictInfo))
+	{
+		return mv_rewrite_list_append_and_flatten_bool_exprs (list, (Node *) ((RestrictInfo *) node)->clause);
+	}
+	else if (IsA (node, BoolExpr))
+	{
+		if (((BoolExpr *) node)->boolop == AND_EXPR)
+		{
+			// Presumet there's nested AND_EXPRs with long clause lists.
+			return mv_rewrite_list_append_and_flatten_bool_exprs (list, (Node *) ((BoolExpr *) node)->args);
+		}
+	}
+	
+	// Otherwise (we assume some other kind of Expr)...
+	return lappend (list, node);
 }
 
 static bool
@@ -1520,6 +1576,8 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
  *
  * It is equally possible the query plan contained more clauses than the MV. Those
  * additional clauses are left in query_clauses.
+ *
+ * Note: this is destructive to the mv_join_quals list.
  */
 static bool
 mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *comparison_context,
@@ -1529,51 +1587,43 @@ mv_rewrite_join_clauses_are_valid (struct mv_rewrite_expr_targets_equals_ctx *co
 {
 	elog_if (g_debug_join_clause_check, INFO, "%*schecking FROM/JOIN clauses from MV are present in the query plan...", log_indent, log_prefix);
 
-	ListOf (Expr *) *query_clauses_copy = list_copy (*query_clauses);
-	
 	const unsigned int inner_log_indent = log_indent + indent;
-
-	ListCell *lc2;
-	foreach (lc2, mv_join_quals)
+	
+	ListCell *lc;
+	foreach (lc, mv_join_quals)
 	{
-		Expr *mv_jq = lfirst (lc2);
-		
-		if (IsA (mv_jq, RestrictInfo))
-			mv_jq = ((RestrictInfo *) mv_jq)->clause;
-		
-		if (IsA (mv_jq, BoolExpr) &&
-			((BoolExpr *) mv_jq)->boolop == AND_EXPR)
-		{
-			mv_join_quals = list_concat_unique_ptr (mv_join_quals, ((BoolExpr *) mv_jq)->args);
-			continue;
-		}
+		Expr *mv_jq = lfirst (lc);
 		
 		elog_if (g_debug_join_clause_check, INFO, "%*schecking FROM/JOIN expression: %s", inner_log_indent, log_prefix, mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
 		
 		const unsigned int inner2_log_indent = inner_log_indent + indent;
 		
 		bool found = false;
+		Expr *found_query_expr = NULL;
 		
-		ListCell *lc3;
-		foreach (lc3, query_clauses_copy)
+		ListCell *q_lc;
+		foreach (q_lc, *query_clauses)
 		{
-			Expr *query_expr = lfirst (lc3);
+			Expr *query_expr = lfirst (q_lc);
 			
 			elog_if (g_trace_join_clause_check, INFO, "%*sagainst expression: %s", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (comparison_context->root->parse->rtable, query_expr));
 			
 			if (mv_rewrite_expr_targets_equal ((Node *) query_expr, (Node *) mv_jq, comparison_context))
 			{
-				elog_if (g_debug_join_clause_check, INFO, "%*smatched expression: %s", inner2_log_indent, log_prefix, nodeToString (query_expr));
-				
-				*query_clauses = list_delete_ptr (*query_clauses, query_expr);
+				elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", inner2_log_indent, log_prefix);
 				
 				found = true;
+				found_query_expr = query_expr;
 				break;
 			}
 		}
 		
-		if (!found)
+		if (found)
+		{
+			*query_clauses = list_delete_ptr (*query_clauses, found_query_expr);
+		}
+		else
 		{
 			elog_if (g_log_match_progress, INFO, "%*sMV expression (%s) not found in clauses in the query.", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (comparison_context->parsed_mv_query_rtable, mv_jq));
@@ -1706,18 +1756,28 @@ mv_rewrite_check_nodes_supported_by_mv_tlist (PlannerInfo *root,
 											  struct mv_rewrite_xform_todo_list *todo_list,
 											  enum mv_rewrite_check_exprs_supported_action action,
 											  bool log_progress,
-											  bool trace_progress)
+											  bool trace_progress,
+											  const unsigned int log_indent)
 {
+	elog_if (trace_progress, INFO, "%*schecking expressions are supported by MV SELECT list...", log_indent, log_prefix);
+
+	const unsigned int inner_log_indent = log_indent + indent;
+	
 	ListCell   *lc;
 	foreach (lc, *clause_list)
 	{
 		Node *node = lfirst (lc);
 		
+		elog_if (trace_progress, INFO, "%*schecking expression: %s", inner_log_indent, log_prefix, mv_rewrite_deparse_expression (root->parse->rtable,
+																																  IsA (node, TargetEntry) ? ((TargetEntry *) node)->expr : (Expr *) node));
+
+		const unsigned int inner2_log_indent = inner_log_indent + indent;
+
 		// FIXME: we should check that none of the Expr's Vars references a levelsup > 0
 		
 		if (!mv_rewrite_check_expr_targets_in_mv_tlist (root, parsed_mv_query, node, todo_list, true, trace_progress))
 		{
-			elog_if (log_progress, INFO, "%s: %s clause (%s) not found in MV SELECT list", __func__, clause_type,
+			elog_if (log_progress, INFO, "%*sclause (%s) can not be supported by MV SELECT list", inner2_log_indent, log_prefix,
 					 mv_rewrite_deparse_expression (root->parse->rtable,
 													IsA (node, TargetEntry) ? ((TargetEntry *) node)->expr : (Expr *) node));
 			
@@ -1734,7 +1794,8 @@ mv_rewrite_check_nodes_supported_by_mv_tlist (PlannerInfo *root,
 ListOf (Expr *) *
 mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 								  RelOptInfo *rel,
-								  Index relid)
+								  Index relid,
+								  const unsigned int log_indent)
 {
 	ListOf (Expr *) *out_ris = NIL;
 
@@ -1745,6 +1806,8 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 	else if (IS_JOIN_REL (rel))
 		rel_ris = rel->joininfo;
 	
+	const unsigned inner_log_indent = log_indent + indent;
+	
 	ListCell *lc;
 	foreach (lc, rel_ris)
 	{
@@ -1752,7 +1815,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		if (rel_ri->is_pushed_down)
 		{
-			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%s: found pushed down clause: %s", __func__, mv_rewrite_deparse_expression (root->parse->rtable, rel_ri->clause));
+			elog_if (g_trace_pushed_down_clauses_collation, INFO, "%*sfound pushed down clause: %s", inner_log_indent, log_prefix, mv_rewrite_deparse_expression (root->parse->rtable, rel_ri->clause));
 
 			// The RI Vars are live structures in the query plan, so take a copy before
 			// perfroming any transformation on them.
@@ -1775,7 +1838,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		
 		if (subrel != NULL && IS_SIMPLE_REL (subrel))
 		{
-			ListOf (Expr *) *subris = mv_rewrite_get_pushed_down_exprs (rel->subroot, subrel, (Index) i);
+			ListOf (Expr *) *subris = mv_rewrite_get_pushed_down_exprs (rel->subroot, subrel, (Index) i, inner_log_indent);
 
 			sub_ris = list_concat (sub_ris, subris);
 		}
@@ -1791,7 +1854,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 				appendStringInfoString (cl, ", ");
 			appendStringInfoString (cl, mv_rewrite_deparse_expression (subroot->parse->rtable, (Expr *) lfirst (lc)));
 		}
-		elog (INFO, "%s: collated clause list: %s", __func__, cl->data);
+		elog (INFO, "%*scollated clause list: %s", inner_log_indent, log_prefix, cl->data);
 	}
 
 	// Done with this query level: thin out the list, and include only those
@@ -1804,7 +1867,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 		.replacement_varno = relid
 	};
 	
-	(void) mv_rewrite_check_nodes_supported_by_mv_tlist (subroot, subroot->parse, "pushed down", &sub_ris, &xform_todo_list, DeleteEntryButContinue, g_trace_pushed_down_clauses_collation, false);
+	(void) mv_rewrite_check_nodes_supported_by_mv_tlist (subroot, subroot->parse, "pushed down", &sub_ris, &xform_todo_list, DeleteEntryButContinue, g_trace_pushed_down_clauses_collation, false, inner_log_indent);
 	
 	// Rewrite RIs from the subquery, such that their Vars reference the subquery's target list,
 	// which has the effect of pulling them up a level.
@@ -1822,7 +1885,7 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 				appendStringInfoString (cl, ", ");
 			appendStringInfoString (cl, mv_rewrite_deparse_expression (root->parse->rtable, (Expr *) lfirst (lc)));
 		}
-		elog (INFO, "%s: resulting clause list: %s", __func__, cl->data);
+		elog (INFO, "%*sresulting clause list: %s", inner_log_indent, log_prefix, cl->data);
 	}
 
 done:
@@ -2066,7 +2129,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 					
 					elog_if (g_trace_join_clause_check, INFO, "%*srel: %s", log_indent, log_prefix, nodeToString (rel));
 
-					ListOf (Expr *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i);
+					ListOf (Expr *) *pushed_quals = mv_rewrite_get_pushed_down_exprs (root, rel, (Index) i, log_indent);
 					*collated_query_quals = list_concat_unique_ptr (*collated_query_quals, pushed_quals);
 
 					if (query_found_rel != NULL)
@@ -2129,10 +2192,10 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 	}
 	else if (IsA (node, JoinExpr))
 	{
-		JoinExpr *je = castNode (JoinExpr, node);
+		JoinExpr *mv_je = castNode (JoinExpr, node);
 		
-		Node *larg = je->larg;
-		Node *rarg = je->rarg;
+		Node *mv_larg = mv_je->larg;
+		Node *mv_rarg = mv_je->rarg;
 		
 		Relids larg_query_relids = NULL;
 		
@@ -2140,7 +2203,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 		RelOptInfo *lrel, *rrel;
 
 		// Check the left side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals, log_indent))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, mv_larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
 			elog_if (g_log_match_progress, INFO, "%*sleft side of join is not valid for plan", log_indent, log_prefix);
 
@@ -2150,7 +2213,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 		Relids rarg_query_relids = NULL;
 		
 		// Check the right side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals, log_indent))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, mv_rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
 			elog_if (g_log_match_progress, INFO, "%*sright side of join is not valid for plan", log_indent, log_prefix);
 			
@@ -2192,7 +2255,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 				legal_jt = JOIN_UNIQUE_INNER;
 		}
 	
-		if (legal_jt != je->jointype)
+		if (legal_jt != mv_je->jointype)
 		{
 			elog_if (g_log_match_progress, INFO, "%*sMV contains a join of type not matched in query.", log_indent, log_prefix);
 				
@@ -2219,8 +2282,10 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 		}
 
 		// Similarly record the quals from the MV jointree.
-		if (je->quals != NULL)
-			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, je->quals);
+		if (mv_je->quals != NULL)
+		{
+			*collated_mv_quals = mv_rewrite_list_append_and_flatten_bool_exprs (*collated_mv_quals, mv_je->quals);
+		}
 		
 		elog_if (g_trace_join_clause_check, INFO, "%*sjoin for relids found: %s", log_indent, log_prefix, bmsToString (*query_relids_involved));
 		
@@ -2244,7 +2309,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 		{
 			// Record the quals from the MV jointree.
 			if (fe->quals != NULL)
-				*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
+				*collated_mv_quals = mv_rewrite_list_append_and_flatten_bool_exprs (*collated_mv_quals, fe->quals);
 
 			return mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals, log_indent);
 		}
@@ -2266,8 +2331,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 				{
 					Node *child = lfirst (lc);
 	
-					List *mv_oids_involved = NIL;
-					
 					if (!first)
 						je->larg = je->rarg; // prior rarg becomes left
 					
@@ -2275,7 +2338,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 					
 					if (!first)
 					{
-						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals, log_indent))
+						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, (Node *) je, parsed_mv_query, join_relids, mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals, log_indent))
 							// Since we can't find a match, the MV doesn't match
 							return false;
 						
@@ -2308,7 +2371,9 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
 		
 		// Record the quals from the MV jointree.
 		if (fe->quals != NULL)
-			*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
+		{
+			*collated_mv_quals = mv_rewrite_list_append_and_flatten_bool_exprs (*collated_mv_quals, fe->quals);
+		}
 		
 		elog_if (g_trace_join_clause_check, INFO, "%*sjoin for relids found: %s", log_indent, log_prefix, bmsToString (*query_relids_involved));
 		
@@ -2417,7 +2482,7 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 	// The query obtained which represents the MV is now locked.
 	
     // 1a. Check the GROUP BY clause: it must match exactly.
-	if (!mv_rewrite_check_group_clauses_for_mv (root, stage, parsed_mv_query, output_rel, selected_tlist, &transform_todo_list))
+	if (!mv_rewrite_check_group_clauses_for_mv (root, stage, parsed_mv_query, output_rel, selected_tlist, &transform_todo_list, log_indent))
     	goto done;
 	
 	// 1b. Check the DISTINCT clause: it must match exactly.
@@ -2450,11 +2515,11 @@ mv_rewrite_evaluate_mv_for_rewrite (PlannerInfo *root,
 		additional_where_clauses = list_concat (additional_where_clauses, list_copy ((List *) root->parse->havingQual));
 	
     // 4. Check the additional WHERE clauses list, and any WHERE clauses not found in the FROM/JOIN list
-    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "WHERE", &additional_where_clauses, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_where_clause_source_check))
+    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "WHERE", &additional_where_clauses, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_where_clause_source_check, log_indent))
         goto done;
     
     // 5. Check the SELECT clauses: they must be a subset of the MV's tList
-    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "SELECT", &selected_tlist, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_select_clause_source_check))
+    if (!mv_rewrite_check_nodes_supported_by_mv_tlist (root, parsed_mv_query, "SELECT", &selected_tlist, &transform_todo_list, StopOnFailReturnFalse, g_log_match_progress, g_trace_select_clause_source_check, log_indent))
         goto done;
 
     // 6. Transform Exprs that were found to match Exprs in the MV into Vars that instead reference MV tList entries

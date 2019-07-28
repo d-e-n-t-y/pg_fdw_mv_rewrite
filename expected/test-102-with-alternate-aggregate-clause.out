@@ -2,31 +2,63 @@
 set mv_rewrite.log_match_progress = 'true';
 -- We don't actually care about the plan itself, only the log output.
 DO LANGUAGE plpgsql $$BEGIN EXECUTE 'explain (VERBOSE, COSTS OFF) select key, COUNT (key) from test group by key;'; END; $$;
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
 select key, COUNT (key) from test group by key;
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (count(key)) not found in MV SELECT list
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (count(key)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
  key  |  count  
 ------+---------
  key1 |      10

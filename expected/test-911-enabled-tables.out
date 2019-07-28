@@ -52,8 +52,9 @@ LOOP IF t LIKE '%Rewritten%' THEN RAISE 'Rewritten'; END IF; END LOOP; END; $$;
 set mv_rewrite.log_match_progress = 'true';
 -- We don't actually care about the plan itself, only the log output.
 DO LANGUAGE plpgsql $$ BEGIN EXECUTE 'explain (VERBOSE, COSTS OFF) select key, COUNT (value) from test group by key order by key;'; END; $$;
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
+INFO:  MV rewrite not enabled for one or more table in the query.
 -- Anticipate rewrite
 set mv_rewrite.log_match_progress = 'false';
 set mv_rewrite.rewrite_enabled_for_tables to default;

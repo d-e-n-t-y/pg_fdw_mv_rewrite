@@ -12,42 +12,62 @@ select t.key, COUNT (lt.value)
 	) lt
   where t.value::numeric < 50
   group by t.key;
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv5
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  evaluating MV: public.test_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv5
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
                                                     QUERY PLAN                                                     
 -------------------------------------------------------------------------------------------------------------------
  Finalize GroupAggregate
@@ -88,42 +108,62 @@ select t.key, COUNT (lt.value)
 	) lt
   where t.value::numeric < 50
   group by t.key;
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: GROUP BY list for MV and query differ in length.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_expr_mv1
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_union_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_mv5
-INFO:  mv_rewrite_from_join_clauses_are_valid_for_mv: the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv5
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  evaluating MV: public.test_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      the query does not involve all relations joined by the MV
+INFO:  evaluating MV: public.test_mv5
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_mv2
+INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:  evaluating MV: public.test_expr_mv1
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_union_mv1
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_union_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_mv5
+INFO:        clause (((t.value)::numeric < '50'::numeric)) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_recursive_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
  key  | count 
 ------+-------
  key1 |     9

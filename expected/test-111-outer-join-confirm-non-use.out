@@ -4,30 +4,38 @@ explain (VERBOSE, COSTS OFF)
 select n.name, n.class, v.additional, count(value) as count
 FROM test_name n LEFT OUTER JOIN test_value v ON n.id1 = v.id1 and n.id2 = v.id2
 GROUP BY n.name, n.class, v.additional;
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv3
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (v.value) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv4
-INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv1
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite without GROUP BY, but MV is GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv2
-INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv3
-INFO:  mv_rewrite_check_nodes_supported_by_mv_tlist: SELECT clause (v.value) not found in MV SELECT list
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv4
-INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv1
-INFO:  mv_rewrite_join_node_is_valid_for_plan_recurse: MV contains a join of type not matched in query.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv2
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv3
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
-INFO:  mv_rewrite_add_rewritten_mv_paths: evaluating MV: public.test_name_value_mv4
-INFO:  mv_rewrite_check_group_clauses_for_mv: looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv2
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv3
+INFO:        clause (v.value) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_name_value_mv4
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv1
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv2
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv3
+INFO:        clause (v.value) can not be supported by MV SELECT list
+INFO:  evaluating MV: public.test_name_value_mv4
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv1
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv3
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv4
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv1
+INFO:          MV contains a join of type not matched in query.
+INFO:  evaluating MV: public.test_name_value_mv2
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv3
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
+INFO:  evaluating MV: public.test_name_value_mv4
+INFO:      looking to rewrite GROUP BY, but MV has no GROUP BY.
                         QUERY PLAN                         
 -----------------------------------------------------------
  HashAggregate

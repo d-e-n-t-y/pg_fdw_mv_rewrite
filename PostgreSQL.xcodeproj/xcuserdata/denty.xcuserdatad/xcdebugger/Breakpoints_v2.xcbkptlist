@@ -224,7 +224,7 @@
                   moduleName = "postgres"
                   usesParentBreakpointCondition = "Yes"
                   urlString = "file:///Users/denty/junk/postgresql-12beta2/src/backend/utils/error/elog.c"
-                  timestampString = "585994520.309677"
+                  timestampString = "586029002.019346"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
                   startingLineNumber = "1337"
@@ -257,11 +257,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.277348"
+            timestampString = "586029001.974154"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "645"
-            endingLineNumber = "645"
+            startingLineNumber = "627"
+            endingLineNumber = "627"
             landmarkName = "mv_rewrite_get_involved_rel_names()"
             landmarkType = "9">
          </BreakpointContent>
@@ -273,11 +273,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.27786"
+            timestampString = "586029001.975034"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "496"
-            endingLineNumber = "496"
+            startingLineNumber = "478"
+            endingLineNumber = "478"
             landmarkName = "mv_rewrite_get_cte_for_plan_rte()"
             landmarkType = "9">
             <Locations>
@@ -321,12 +321,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.278186"
+            timestampString = "586029001.975464"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "596"
-            endingLineNumber = "596"
-            landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
+            startingLineNumber = "578"
+            endingLineNumber = "578"
+            landmarkName = "mv_rewrite_find_oids_for_relids_recurse()"
             landmarkType = "9">
             <Locations>
                <Location
@@ -369,11 +369,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.278506"
+            timestampString = "586029001.975852"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "646"
-            endingLineNumber = "646"
+            startingLineNumber = "628"
+            endingLineNumber = "628"
             landmarkName = "mv_rewrite_get_involved_rel_names()"
             landmarkType = "9">
          </BreakpointContent>
@@ -385,12 +385,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2788301"
+            timestampString = "586029001.97624"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "633"
-            endingLineNumber = "633"
-            landmarkName = "mv_rewrite_append_relname_for_oid()"
+            startingLineNumber = "615"
+            endingLineNumber = "615"
+            landmarkName = "mv_rewrite_get_involved_rel_names()"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -401,11 +401,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.279124"
+            timestampString = "586029001.976627"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "523"
-            endingLineNumber = "523"
+            startingLineNumber = "505"
+            endingLineNumber = "505"
             landmarkName = "mv_rewrite_get_cte_for_plan_rte()"
             landmarkType = "9">
             <Locations>
@@ -449,11 +449,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.27941"
+            timestampString = "586029001.9770041"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "610"
-            endingLineNumber = "610"
+            startingLineNumber = "592"
+            endingLineNumber = "592"
             landmarkName = "mv_rewrite_find_oids_for_relids_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -465,11 +465,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.279852"
+            timestampString = "586029001.977391"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "564"
-            endingLineNumber = "564"
+            startingLineNumber = "546"
+            endingLineNumber = "546"
             landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -481,11 +481,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.280152"
+            timestampString = "586029001.977767"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "570"
-            endingLineNumber = "570"
+            startingLineNumber = "552"
+            endingLineNumber = "552"
             landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -497,11 +497,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.280444"
+            timestampString = "586029001.978139"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "591"
-            endingLineNumber = "591"
+            startingLineNumber = "573"
+            endingLineNumber = "573"
             landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -513,12 +513,12 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2807389"
+            timestampString = "586029001.978514"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "597"
-            endingLineNumber = "597"
-            landmarkName = "mv_rewrite_find_oids_for_ri_recurse()"
+            startingLineNumber = "579"
+            endingLineNumber = "579"
+            landmarkName = "mv_rewrite_find_oids_for_relids_recurse()"
             landmarkType = "9">
          </BreakpointContent>
       </BreakpointProxy>
@@ -529,11 +529,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.281026"
+            timestampString = "586029001.9788851"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "933"
-            endingLineNumber = "933"
+            startingLineNumber = "915"
+            endingLineNumber = "915"
             landmarkName = "mv_rewrite_expr_targets_equals_walker()"
             landmarkType = "9">
          </BreakpointContent>
@@ -545,7 +545,71 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.281321"
+            timestampString = "586029001.979273"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "919"
+            endingLineNumber = "919"
+            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.979656"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "923"
+            endingLineNumber = "923"
+            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.9800251"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "927"
+            endingLineNumber = "927"
+            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.9803931"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "932"
+            endingLineNumber = "932"
+            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.980758"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "937"
@@ -561,7 +625,7 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.281615"
+            timestampString = "586029001.981124"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "941"
@@ -577,11 +641,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.281968"
+            timestampString = "586029001.981493"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "945"
-            endingLineNumber = "945"
+            startingLineNumber = "961"
+            endingLineNumber = "961"
             landmarkName = "mv_rewrite_expr_targets_equals_walker()"
             landmarkType = "9">
          </BreakpointContent>
@@ -593,75 +657,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.282315"
+            timestampString = "586029001.981871"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "950"
-            endingLineNumber = "950"
-            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "mv_rewrite.c"
-            timestampString = "585994520.282626"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "955"
-            endingLineNumber = "955"
-            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "mv_rewrite.c"
-            timestampString = "585994520.282933"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "959"
-            endingLineNumber = "959"
-            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "mv_rewrite.c"
-            timestampString = "585994520.283219"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "978"
-            endingLineNumber = "978"
-            landmarkName = "mv_rewrite_expr_targets_equals_walker()"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
-            shouldBeEnabled = "No"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "mv_rewrite.c"
-            timestampString = "585994520.283504"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "2179"
-            endingLineNumber = "2179"
+            startingLineNumber = "2180"
+            endingLineNumber = "2180"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
             landmarkType = "9">
             <Locations>
@@ -705,11 +705,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2838219"
+            timestampString = "586029001.982289"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "2133"
-            endingLineNumber = "2133"
+            startingLineNumber = "2134"
+            endingLineNumber = "2134"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -769,11 +769,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2841949"
+            timestampString = "586029001.98274"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "2171"
-            endingLineNumber = "2171"
+            startingLineNumber = "2172"
+            endingLineNumber = "2172"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -897,11 +897,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2846299"
+            timestampString = "586029001.983241"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "396"
-            endingLineNumber = "396"
+            startingLineNumber = "378"
+            endingLineNumber = "378"
             landmarkName = "mv_rewrite_create_upper_paths_hook()"
             landmarkType = "9">
             <Locations>
@@ -941,31 +941,15 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "Yes"
-            ignoreCount = "0"
-            continueAfterRunningActions = "No"
-            filePath = "mv_rewrite.c"
-            timestampString = "585994520.284919"
-            startingColumnNumber = "9223372036854775807"
-            endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1583"
-            endingLineNumber = "1583"
-            landmarkName = "mv_rewrite_join_clauses_are_valid()"
-            landmarkType = "9">
-         </BreakpointContent>
-      </BreakpointProxy>
-      <BreakpointProxy
-         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
-         <BreakpointContent
             shouldBeEnabled = "No"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.285215"
+            timestampString = "586029001.983981"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "330"
-            endingLineNumber = "330"
+            startingLineNumber = "310"
+            endingLineNumber = "310"
             landmarkName = "mv_rewrite_set_join_pathlist_hook()"
             landmarkType = "9">
          </BreakpointContent>
@@ -977,11 +961,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.285493"
+            timestampString = "586029001.98434"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "379"
-            endingLineNumber = "379"
+            startingLineNumber = "361"
+            endingLineNumber = "361"
             landmarkName = "mv_rewrite_create_upper_paths_hook()"
             landmarkType = "9">
          </BreakpointContent>
@@ -989,47 +973,47 @@
       <BreakpointProxy
          BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
          <BreakpointContent
-            shouldBeEnabled = "No"
+            shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.285766"
+            timestampString = "586029001.984699"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1679"
-            endingLineNumber = "1679"
+            startingLineNumber = "1698"
+            endingLineNumber = "1698"
             landmarkName = "mv_rewrite_from_join_clauses_are_valid_for_mv()"
             landmarkType = "9">
             <Locations>
                <Location
-                  shouldBeEnabled = "No"
+                  shouldBeEnabled = "Yes"
                   ignoreCount = "0"
                   continueAfterRunningActions = "No"
                   symbolName = "mv_rewrite_from_join_clauses_are_valid_for_mv"
                   moduleName = "mv_rewrite.0.6.2.so"
                   usesParentBreakpointCondition = "Yes"
                   urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
-                  timestampString = "585960704.765532"
+                  timestampString = "586029002.091869"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1679"
-                  endingLineNumber = "1679"
-                  offsetFromSymbolStart = "734">
+                  startingLineNumber = "1698"
+                  endingLineNumber = "1698"
+                  offsetFromSymbolStart = "808">
                </Location>
                <Location
-                  shouldBeEnabled = "No"
+                  shouldBeEnabled = "Yes"
                   ignoreCount = "0"
                   continueAfterRunningActions = "No"
                   symbolName = "mv_rewrite_from_join_clauses_are_valid_for_mv"
                   moduleName = "mv_rewrite.0.6.2.so"
                   usesParentBreakpointCondition = "Yes"
                   urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
-                  timestampString = "585960704.768294"
+                  timestampString = "586029002.094692"
                   startingColumnNumber = "9223372036854775807"
                   endingColumnNumber = "9223372036854775807"
-                  startingLineNumber = "1679"
-                  endingLineNumber = "1679"
-                  offsetFromSymbolStart = "748">
+                  startingLineNumber = "1698"
+                  endingLineNumber = "1698"
+                  offsetFromSymbolStart = "822">
                </Location>
             </Locations>
          </BreakpointContent>
@@ -1041,11 +1025,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.286057"
+            timestampString = "586029001.98507"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "2155"
-            endingLineNumber = "2155"
+            startingLineNumber = "2156"
+            endingLineNumber = "2156"
             landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
             landmarkType = "9">
          </BreakpointContent>
@@ -1057,13 +1041,349 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "mv_rewrite.c"
-            timestampString = "585994520.2863671"
+            timestampString = "586029001.985463"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "1965"
-            endingLineNumber = "1965"
-            landmarkName = "mv_rewrite_find_oids_for_subquery()"
+            startingLineNumber = "1974"
+            endingLineNumber = "1974"
+            landmarkName = "mv_rewrite_explain_rte()"
             landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.985823"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1622"
+            endingLineNumber = "1622"
+            landmarkName = "mv_rewrite_join_clauses_are_valid()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.986151"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1575"
+            endingLineNumber = "1575"
+            landmarkName = "unknown"
+            landmarkType = "0">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.986479"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2264"
+            endingLineNumber = "2264"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.986806"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2272"
+            endingLineNumber = "2272"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.987132"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2278"
+            endingLineNumber = "2278"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586011434.656346"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "2246"
+                  endingLineNumber = "2246"
+                  offsetFromSymbolStart = "4205">
+               </Location>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586011434.658646"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "2246"
+                  endingLineNumber = "2246"
+                  offsetFromSymbolStart = "4210">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.9874589"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2353"
+            endingLineNumber = "2353"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.98779"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2366"
+            endingLineNumber = "2366"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586011434.759739"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "2338"
+                  endingLineNumber = "2338"
+                  offsetFromSymbolStart = "5572">
+               </Location>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_node_is_valid_for_plan_recurse"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586011434.762447"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "2338"
+                  endingLineNumber = "2338"
+                  offsetFromSymbolStart = "5577">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.988119"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2094"
+            endingLineNumber = "2094"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.988446"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2081"
+            endingLineNumber = "2081"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.988764"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2113"
+            endingLineNumber = "2113"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.989084"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "2163"
+            endingLineNumber = "2163"
+            landmarkName = "mv_rewrite_join_node_is_valid_for_plan_recurse()"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.9894"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1488"
+            endingLineNumber = "1488"
+            landmarkName = "mv_rewrite_check_group_clauses_for_mv()"
+            landmarkType = "9">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_check_group_clauses_for_mv"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586014729.147725"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "1468"
+                  endingLineNumber = "1468"
+                  offsetFromSymbolStart = "396">
+               </Location>
+               <Location
+                  shouldBeEnabled = "No"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_check_group_clauses_for_mv"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586014729.149377"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "1468"
+                  endingLineNumber = "1468"
+                  offsetFromSymbolStart = "410">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "mv_rewrite.c"
+            timestampString = "586029001.989699"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "1619"
+            endingLineNumber = "1619"
+            landmarkName = "mv_rewrite_join_clauses_are_valid()"
+            landmarkType = "9">
+            <Locations>
+               <Location
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_clauses_are_valid"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586029002.121502"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "1619"
+                  endingLineNumber = "1619"
+                  offsetFromSymbolStart = "856">
+               </Location>
+               <Location
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "mv_rewrite_join_clauses_are_valid"
+                  moduleName = "mv_rewrite.0.6.2.so"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/denty/Desktop/pg_fdw_mv_rewrite/mv_rewrite.c"
+                  timestampString = "586029002.123188"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "1619"
+                  endingLineNumber = "1619"
+                  offsetFromSymbolStart = "870">
+               </Location>
+            </Locations>
          </BreakpointContent>
       </BreakpointProxy>
    </Breakpoints>
