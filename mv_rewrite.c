@@ -44,6 +44,7 @@
 #include "optimizer/tlist.h"
 #include "parser/parse_clause.h"
 #include "parser/parse_oper.h"
+#include "parser/parse_relation.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -1518,7 +1519,8 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 }
 
 static bool
-mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
+mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
+								  PlannerInfo *root,
 								  Node *node,
 			  					  Query *parsed_mv_query,
 								  Relids join_relids,
@@ -1640,7 +1642,7 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	ListOf (Expr *) *collated_query_quals = NIL;
 	ListOf (RestrictInfo *) *collated_mv_quals = NIL;
 
-	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals, indent))
+	if (!mv_rewrite_join_node_is_valid_for_plan_recurse (NULL, root, (Node *) parsed_mv_query->jointree, parsed_mv_query, join_relids, &mv_oids_involved, &query_relids_involved, NULL, &collated_query_quals, &collated_mv_quals, indent))
 		return false;
 
 	struct mv_rewrite_expr_targets_equals_ctx comparison_context = {
@@ -1654,8 +1656,26 @@ mv_rewrite_from_join_clauses_are_valid_for_mv (PlannerInfo *root,
 	// Any query plan clauses not found will have to be folded as quals against the rewritten query.
 	*additional_where_clauses = collated_query_quals;
 	
-	// The join should now have accounted for every rel in the join_rel: if not, we don't have a match
-	if (!bms_equal (join_relids, query_relids_involved))
+	// The join should now have accounted for every relation in the. We check this now in case,
+	// during the join search, we missed some relations that were joined in the plan, but not joined
+	// by the MV.
+	//
+	// We have to make this comparison by OIDs, rather than Relids, which means we can't use
+	// bms_equal().
+	List *query_oids = NIL;
+	ListOf (RelOptInfo *) *seen_ris = NIL;
+	if (!mv_rewrite_find_oids_for_relids_recurse (root, join_relids, &query_oids, &seen_ris))
+		return false;
+	
+	ListCell *lc;
+	foreach (lc, mv_oids_involved)
+	{
+		Oid mv_oid = lfirst_oid (lc);
+		
+		query_oids = list_delete_oid (query_oids, mv_oid);
+	}
+
+	if (list_length (query_oids) != 0)
 	{
 		elog_if (g_log_match_progress, INFO, "%s: the query does not involve all relations joined by the MV", __func__);
 
@@ -1935,6 +1955,54 @@ mv_rewrite_explain_rte (Query *query, Node *node, StringInfo out)
 	}
 }
 
+static void
+mv_rewrite_find_oids_for_subquery (ParseState *pstate, Query *query, ListOf (Oid) **oids_involved)
+{
+	if (pstate == NULL)
+		pstate = make_parsestate (NULL);
+	pstate->p_ctenamespace = query->cteList;
+
+	ListCell *lc;
+	foreach (lc, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst (lc);
+		
+		switch (rte->rtekind)
+		{
+			case RTE_RELATION:
+				*oids_involved = list_append_unique_oid (*oids_involved, rte->relid);
+				break;
+			case RTE_SUBQUERY:
+			{
+				mv_rewrite_find_oids_for_subquery (make_parsestate (pstate), rte->subquery, oids_involved);
+				break;
+			}
+			case RTE_JOIN:
+				break;
+			case RTE_CTE:
+			{
+				// Avoid recursing infinitely into RECURISVE CTEs
+				if (rte->self_reference)
+					break;
+				CommonTableExpr *cte = GetCTEForRTE (pstate, rte, 0);
+				for (unsigned int i = 0; i < rte->ctelevelsup; i++)
+					pstate = pstate->parentParseState;
+				mv_rewrite_find_oids_for_subquery (make_parsestate (pstate), (Query *) cte->ctequery, oids_involved);
+				break;
+			}
+			case RTE_FUNCTION:
+			case RTE_TABLEFUNC:
+			case RTE_VALUES:
+			case RTE_NAMEDTUPLESTORE:
+			case RTE_RESULT:
+			default:
+				elog (ERROR, "RTE kind (%d) not handled.", rte->rtekind);
+				break;
+		}
+	}
+}
+
+
 /**
  * Recursively descend into the MV's jointree, and do two things:
  *
@@ -1944,7 +2012,8 @@ mv_rewrite_explain_rte (Query *query, Node *node, StringInfo out)
  *
  */
 static bool
-mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
+mv_rewrite_join_node_is_valid_for_plan_recurse (ParseState *pstate,
+								  PlannerInfo *root,
 								  Node *node,
 								  Query *parsed_mv_query,
 								  Relids join_relids,
@@ -1955,7 +2024,12 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 								  ListOf (RestrictInfo *) **collated_mv_quals,
 								  unsigned int log_indent)
 {
-	// elog_if (g_trace_join_clause_check, INFO, "%s: processing node: %s", __func__, nodeToString (node));
+	if (pstate == NULL)
+	{
+		pstate = make_parsestate (NULL);
+		pstate->p_ctenamespace = parsed_mv_query->cteList;
+	}
+
 	if (g_debug_join_clause_check)
 	{
 		StringInfo mv_query_join_str = makeStringInfo();
@@ -1971,14 +2045,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		
 		// Find the OID it references.
 		Oid mv_oid = mv_rte->relid;
-		
-		if (mv_rte->rtekind == RTE_RELATION)
-			if (list_member_oid (*mv_oids_involved, mv_oid))
-			{
-				elog_if (g_log_match_progress, INFO, "%*sMV with multiple mentions of same OID not supported.", log_indent, log_prefix);
-
-				return false;
-			}
 		
 		// Locate the same OID the query plan.
 		for (int i = bms_next_member (join_relids, -1);
@@ -1996,6 +2062,13 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 				// If found, keep a record so we know what joins to what later.
 				if (mv_oid == join_oid)
 				{
+					if (list_member_oid (*mv_oids_involved, mv_oid))
+					{
+						elog_if (g_log_match_progress, INFO, "%*sMV with multiple mentions of same OID not supported.", log_indent, log_prefix);
+						
+						return false;
+					}
+					
 					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 
@@ -2027,7 +2100,9 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			{
 				if (equal_tree_walker (mv_rte, plan_rte, mv_rewrite_rte_equals_walker, NULL))
 				{
-					*mv_oids_involved = list_append_unique_oid (*mv_oids_involved, mv_oid);
+					// Recurse down into the MV query to find the OIDs involved...
+					mv_rewrite_find_oids_for_subquery (make_parsestate (pstate), mv_rte->subquery, mv_oids_involved);
+					
 					*query_relids_involved = bms_add_member (*query_relids_involved, i);
 					
 					elog_if (g_trace_join_clause_check, INFO, "%*smatch found: MV rtindex: %d; MV Oid: %d; matches plan relid: %d", log_indent, log_prefix, rtr->rtindex, (int) mv_oid, i);
@@ -2069,17 +2144,15 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					continue;
 				}
 				
-				Index parsed_ctendx;
-				CommonTableExpr *mv_cte = mv_rewrite_get_cte_for_query_rte (parsed_mv_query, mv_rte, &parsed_ctendx);
-				if (mv_cte == NULL)
-				{
-					elog (ERROR, "CTE referenced from MV was not found in MV definition");
-
-					continue;
-				}
+				CommonTableExpr *mv_cte = GetCTEForRTE (pstate, mv_rte, 0);
+				for (unsigned int i = 0; i < mv_rte->ctelevelsup; i++)
+					pstate = pstate->parentParseState;
 				
 				if (equal_tree_walker (mv_cte->ctequery, plan_cte_subroot->parse, mv_rewrite_rte_equals_walker, NULL))
 				{
+					// Rrecurse into the MV subquery, and find all the OIDs involved in order that we can check it later.
+					mv_rewrite_find_oids_for_subquery (make_parsestate (pstate), (Query *) mv_cte->ctequery, mv_oids_involved);
+
 					elog_if (g_debug_join_clause_check, INFO, "%*smatch found.", log_indent, log_prefix);
 
 					return true;
@@ -2091,8 +2164,6 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					continue;
 				}
 			}
-			
-			// FIXME: other rtekinds?
 		}
 
 		// Otherwise, since we can't find a match, that means the MV doesn't match the query.
@@ -2114,7 +2185,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		RelOptInfo *lrel, *rrel;
 
 		// Check the left side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals, log_indent))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, larg, parsed_mv_query, join_relids, mv_oids_involved, &larg_query_relids, &lrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
 			elog_if (g_log_match_progress, INFO, "%*sleft side of join is not valid for plan", log_indent, log_prefix);
 
@@ -2124,7 +2195,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 		Relids rarg_query_relids = NULL;
 		
 		// Check the right side of the join is legal according to the plan.
-		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals, log_indent))
+		if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, rarg, parsed_mv_query, join_relids, mv_oids_involved, &rarg_query_relids, &rrel, collated_query_quals, collated_mv_quals, log_indent))
 		{
 			elog_if (g_log_match_progress, INFO, "%*sright side of join is not valid for plan", log_indent, log_prefix);
 			
@@ -2220,7 +2291,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 			if (fe->quals != NULL)
 				*collated_mv_quals = list_append_unique_ptr (*collated_mv_quals, fe->quals);
 
-			return mv_rewrite_join_node_is_valid_for_plan_recurse (root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals, log_indent);
+			return mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, list_nth_node (Node, fe->fromlist, 0), parsed_mv_query, join_relids, mv_oids_involved, query_relids_involved, NULL, collated_query_quals, collated_mv_quals, log_indent);
 		}
 		
 		// Note that it is possible that there are /no/ items in the FROM list (e.g.,
@@ -2249,7 +2320,7 @@ mv_rewrite_join_node_is_valid_for_plan_recurse (PlannerInfo *root,
 					
 					if (!first)
 					{
-						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals, log_indent))
+						if (!mv_rewrite_join_node_is_valid_for_plan_recurse (pstate, root, (Node *) je, parsed_mv_query, join_relids, &mv_oids_involved, &outrelids, NULL, collated_query_quals, collated_mv_quals, log_indent))
 							// Since we can't find a match, the MV doesn't match
 							return false;
 						
