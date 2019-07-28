@@ -264,29 +264,6 @@ mv_rewrite_deparse_expression (ListOf (RangeTblEntry *) *rtable,
 							   true, false);
 }
 
-static bool
-mv_rewrite_check_ctes_inlined (PlannerInfo *root)
-{
-	ListCell *sr_lc;
-	foreach (sr_lc, root->glob->subroots)
-	{
-		PlannerInfo *subroot = (PlannerInfo *) lfirst (sr_lc);
-		
-		ListCell *q_lc;
-		foreach (q_lc, subroot->cte_plan_ids)
-		{
-			int plan_id = lfirst_int (q_lc);
-			
-			// A plan ID of -1 indicates that the CTE has been inlined, and is now
-			// a SUBQUERY in the main query.
-			if (plan_id != -1)
-				return false;
-		}
-	}
-	
-	return true;
-}
-
 /*
  * evaluate_query_for_rewrite_support
  *        Check that the query being planned does not involve any features
@@ -1850,28 +1827,6 @@ mv_rewrite_get_pushed_down_exprs (PlannerInfo *root,
 
 done:
 	return out_ris;
-}
-
-
-static CommonTableExpr *
-mv_rewrite_get_cte_for_query_rte (Query *parsed_mv_query, RangeTblEntry *mv_rte, Index *parsed_ctendx)
-{
-	if (mv_rte->ctelevelsup != 0)
-		return NULL;
-
-	*parsed_ctendx = 0;
-	ListCell *lc;
-	foreach (lc, parsed_mv_query->cteList)
-	{
-		CommonTableExpr *mv_cte = lfirst_node (CommonTableExpr, lc);
-		
-		if (strcmp (mv_cte->ctename, mv_rte->ctename) == 0)
-			return mv_cte;
-
-		(*parsed_ctendx)++;
-	}
-	
-	return NULL;
 }
 
 static void
