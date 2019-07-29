@@ -1933,7 +1933,6 @@ mv_rewrite_explain_rte (Query *query, Node *node, StringInfo out)
 			case RTE_TABLEFUNC:
 			case RTE_VALUES:
 			case RTE_NAMEDTUPLESTORE:
-			case RTE_RESULT:
 			default:
 				appendStringInfo (out, "(other: type %d)", rte->rtekind);
 				break;
@@ -2013,7 +2012,6 @@ mv_rewrite_find_oids_for_subquery (ParseState *pstate, Query *query, ListOf (Oid
 			case RTE_TABLEFUNC:
 			case RTE_VALUES:
 			case RTE_NAMEDTUPLESTORE:
-			case RTE_RESULT:
 			default:
 				elog (ERROR, "RTE kind (%d) not handled.", rte->rtekind);
 				break;

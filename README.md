@@ -98,7 +98,7 @@ Query rewrite is only considered for:
 * simple SELECTS and queries that involve JOINs;
 * queries with WHERE and/or HAVING clauses.
 
-RECURSIVE queries are not supported, nor are LATERAL joins.
+RECURSIVE queries are not yet properly supported, nor are LATERAL joins.
 
 ## Configurable parameters
 
