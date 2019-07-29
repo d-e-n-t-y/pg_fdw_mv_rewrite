@@ -17,17 +17,17 @@ select key, count (value)
   from data
   group by key;
 INFO:  evaluating MV: public.test_mv1
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_mv2
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_expr_mv1
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_union_mv1
 INFO:      the query does not involve all relations joined by the MV
 INFO:  evaluating MV: public.test_union_mv2
 INFO:      the query does not involve all relations joined by the MV
 INFO:  evaluating MV: public.test_mv5
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_recursive_mv2
 INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
 INFO:  evaluating MV: public.test_mv1
@@ -114,17 +114,17 @@ select key, count (value)
   from data
   group by key;
 INFO:  evaluating MV: public.test_mv1
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_mv2
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_expr_mv1
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_union_mv1
 INFO:      the query does not involve all relations joined by the MV
 INFO:  evaluating MV: public.test_union_mv2
 INFO:      the query does not involve all relations joined by the MV
 INFO:  evaluating MV: public.test_mv5
-INFO:      looking to rewrite GROUP BY but clause list for MV and query differ in length.
+INFO:      looking to rewrite without GROUP BY, but MV is GROUP BY.
 INFO:  evaluating MV: public.test_recursive_mv2
 INFO:          no match found in plan for MV rtindex: 3; MV Oid: 0
 INFO:  evaluating MV: public.test_mv1

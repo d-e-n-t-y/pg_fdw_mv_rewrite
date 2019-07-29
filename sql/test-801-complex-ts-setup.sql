@@ -81,7 +81,7 @@ create or replace view event_sdr_device_signal as
     event_sdr_device."timestamp",
     'SIGNAL'::text AS category,
     event_sdr_device.sdr_device AS subcategory,
-    1.0::double precision AS detail
+    1.0 AS detail
    FROM event_sdr_device;
 
 create or replace view events_all as
@@ -155,7 +155,7 @@ create or replace function ordered_ts (start_ts timestamp with time zone,
                     returns table ("timestamp" timestamp with time zone,
                                    value float,
                                    stddev_detail float, min_detail float, max_detail float,
-                                   count_measurements bigint, count_events bigint,
+                                   count_measurements bigint,
                                    max_low_battery float)
                     language sql stable
 as $$
@@ -164,7 +164,7 @@ as $$
         sum (avg_detail*count_measurements)/sum (count_measurements) avg_detail,
         avg (stddev_detail) stddev_detail,
         min (min_detail) min_detail, max (max_detail) max_detail,
-        sum (count_measurements)::bigint count_measurements, sum (count_events)::bigint count_events,
+        sum (count_measurements)::bigint count_measurements,
         0::float max_low_battery
      from
        ts_series_bucket (start_ts, end_ts, unit, bucket_size) ts
@@ -173,8 +173,7 @@ as $$
             ts_to_bucket (d.timestamp, unit, bucket_size) as ts_bucket,
             avg (d.detail::float) avg_detail, stddev_pop (d.detail::float) stddev_detail,
             min (d.detail::float) min_detail, max (d.detail::float) max_detail,
-            count (d.detail) count_measurements,
-            sum (case when d.detail = 1.0::double precision then 1 else 0 end) count_events
+            count (d.detail) count_measurements
          from
            events_all_room d
          where
@@ -210,11 +209,6 @@ create materialized view test99 as
     min(events_all_room.detail) AS min_detail,
     max(events_all_room.detail) AS max_detail,
     count(events_all_room.detail) AS count_measurements,
-    sum(
-        CASE
-            WHEN events_all_room.detail = 1.0::double precision THEN 1
-            ELSE 0
-        END) AS count_events,
     events_all_room.category,
     events_all_room.subcategory,
     r.name AS room_name

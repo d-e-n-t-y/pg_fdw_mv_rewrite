@@ -720,11 +720,7 @@ mv_rewrite_eval_const_expressions (Query *mv_query)
 	mv_query->targetList = (List *) expression_tree_mutator ((Node *) mv_query->targetList, mv_rewrite_eval_const_expressions_etm, NULL);
 	mv_query->limitCount = eval_const_expressions (NULL, mv_query->limitCount); //FIXME: should check it during eval
 	mv_query->limitOffset = eval_const_expressions (NULL, mv_query->limitOffset); //FIXME: should check it during eval
-	//elog(INFO, "simplifyied: %s", nodeToString (mv_query->jointree));
 	mv_query->jointree = (FromExpr *) expression_tree_mutator ((Node *) mv_query->jointree, mv_rewrite_eval_const_expressions_etm, NULL);
-	mv_query->jointree->quals = (Node *) make_ands_implicit ((Expr *) mv_query->jointree->quals);
-	//FIXME: recurse into jointree, a la preprocess_qual_conditions()
-	//elog(INFO, "... to: %s", nodeToString (mv_query->jointree));
 
 	foreach (lc, mv_query->cteList)
 	{
@@ -1477,16 +1473,21 @@ mv_rewrite_check_group_clauses_for_mv (PlannerInfo *root,
 	}
 	
 	// 2.a.
-	if (list_length (root->parse->groupClause) != list_length (parsed_mv_query->groupClause))
+	if (root->parse->groupClause != NIL && parsed_mv_query->groupClause == NIL)
 	{
-		if (parsed_mv_query->groupClause == NIL)
-		{
-			elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY, but MV has no GROUP BY.", inner_log_indent, log_prefix);
-		}
-		else
-		{
-			elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY but clause list for MV and query differ in length.", inner_log_indent, log_prefix);
-		}
+		elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY, but MV has no GROUP BY.", inner_log_indent, log_prefix);
+		
+		return false;
+	}
+	else if (root->parse->groupClause == NIL && parsed_mv_query->groupClause != NIL)
+	{
+		elog_if (g_log_match_progress, INFO, "%*slooking to rewrite without GROUP BY, but MV is GROUP BY.", inner_log_indent, log_prefix);
+		
+		return false;
+	}
+	else if (list_length (root->parse->groupClause) != list_length (parsed_mv_query->groupClause))
+	{
+		elog_if (g_log_match_progress, INFO, "%*slooking to rewrite GROUP BY but clause list for MV and query differ in length.", inner_log_indent, log_prefix);
 		
 		return false;
 	}
