@@ -2679,8 +2679,8 @@ mv_rewrite_involved_rels_enabled_for_rewrite (List *involved_rel_names)
 	return true;
 }
 
-static Path *
-mv_rewrite_create_mv_scan_path (PlannerInfo *root,
+static void
+mv_rewrite_add_mv_scan_path (PlannerInfo *root,
 								Query *alternative_query,
 								RelOptInfo *rel,
 								List *selected_tlist,
@@ -2690,72 +2690,108 @@ mv_rewrite_create_mv_scan_path (PlannerInfo *root,
 	/* plan_params should not be in use in current query level */
 	elog_if (root->plan_params != NIL, ERROR, "%s: plan_params != NIL", __func__);
 	
-	/* Generate Paths for the subquery. */
-	PlannedStmt *pstmt = pg_plan_query (alternative_query,
-										(root->glob->parallelModeOK ? CURSOR_OPT_PARALLEL_OK : 0 )
-										| (root->tuple_fraction <= 1e-10 ? CURSOR_OPT_FAST_PLAN : 0),
-										root->glob->boundParams);
-	
-	Plan *subplan = pstmt->planTree;
-	
-	/* Bury our subquery inside a CustomPath. We need to do this because
-	 * the SubQueryScanPath code expects the query to be 1:1 related to the
-	 * root's PlannerInfo --- now, of course, the origingal query didn't have
-	 * any such subquery in it at all, let alone with a 1:1 relationship.
+	/*
+	 * If it's a LATERAL subquery, it might contain some Vars of the current
+	 * query level, requiring it to be treated as parameterized, even though
+	 * we don't support pushing down join quals into subqueries.
 	 */
-	CustomPath *cp = makeNode (CustomPath);
-	cp->path.pathtype = T_CustomScan;
-	cp->flags = 0;
-	cp->methods = &mv_rewrite_path_methods;
-	
-	// Take the cost information from the replacement query...
-	cp->path.startup_cost = subplan->startup_cost;
-	cp->path.total_cost = subplan->total_cost;
-	cp->path.rows = subplan->plan_rows;
-	if (IsA (subplan, Gather))
-		cp->path.parallel_workers = ((Gather *) subplan)->num_workers;
-	else if (IsA (subplan, GatherMerge))
-		cp->path.parallel_workers = ((GatherMerge *) subplan)->num_workers;
-	
-	// The target that the Path will delivr is our grouped_rel/grouping_target
-	cp->path.pathtarget = pathtarget;
-	cp->path.parent = rel;
-	
-	cp->path.param_info = NULL;
-	cp->path.parallel_aware = subplan->parallel_aware;
-	cp->path.parallel_safe = subplan->parallel_safe;
-	
-	// Work out the cost of the competing (unrewritten) plan...
-	StringInfo competing_cost = makeStringInfo();
+	Relids required_outer = rel->lateral_relids;
 
-	ListCell *lc;
-	foreach (lc, rel->pathlist)
+	/* Generate a subroot and Paths for the subquery */
+	rel->subroot = subquery_planner (root->glob, alternative_query,
+									root,
+									false,
+									root->tuple_fraction /* FIXME */);
+	
+	/* Isolate the params needed by this specific subplan */
+	rel->subplan_params = root->plan_params;
+	root->plan_params = NIL;
+	
+	/*
+	 * It's possible that constraint exclusion proved the subquery empty. If
+	 * so, it's desirable to produce an unadorned dummy path so that we will
+	 * recognize appropriate optimizations at this query level.
+	 */
+	RelOptInfo *sub_final_rel = fetch_upper_rel(rel->subroot, UPPERREL_FINAL, NULL);
+	
+	if (IS_DUMMY_REL(sub_final_rel))
 	{
-		Path *p = lfirst_node (Path, lc);
-		
-		if (competing_cost->len > 0)
-			appendStringInfo (competing_cost, "; ");
-		
-		appendStringInfo (competing_cost, "cost=%.2f..%.2f rows=%.0f width=%d",
-						  p->startup_cost, p->total_cost, p->rows, p->pathtarget->width);
+		//set_dummy_rel_pathlist(rel);
+		return;
 	}
 	
-	elog_if (g_trace_match_progress, INFO, "%s: rewritten cost: cost=%.2f..%.2f rows=%.0f width=%d", __func__,
-			 	cp->path.startup_cost, cp->path.total_cost, cp->path.rows, cp->path.pathtarget->width);
-	elog_if (g_trace_match_progress, INFO, "%s: competing costs: %s", __func__, competing_cost->data);
-	
-	StringInfo alt_query_text = makeStringInfo();
-	appendStringInfo (alt_query_text, "scan of %s%s%s",
-			 mv_name,
-			 alternative_query->jointree->quals != NULL ? " WHERE " : "",
-			 alternative_query->jointree->quals != NULL ?
-			 mv_rewrite_deparse_expression (alternative_query->rtable, (Expr *) alternative_query->jointree->quals)
-			 : "");
+	/*
+	 * Mark rel with estimated output rows, width, etc.  Note that we have to
+	 * do this before generating outer-query paths, else cost_subqueryscan is
+	 * not happy.
+	 */
+	//set_subquery_size_estimates(root, rel);
 
-	cp->custom_private = list_make5 (pstmt, selected_tlist, rel->relids,
-									 makeString (alt_query_text->data), makeString (competing_cost->data));
+	/*
+	 * For each Path that subquery_planner produced, make a SubqueryScanPath
+	 * in the outer query.
+	 */
+	ListCell *lc;
+	foreach(lc, sub_final_rel->pathlist)
+	{
+		Path	   *subpath = (Path *) lfirst(lc);
+		List	   *pathkeys;
+		
+		/* Convert subpath's pathkeys to outer representation */
+		pathkeys = convert_subquery_pathkeys(root,
+											 rel,
+											 subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
+		
+		/* Generate outer path using this subpath */
+		add_path(rel, (Path *)
+				 create_subqueryscan_path(root, rel, subpath,
+										  pathkeys, required_outer));
+	}
+
+	foreach(lc, sub_final_rel->pathlist)
+	{
+		Path	   *subpath = (Path *) lfirst(lc);
+		List	   *pathkeys;
+		
+		/* Convert subpath's pathkeys to outer representation */
+		pathkeys = convert_subquery_pathkeys(root,
+											 rel,
+											 subpath->pathkeys,
+											 make_tlist_from_pathtarget(subpath->pathtarget));
+		
+		/* Generate outer path using this subpath */
+		add_path(rel, (Path *)
+				 create_subqueryscan_path(root, rel, subpath,
+										  pathkeys, required_outer));
+	}
 	
-	return (Path *) cp;
+	/* If outer rel allows parallelism, do same for partial paths. */
+	if (rel->consider_parallel && bms_is_empty(required_outer))
+	{
+		/* If consider_parallel is false, there should be no partial paths. */
+		Assert(sub_final_rel->consider_parallel ||
+			   sub_final_rel->partial_pathlist == NIL);
+		
+		/* Same for partial paths. */
+		foreach(lc, sub_final_rel->partial_pathlist)
+		{
+			Path	   *subpath = (Path *) lfirst(lc);
+			List	   *pathkeys;
+			
+			/* Convert subpath's pathkeys to outer representation */
+			pathkeys = convert_subquery_pathkeys(root,
+												 rel,
+												 subpath->pathkeys,
+												 make_tlist_from_pathtarget(subpath->pathtarget));
+			
+			/* Generate outer path using this subpath */
+			add_partial_path(rel, (Path *)
+							 create_subqueryscan_path(root, rel, subpath,
+													  pathkeys,
+													  required_outer));
+		}
+	}
 }
 
 static void
@@ -2850,8 +2886,7 @@ mv_rewrite_add_rewritten_mv_paths (PlannerInfo *root,
 			// 		3. Hang our new path off it as alternate #2
 			//				- Under CustomPath #2
 			// 		4. Pick Path as normal — based on least cost
-			add_path (the_rel,
-					  mv_rewrite_create_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name));
+			mv_rewrite_add_mv_scan_path (root, alternative_query, the_rel, selected_tlist, pathtarget, mv_name);
 		}
     }
 }
